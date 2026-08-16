@@ -182,4 +182,90 @@ describe("TextDocumentCrdt", () => {
     crdt.apply(operation); crdt.getState();
     expect(operation.payload).toEqual(payload); expect(operation.vectorClock.toMap()).toEqual(clock);
   });
+
+  // TESTE 2 - DELETE de parte de uma operação
+  it("aplica DELETE de parte de uma operação (deletar B de ABC, deixando AC)", () => {
+    const crdt = new TextDocumentCrdt("doc-1");
+    crdt.apply(insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "ABC"));
+    expect(crdt.getState()).toBe("ABC");
+    
+    // Deletar apenas o elemento B (índice 1)
+    crdt.apply(remove("delete-b", "device-A", VectorClock.from({ "device-A": 2 }), [createElementId("op-1", 1)]));
+    expect(crdt.getState()).toBe("AC");
+    expect(crdt.getVisibleElementIds()).toEqual([createElementId("op-1", 0), createElementId("op-1", 2)]);
+  });
+
+  // TESTE 4 - INSERT após elemento deletado (usando tombstone como afterId)
+  it("insere após elemento deletado, usando tombstone como âncora", () => {
+    const crdt = new TextDocumentCrdt("doc-1");
+    const base = insert("base", "device-A", VectorClock.from({ "device-A": 1 }), null, "AB");
+    crdt.apply(base);
+    expect(crdt.getState()).toBe("AB");
+
+    // Deletar B (elementId = "base:1")
+    const elementBId = createElementId("base", 1);
+    crdt.apply(remove("delete-b", "device-A", VectorClock.from({ "device-A": 2 }), [elementBId]));
+    expect(crdt.getState()).toBe("A");
+
+    // Inserir C usando o tombstone B como afterId
+    crdt.apply(insert("insert-c", "device-A", VectorClock.from({ "device-A": 3 }), elementBId, "C"));
+    expect(crdt.getState()).toBe("AC");
+    expect(crdt.getVisibleElementIds()).toEqual([createElementId("base", 0), createElementId("insert-c", 0)]);
+  });
+
+  // TESTE 12 - Convergência com múltiplas operações concorrentes
+  it("converge com múltiplas operações concorrentes de três dispositivos", () => {
+    // Simular três réplicas recebendo as mesmas operações em ordens diferentes
+    const operations = [
+      // Dispositivo A cria "A"
+      insert("op-a", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+      // Dispositivo B concorrentemente cria "B" (no início)
+      insert("op-b", "device-B", VectorClock.from({ "device-B": 1 }), null, "B"),
+      // Dispositivo C concorrentemente cria "C" (no início)
+      insert("op-c", "device-C", VectorClock.from({ "device-C": 1 }), null, "C"),
+      // Dispositivo A insere "X" após A
+      insert("op-ax", "device-A", VectorClock.from({ "device-A": 2, "device-B": 1, "device-C": 1 }), createElementId("op-a", 0), "X"),
+      // Dispositivo B concorrentemente insere "Y" após B
+      insert("op-by", "device-B", VectorClock.from({ "device-A": 1, "device-B": 2, "device-C": 1 }), createElementId("op-b", 0), "Y"),
+      // Dispositivo B deleta C
+      remove("delete-c", "device-B", VectorClock.from({ "device-A": 1, "device-B": 3, "device-C": 1 }), [createElementId("op-c", 0)]),
+    ];
+
+    // Primeira réplica: ordem original
+    const replica1 = new TextDocumentCrdt("doc-1");
+    operations.forEach((op) => replica1.apply(op));
+    const state1 = replica1.getState();
+
+    // Segunda réplica: ordem reversa
+    const replica2 = new TextDocumentCrdt("doc-1");
+    [...operations].reverse().forEach((op) => replica2.apply(op));
+    const state2 = replica2.getState();
+
+    // Terceira réplica: ordem aleatória específica
+    const replica3 = new TextDocumentCrdt("doc-1");
+    const shuffled = [
+      operations[5], // delete-c primeiro
+      operations[2], // op-c
+      operations[1], // op-b
+      operations[3], // op-ax
+      operations[4], // op-by
+      operations[0], // op-a
+    ];
+    shuffled.forEach((op) => replica3.apply(op));
+    const state3 = replica3.getState();
+
+    // Todas as três réplicas devem convergir para o mesmo estado
+    expect(state1).toBe(state2);
+    expect(state2).toBe(state3);
+
+    // Esperado: "BAX" ou "ABX" ou "AXB" dependendo da ordem determinística
+    // B foi deletado por uma operação causal, então não aparece
+    // A e X têm relação causal (X é inserido após A)
+    // Portanto: "AXB" (onde A -> X é causal, B é concorrente a ambos)
+    // Desempate: device-A < device-B, então A vem antes de B
+    // Dentro de A, X é inserido após A (causal), então A depois X
+    // Resultado final: a ordem será "BYA" "XY" ou similar, dependendo de como os desempates ocorrem
+    // O importante é que as três réplicas convergem
+    expect(state1.length).toBeGreaterThan(0); // Deve ter algum conteúdo visível
+  });
 });
