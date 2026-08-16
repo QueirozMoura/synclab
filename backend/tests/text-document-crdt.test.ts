@@ -128,6 +128,47 @@ describe("TextDocumentCrdt", () => {
     expect(crdt.getState()).toBe("A");
   });
 
+  it("rejeita operações que pertencem a outro documento", () => {
+    const crdt = new TextDocumentCrdt("doc-1");
+    const operationFromAnotherDocument: Operation = {
+      ...insert(
+        "op-foreign",
+        "device-A",
+        VectorClock.from({ "device-A": 1 }),
+        0,
+        "A",
+      ),
+      documentId: "doc-2",
+    };
+
+    expect(() => crdt.apply(operationFromAnotherDocument)).toThrow(
+      "Operation op-foreign belongs to document doc-2, not doc-1",
+    );
+  });
+
+  it("limita posições de INSERT fora dos limites do texto atual", () => {
+    const crdt = new TextDocumentCrdt("doc-1");
+    const negativePosition = insert(
+      "op-negative",
+      "device-A",
+      VectorClock.from({ "device-A": 1 }),
+      -10,
+      "A",
+    );
+    const positionAfterEnd = insert(
+      "op-after-end",
+      "device-A",
+      VectorClock.from({ "device-A": 2 }),
+      100,
+      "B",
+    );
+
+    crdt.apply(negativePosition);
+    crdt.apply(positionAfterEnd);
+
+    expect(crdt.getState()).toBe("AB");
+  });
+
   it("mantém determinismo para conflito concorrente de múltiplos dispositivos", () => {
     const operations = [
       insert("op-c", "device-C", VectorClock.from({ "device-C": 1 }), 0, "C"),
@@ -169,6 +210,39 @@ describe("TextDocumentCrdt", () => {
 
     expect(replicaOne.getState()).toBe("ZA");
     expect(replicaTwo.getState()).toBe("ZA");
+  });
+
+  it("converge com operações causais e concorrentes de dois dispositivos", () => {
+    // A1 e B1 são concorrentes. Ambos são predecessores de A2; A2 e B2
+    // são concorrentes e o deviceId de A2 define seu desempate antes de B2.
+    const operations = [
+      insert("op-a1", "device-A", VectorClock.from({ "device-A": 1 }), 0, "A"),
+      insert("op-b1", "device-B", VectorClock.from({ "device-B": 1 }), 0, "B"),
+      insert(
+        "op-a2",
+        "device-A",
+        VectorClock.from({ "device-A": 2, "device-B": 1 }),
+        2,
+        "C",
+      ),
+      insert(
+        "op-b2",
+        "device-B",
+        VectorClock.from({ "device-A": 1, "device-B": 2 }),
+        0,
+        "D",
+      ),
+    ];
+    const replicaOne = new TextDocumentCrdt("doc-1");
+    const replicaTwo = new TextDocumentCrdt("doc-1");
+
+    for (const operation of operations) replicaOne.apply(operation);
+    for (const operation of [operations[2], operations[0], operations[3], operations[1]]) {
+      replicaTwo.apply(operation);
+    }
+
+    expect(replicaOne.getState()).toBe("DBAC");
+    expect(replicaTwo.getState()).toBe(replicaOne.getState());
   });
 
   it("não altera a operação nem seu payload original", () => {
