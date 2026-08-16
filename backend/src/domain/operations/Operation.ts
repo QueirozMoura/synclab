@@ -47,7 +47,7 @@ export function createOperation(params: {
     documentId: params.documentId,
     deviceId: params.deviceId,
     type: params.type,
-    payload: params.payload,
+    payload: Object.freeze({ ...params.payload }),
     vectorClock: params.vectorClock,
   });
 }

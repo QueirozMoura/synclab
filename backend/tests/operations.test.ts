@@ -60,6 +60,10 @@ describe("Operation", () => {
     expect(() => {
       (op as any).documentId = "other";
     }).toThrow();
+
+    expect(() => {
+      op.payload.content = "other";
+    }).toThrow();
   });
 
   it("deve carregar o vector clock correto", () => {
@@ -167,5 +171,20 @@ describe("OperationLog", () => {
     all.push(makeOp("op-999", "doc-1", "device-A", vc));
 
     expect(log.size()).toBe(1);
+  });
+
+  it("deve isolar uma operação aceita de mutações posteriores no payload de entrada", () => {
+    const log = new OperationLog();
+    const operation = makeOp(
+      "op-1",
+      "doc-1",
+      "device-A",
+      VectorClock.create().increment("device-A"),
+    );
+
+    log.append(operation);
+    operation.payload.content = "changed";
+
+    expect(log.getByDocument("doc-1")[0].payload.content).toBe("x");
   });
 });

@@ -128,6 +128,22 @@ describe("TextDocumentCrdt", () => {
     expect(crdt.getState()).toBe("A");
   });
 
+  it("mantém o estado após o payload do objeto de entrada ser mutado", () => {
+    const crdt = new TextDocumentCrdt("doc-1");
+    const operation = insert(
+      "op-1",
+      "device-A",
+      VectorClock.from({ "device-A": 1 }),
+      0,
+      "A",
+    );
+
+    crdt.apply(operation);
+    operation.payload.content = "changed";
+
+    expect(crdt.getState()).toBe("A");
+  });
+
   it("rejeita operações que pertencem a outro documento", () => {
     const crdt = new TextDocumentCrdt("doc-1");
     const operationFromAnotherDocument: Operation = {
@@ -243,6 +259,86 @@ describe("TextDocumentCrdt", () => {
 
     expect(replicaOne.getState()).toBe("DBAC");
     expect(replicaTwo.getState()).toBe(replicaOne.getState());
+  });
+
+  it("converge quando uma dependência causal cruza o desempate por deviceId", () => {
+    const operations = [
+      insert("op-a", "device-Z", VectorClock.from({ "device-Z": 1 }), 0, "A"),
+      insert(
+        "op-b",
+        "device-A",
+        VectorClock.from({ "device-Z": 1, "device-A": 1 }),
+        1,
+        "B",
+      ),
+      insert("op-c", "device-M", VectorClock.from({ "device-M": 1 }), 0, "C"),
+    ];
+    const firstReplica = new TextDocumentCrdt("doc-1");
+    const secondReplica = new TextDocumentCrdt("doc-1");
+
+    for (const operation of operations) firstReplica.apply(operation);
+    for (const operation of [...operations].reverse()) secondReplica.apply(operation);
+
+    expect(firstReplica.getState()).toBe("ABC");
+    expect(secondReplica.getState()).toBe("ABC");
+  });
+
+  it("resolve inserções concorrentes por posição de forma determinística, mas não preserva a intenção da posição local", () => {
+    // Ambas as réplicas partem de "ab". A insere X antes de b e B insere Y
+    // após b. Depois do desempate global, Y é aplicada sobre o texto que já
+    // contém X, portanto deixa de ficar após b como pretendia em B.
+    const crdt = new TextDocumentCrdt("doc-1");
+    const base = insert(
+      "base",
+      "device-base",
+      VectorClock.from({ "device-base": 1 }),
+      0,
+      "ab",
+    );
+    const fromA = insert(
+      "from-a",
+      "device-A",
+      VectorClock.from({ "device-base": 1, "device-A": 1 }),
+      1,
+      "X",
+    );
+    const fromB = insert(
+      "from-b",
+      "device-B",
+      VectorClock.from({ "device-base": 1, "device-B": 1 }),
+      2,
+      "Y",
+    );
+
+    crdt.apply(fromB);
+    crdt.apply(base);
+    crdt.apply(fromA);
+
+    expect(crdt.getState()).toBe("aXYb");
+  });
+
+  it("não converge se réplicas aceitarem conteúdos diferentes para o mesmo id de operação", () => {
+    const operationA = insert(
+      "shared-id",
+      "device-A",
+      VectorClock.from({ "device-A": 1 }),
+      0,
+      "A",
+    );
+    const operationB = {
+      ...operationA,
+      payload: { position: 0, content: "B" },
+    };
+    const firstReplica = new TextDocumentCrdt("doc-1");
+    const secondReplica = new TextDocumentCrdt("doc-1");
+
+    firstReplica.apply(operationA);
+    firstReplica.apply(operationB);
+    secondReplica.apply(operationB);
+    secondReplica.apply(operationA);
+
+    expect(firstReplica.getState()).toBe("A");
+    expect(secondReplica.getState()).toBe("B");
   });
 
   it("não altera a operação nem seu payload original", () => {

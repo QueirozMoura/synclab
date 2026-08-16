@@ -54,31 +54,41 @@ export class SyncEngine {
     const ops = this.log.getByDocument(documentId);
     if (ops.length <= 1) return [...ops];
 
-    // Topological sort respeitando BEFORE.
-    // Para concorrentes, usa tiebreaker (deviceId, id).
-    const sorted = [...ops].sort((a, b) => this.deterministicCompare(a, b));
+    // Uma comparação par-a-par que mistura causalidade com o desempate não é
+    // necessariamente transitiva. Portanto, `Array.sort` não pode ser usada
+    // como ordenação topológica. Escolhemos, a cada passo, uma operação sem
+    // predecessores causais restantes e aplicamos o desempate apenas entre
+    // essas operações prontas.
+    const remaining = new Set(ops);
+    const ordered: Operation[] = [];
 
-    // Valida que a ordenação respeita causalidade:
-    // se A → B (BEFORE), A deve aparecer antes de B.
-    // O sort estável com deterministicCompare já garante isso porque
-    // se A.isBefore(B), deterministicCompare retorna -1.
-    return sorted;
+    while (remaining.size > 0) {
+      const ready = [...remaining].filter((candidate) =>
+        [...remaining].every(
+          (other) =>
+            other === candidate ||
+            other.vectorClock.compare(candidate.vectorClock) !==
+              ClockOrdering.BEFORE,
+        ),
+      );
+
+      // O happened-before de vector clocks é acíclico; chegar aqui sem uma
+      // operação pronta indicaria clocks inválidos, não uma escolha de ordem.
+      if (ready.length === 0) {
+        throw new Error("Cannot topologically order operations with cyclic causality");
+      }
+
+      ready.sort((a, b) => this.compareTieBreaker(a, b));
+      const next = ready[0];
+      remaining.delete(next);
+      ordered.push(next);
+    }
+
+    return ordered;
   }
 
-  /**
-   * Comparador determinístico para ordenação de operações.
-   *
-   * 1. Se A aconteceu antes de B (BEFORE), A vem primeiro.
-   * 2. Se B aconteceu antes de A (AFTER), B vem primeiro.
-   * 3. Se são concorrentes ou iguais, usa tiebreaker: deviceId, depois id.
-   */
-  private deterministicCompare(a: Operation, b: Operation): number {
-    const ordering = a.vectorClock.compare(b.vectorClock);
-
-    if (ordering === ClockOrdering.BEFORE) return -1;
-    if (ordering === ClockOrdering.AFTER) return 1;
-
-    // CONCURRENT ou EQUAL: tiebreaker determinístico
+  /** Compara operações pelo desempate total usado entre as prontas. */
+  private compareTieBreaker(a: Operation, b: Operation): number {
     if (a.deviceId !== b.deviceId) {
       return a.deviceId.localeCompare(b.deviceId);
     }
@@ -88,9 +98,10 @@ export class SyncEngine {
   /**
    * Retorna grupos de operações concorrentes para um documento.
    *
-   * Cada grupo é um array de operações que são mutuamente concorrentes
-   * entre si. Operações que não são concorrentes com nenhuma outra
-   * não aparecem em nenhum grupo.
+   * Cada grupo é um componente conexo no grafo de concorrência. Portanto,
+   * operações do mesmo grupo podem ter uma relação causal entre si quando
+   * ambas são concorrentes com uma terceira operação. Operações que não são
+   * concorrentes com nenhuma outra não aparecem em nenhum grupo.
    *
    * Útil para identificar onde resolução de conflitos (CRDT) será necessária.
    */

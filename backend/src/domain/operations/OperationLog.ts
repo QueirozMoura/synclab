@@ -29,7 +29,15 @@ export class OperationLog {
       return false;
     }
 
-    this.operations.push(operation);
+    // O log é a fonte do estado derivado do CRDT. Mantém uma cópia imutável
+    // do payload para que mutações posteriores no objeto recebido não mudem
+    // retroativamente uma operação já aceita.
+    this.operations.push(
+      Object.freeze({
+        ...operation,
+        payload: Object.freeze({ ...operation.payload }),
+      }),
+    );
     this.seenIds.add(operation.id);
     return true;
   }

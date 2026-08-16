@@ -177,6 +177,46 @@ describe("SyncEngine", () => {
       expect(ordered1.map((op) => op.id)).toEqual(ordered2.map((op) => op.id));
     });
 
+    it("deve ordenar topologicamente quando causalidade e desempate formariam um ciclo no comparador par-a-par", () => {
+      // A aconteceu antes de B, embora B tenha deviceId menor. C é
+      // concorrente com ambos. Um comparador que retorna causalidade quando
+      // disponível e deviceId nos demais pares produz A < B < C < A.
+      const opA = makeOp(
+        "op-a",
+        "doc-1",
+        "device-Z",
+        VectorClock.from({ "device-Z": 1 }),
+      );
+      const opB = makeOp(
+        "op-b",
+        "doc-1",
+        "device-A",
+        VectorClock.from({ "device-Z": 1, "device-A": 1 }),
+      );
+      const opC = makeOp(
+        "op-c",
+        "doc-1",
+        "device-M",
+        VectorClock.from({ "device-M": 1 }),
+      );
+      const firstReplica = new SyncEngine();
+      const secondReplica = new SyncEngine();
+
+      for (const operation of [opA, opB, opC]) firstReplica.receive(operation);
+      for (const operation of [opC, opB, opA]) secondReplica.receive(operation);
+
+      expect(firstReplica.getOrderedOperations("doc-1").map((op) => op.id)).toEqual([
+        "op-c",
+        "op-a",
+        "op-b",
+      ]);
+      expect(secondReplica.getOrderedOperations("doc-1").map((op) => op.id)).toEqual([
+        "op-c",
+        "op-a",
+        "op-b",
+      ]);
+    });
+
     it("deve misturar operações causais e concorrentes corretamente", () => {
       const engine = new SyncEngine();
       // op-1: {A:1} — primeira op de A
@@ -254,6 +294,39 @@ describe("SyncEngine", () => {
       const groups = engine.getConcurrentGroups("doc-1");
       expect(groups).toHaveLength(1);
       expect(groups[0]).toHaveLength(3);
+    });
+
+    it("deve retornar componente conexo, sem afirmar concorrência par-a-par", () => {
+      const engine = new SyncEngine();
+      const opA = makeOp(
+        "op-a",
+        "doc-1",
+        "device-Z",
+        VectorClock.from({ "device-Z": 1 }),
+      );
+      const opB = makeOp(
+        "op-b",
+        "doc-1",
+        "device-A",
+        VectorClock.from({ "device-Z": 1, "device-A": 1 }),
+      );
+      const opC = makeOp(
+        "op-c",
+        "doc-1",
+        "device-M",
+        VectorClock.from({ "device-M": 1 }),
+      );
+
+      engine.receive(opA);
+      engine.receive(opB);
+      engine.receive(opC);
+
+      expect(opA.vectorClock.isBefore(opB.vectorClock)).toBe(true);
+      expect(engine.getConcurrentGroups("doc-1")[0].map((op) => op.id).sort()).toEqual([
+        "op-a",
+        "op-b",
+        "op-c",
+      ]);
     });
 
     it("não deve agrupar operações causais", () => {
