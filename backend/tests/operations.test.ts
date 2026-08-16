@@ -14,7 +14,7 @@ describe("Operation", () => {
       documentId: "doc-1",
       deviceId: "device-A",
       type: OperationType.INSERT,
-      payload: { position: 0, content: "hello" },
+      payload: { afterId: null, content: "hello" },
       vectorClock: vc,
     });
 
@@ -22,7 +22,7 @@ describe("Operation", () => {
     expect(op.documentId).toBe("doc-1");
     expect(op.deviceId).toBe("device-A");
     expect(op.type).toBe(OperationType.INSERT);
-    expect(op.payload).toEqual({ position: 0, content: "hello" });
+    expect(op.payload).toEqual({ afterId: null, content: "hello" });
     expect(op.vectorClock.equals(vc)).toBe(true);
   });
 
@@ -32,18 +32,33 @@ describe("Operation", () => {
       documentId: "doc-1",
       deviceId: "device-A",
       type: OperationType.INSERT,
-      payload: { position: 0, content: "a" },
+      payload: { afterId: null, content: "a" },
       vectorClock: vc,
     });
     const op2 = createOperation({
       documentId: "doc-1",
       deviceId: "device-A",
       type: OperationType.INSERT,
-      payload: { position: 1, content: "b" },
+      payload: { afterId: null, content: "b" },
       vectorClock: vc,
     });
 
     expect(op1.id).not.toBe(op2.id);
+  });
+
+  it("deve criar uma operação DELETE tipada por IDs de elementos", () => {
+    const op = createOperation({
+      documentId: "doc-1",
+      deviceId: "device-A",
+      type: OperationType.DELETE,
+      payload: { elementIds: ["insert-op:0", "insert-op:1"] },
+      vectorClock: VectorClock.create().increment("device-A"),
+    });
+
+    expect(op.type).toBe(OperationType.DELETE);
+    if (op.type === OperationType.DELETE) {
+      expect(op.payload.elementIds).toEqual(["insert-op:0", "insert-op:1"]);
+    }
   });
 
   it("deve ser imutável após criação", () => {
@@ -52,7 +67,7 @@ describe("Operation", () => {
       documentId: "doc-1",
       deviceId: "device-A",
       type: OperationType.INSERT,
-      payload: { position: 0, content: "hello" },
+      payload: { afterId: null, content: "hello" },
       vectorClock: vc,
     });
 
@@ -75,7 +90,7 @@ describe("Operation", () => {
       documentId: "doc-1",
       deviceId: "device-A",
       type: OperationType.INSERT,
-      payload: { position: 0, content: "hello" },
+      payload: { afterId: null, content: "hello" },
       vectorClock: vc,
     });
 
@@ -95,7 +110,7 @@ describe("OperationLog", () => {
       documentId,
       deviceId,
       type: OperationType.INSERT,
-      payload: { position: 0, content: "x" },
+      payload: { afterId: null, content: "x" },
       vectorClock: vc,
     };
   }

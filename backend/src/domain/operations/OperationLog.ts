@@ -1,4 +1,5 @@
 import type { Operation } from "./Operation.js";
+import { OperationType } from "./types.js";
 
 /**
  * Log de operações em memória (append-only).
@@ -32,12 +33,7 @@ export class OperationLog {
     // O log é a fonte do estado derivado do CRDT. Mantém uma cópia imutável
     // do payload para que mutações posteriores no objeto recebido não mudem
     // retroativamente uma operação já aceita.
-    this.operations.push(
-      Object.freeze({
-        ...operation,
-        payload: Object.freeze({ ...operation.payload }),
-      }),
-    );
+    this.operations.push(this.cloneOperation(operation));
     this.seenIds.add(operation.id);
     return true;
   }
@@ -68,5 +64,19 @@ export class OperationLog {
    */
   size(): number {
     return this.operations.length;
+  }
+
+  private cloneOperation(operation: Operation): Operation {
+    if (operation.type === OperationType.INSERT) {
+      return Object.freeze({
+        ...operation,
+        payload: Object.freeze({ ...operation.payload }),
+      });
+    }
+
+    return Object.freeze({
+      ...operation,
+      payload: Object.freeze({ elementIds: Object.freeze([...operation.payload.elementIds]) }),
+    });
   }
 }

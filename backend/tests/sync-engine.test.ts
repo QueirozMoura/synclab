@@ -21,7 +21,7 @@ describe("SyncEngine", () => {
       documentId,
       deviceId,
       type: OperationType.INSERT,
-      payload: { position: 0, content: "x" },
+      payload: { afterId: null, content: "x" },
       vectorClock: vc,
     };
   }

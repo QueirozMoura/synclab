@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { VectorClock } from "../vector-clock/VectorClock.js";
-import { OperationType, type OperationPayload } from "./types.js";
+import {
+  OperationType,
+  type DeletePayload,
+  type InsertPayload,
+} from "./types.js";
 
 /**
  * Representa uma alteração atômica em um documento.
@@ -17,14 +21,28 @@ import { OperationType, type OperationPayload } from "./types.js";
  * representa o estado causal do dispositivo no momento da criação,
  * permitindo que o Sync Engine determine a ordem de aplicação.
  */
-export interface Operation {
+interface BaseOperation {
   readonly id: string;
   readonly documentId: string;
   readonly deviceId: string;
-  readonly type: OperationType;
-  readonly payload: OperationPayload;
   readonly vectorClock: VectorClock;
 }
+
+export interface InsertOperation extends BaseOperation {
+  readonly type: OperationType.INSERT;
+  readonly payload: InsertPayload;
+}
+
+export interface DeleteOperation extends BaseOperation {
+  readonly type: OperationType.DELETE;
+  readonly payload: DeletePayload;
+}
+
+export type Operation = InsertOperation | DeleteOperation;
+
+export type CreateOperationParams =
+  | Omit<InsertOperation, "id">
+  | Omit<DeleteOperation, "id">;
 
 /**
  * Fábrica para criar operações com geração automática de ID.
@@ -33,22 +51,28 @@ export interface Operation {
  * O ID é gerado com crypto.randomUUID() quando disponível (Node.js 19+),
  * ou com um fallback baseado em timestamp + aleatório.
  */
-export function createOperation(params: {
-  documentId: string;
-  deviceId: string;
-  type: OperationType;
-  payload: OperationPayload;
-  vectorClock: VectorClock;
-}): Operation {
+export function createOperation(params: CreateOperationParams): Operation {
   const id = generateId();
 
-  return Object.freeze({
+  const base = {
     id,
     documentId: params.documentId,
     deviceId: params.deviceId,
-    type: params.type,
-    payload: Object.freeze({ ...params.payload }),
     vectorClock: params.vectorClock,
+  };
+
+  if (params.type === OperationType.INSERT) {
+    return Object.freeze({
+      ...base,
+      type: OperationType.INSERT,
+      payload: Object.freeze({ ...params.payload }),
+    });
+  }
+
+  return Object.freeze({
+    ...base,
+    type: OperationType.DELETE,
+    payload: Object.freeze({ elementIds: Object.freeze([...params.payload.elementIds]) }),
   });
 }
 

@@ -1,5 +1,9 @@
 import type { Operation } from "../operations/Operation.js";
-import { OperationType } from "../operations/types.js";
+import {
+  createElementId,
+  OperationType,
+  type ElementId,
+} from "../operations/types.js";
 import { SyncEngine } from "../sync/SyncEngine.js";
 
 /**
@@ -29,14 +33,23 @@ export class TextDocumentCrdt {
   }
 
   /**
-   * Retorna o texto obtido ao aplicar todas as operações em ordem causal e
-   * determinística. Uma posição fora dos limites é limitada ao intervalo do
-   * texto atual, tornando a aplicação total para INSERTs tipados.
+   * Retorna o texto visível. Tombstones continuam na sequência interna, mas
+   * não aparecem no estado materializado.
    */
   getState(): string {
-    return this.syncEngine
-      .getOrderedOperations(this.documentId)
-      .reduce((text, operation) => this.applyToState(text, operation), "");
+    const { elements, tombstones } = this.buildSequence();
+    return elements
+      .filter((element) => !tombstones.has(element.id))
+      .map((element) => element.value)
+      .join("");
+  }
+
+  /** Retorna os IDs estáveis dos elementos visíveis, na ordem do documento. */
+  getVisibleElementIds(): ElementId[] {
+    const { elements, tombstones } = this.buildSequence();
+    return elements
+      .filter((element) => !tombstones.has(element.id))
+      .map((element) => element.id);
   }
 
   /** Verifica se uma operação já foi observada por este CRDT. */
@@ -44,19 +57,65 @@ export class TextDocumentCrdt {
     return this.syncEngine.getLog().has(operationId);
   }
 
-  private applyToState(text: string, operation: Operation): string {
-    switch (operation.type) {
-      case OperationType.INSERT: {
-        const position = Math.max(
-          0,
-          Math.min(operation.payload.position, text.length),
-        );
-        return (
-          text.slice(0, position) +
-          operation.payload.content +
-          text.slice(position)
-        );
-      }
+  private buildSequence(): {
+    elements: SequenceElement[];
+    tombstones: ReadonlySet<ElementId>;
+  } {
+    const nodes = new Map<ElementId, SequenceElement>();
+    const tombstones = new Set<ElementId>();
+
+    this.syncEngine
+      .getOrderedOperations(this.documentId)
+      .forEach((operation, operationOrder) => {
+        if (operation.type === OperationType.DELETE) {
+          for (const elementId of operation.payload.elementIds) {
+            tombstones.add(elementId);
+          }
+          return;
+        }
+
+        let afterId = operation.payload.afterId;
+        for (const [index, value] of Array.from(operation.payload.content).entries()) {
+          const id = createElementId(operation.id, index);
+          nodes.set(id, { id, afterId, value, operationOrder, index });
+          afterId = id;
+        }
+      });
+
+    const children = new Map<ElementId | null, SequenceElement[]>();
+    for (const node of nodes.values()) {
+      if (node.afterId !== null && !nodes.has(node.afterId)) continue;
+      const siblings = children.get(node.afterId) ?? [];
+      siblings.push(node);
+      children.set(node.afterId, siblings);
     }
+
+    for (const siblings of children.values()) {
+      siblings.sort(
+        (a, b) => a.operationOrder - b.operationOrder || a.index - b.index,
+      );
+    }
+
+    const elements: SequenceElement[] = [];
+    const visited = new Set<ElementId>();
+    const visit = (afterId: ElementId | null): void => {
+      for (const node of children.get(afterId) ?? []) {
+        if (visited.has(node.id)) continue;
+        visited.add(node.id);
+        elements.push(node);
+        visit(node.id);
+      }
+    };
+    visit(null);
+
+    return { elements, tombstones };
   }
+}
+
+interface SequenceElement {
+  readonly id: ElementId;
+  readonly afterId: ElementId | null;
+  readonly value: string;
+  readonly operationOrder: number;
+  readonly index: number;
 }
