@@ -218,4 +218,15 @@ describe("VectorClock", () => {
       expect(str).toContain("VC{");
     });
   });
+
+  describe("imutabilidade em runtime", () => {
+    it("não deve permitir mutar o mapa interno por acesso adversarial", () => {
+      const clock = VectorClock.from({ "device-A": 1 });
+
+      expect(() => {
+        (clock as any).clock["device-A"] = 999;
+      }).toThrow();
+      expect(clock.get("device-A")).toBe(1);
+    });
+  });
 });

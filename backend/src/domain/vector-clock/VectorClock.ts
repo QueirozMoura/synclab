@@ -13,7 +13,8 @@ export class VectorClock {
   private readonly clock: ClockMap;
 
   private constructor(clock: ClockMap) {
-    this.clock = { ...clock };
+    // Cópia defensiva + congelamento para garantir imutabilidade em runtime
+    this.clock = Object.freeze({ ...clock });
   }
 
   /**
