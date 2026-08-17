@@ -156,21 +156,33 @@ export class PostgresOperationRepository implements ServerOperationRepository {
   /**
    * Encontra operações que o cliente ainda não possui.
    * Otimizado com query SQL que filtra no banco.
+   *
+   * @param limit - Limite máximo de operações a retornar (aplicado no nível do banco)
    */
   async findMissingOperations(
     documentId: string,
     knownOperationIds: string[],
+    limit?: number,
   ): Promise<Operation[]> {
     try {
       // Se não há IDs conhecidos, retorna todas as operações do documento
       if (knownOperationIds.length === 0) {
-        return this.findByDocumentId(documentId);
+        const ops = await this.findByDocumentId(documentId);
+        if (limit && limit > 0) {
+          return ops.slice(0, limit);
+        }
+        return ops;
       }
 
-      const result = await this.pool.query(QUERIES.selectMissingOperations, [
-        documentId,
-        knownOperationIds,
-      ]);
+      let query = QUERIES.selectMissingOperations;
+      const params: (string | number | string[])[] = [documentId, knownOperationIds];
+
+      if (limit && limit > 0) {
+        query += ` LIMIT $${params.length + 1}`;
+        params.push(limit);
+      }
+
+      const result = await this.pool.query(query, params);
 
       return result.rows.map((row) => this.deserializeRow(row));
     } catch (error) {

@@ -223,6 +223,20 @@ describe("SyncService", () => {
       expect(result.rejected[0].reason).toContain("deviceId mismatch");
     });
 
+    it("rejeita operações com operationId duplicado dentro do mesmo batch", async () => {
+      const vc = VectorClock.from({ "device-A": 1 });
+      const ops = [
+        insert("op-1", "device-A", vc, null, "A"),
+        insert("op-1", "device-A", vc.increment("device-A"), null, "B"), // mesmo ID, payload diferente
+      ];
+
+      const result = await syncService.push(ops, TEST_AUTH_CONTEXT);
+
+      expect(result.accepted).toHaveLength(1);
+      expect(result.rejected).toHaveLength(1);
+      expect(result.rejected[0].reason).toBe("Duplicate operationId within batch");
+    });
+
     it("rejeita operação em documento sem autorização", async () => {
       const operation = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
       operation.documentId = "doc-3"; // client-A não tem acesso a doc-3

@@ -128,21 +128,22 @@ properties: {
                     documentId: { type: "string" },
                     deviceId: { type: "string" },
                     type: { type: "string", enum: ["INSERT", "DELETE"] },
-                    payload: {
+payload: {
                       type: "object",
                       properties: {
                         afterId: { type: ["string", "null"] },
                         content: { type: "string" },
                         elementIds: { type: "array", items: { type: "string" } },
                       },
+                      additionalProperties: false,
                     },
-                    vectorClockMap: { type: "object" },
+                    vectorClockMap: { type: "object", additionalProperties: { type: "number" } },
                   },
                 },
               },
             },
-        },
-        response: {
+          },
+          response: {
           200: {
             type: "object",
             properties: {
@@ -258,7 +259,7 @@ properties: {
                         elementIds: { type: "array", items: { type: "string" } },
                       },
                     },
-                    vectorClockMap: { type: "object" },
+                    vectorClockMap: { type: "object", additionalProperties: { type: "number" } },
                   },
                 },
               },

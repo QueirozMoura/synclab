@@ -55,11 +55,18 @@ export class InMemoryOperationRepository implements ServerOperationRepository {
   async findMissingOperations(
     documentId: string,
     knownOperationIds: string[],
+    limit?: number,
   ): Promise<Operation[]> {
     const known = new Set(knownOperationIds);
     const allOps = await this.findByDocumentId(documentId);
 
-    return allOps.filter((op) => !known.has(op.id));
+    const missing = allOps.filter((op) => !known.has(op.id));
+
+    if (limit && limit > 0) {
+      return missing.slice(0, limit);
+    }
+
+    return missing;
   }
 
   async has(operationId: string): Promise<boolean> {

@@ -47,10 +47,13 @@ export interface ServerOperationRepository {
    * O servidor retorna apenas operações do documento que não estão nesse conjunto.
    *
    * Isso evita enviar operações já sincronizadas e permite pull incremental.
+   *
+   * @param limit - Limite máximo de operações a retornar (aplicado no nível do banco)
    */
   findMissingOperations(
     documentId: string,
     knownOperationIds: string[],
+    limit?: number,
   ): Promise<Operation[]>;
 
   /**

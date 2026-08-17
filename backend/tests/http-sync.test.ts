@@ -54,7 +54,14 @@ describe("HTTP Sync Routes", () => {
   let serializer: OperationSerializer;
 
   beforeEach(async () => {
-    app = fastify();
+    app = fastify({
+      ajv: {
+        customOptions: {
+          strict: true,
+          coerceTypes: false,
+        },
+      },
+    });
     repository = new InMemoryOperationRepository();
     authzRepository = new InMemoryDocumentAuthorizationRepository();
     authzRepository.grantAccess("client-A", ["doc-1", "doc-2", "doc-inexistente"]);
@@ -153,7 +160,7 @@ describe("HTTP Sync Routes", () => {
       expect(body.accepted).toEqual(["op-1", "op-2"]);
     });
 
-    it.skip("rejeita operação com payload inválido (content deve ser string) - known issue: validation not catching in HTTP layer", async () => {
+    it("rejeita operação com payload inválido (content deve ser string) - HTTP layer validation", async () => {
       const op = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
       const serialized = serializeOp(op);
       serialized.payload = { afterId: null, content: 123 as any };
@@ -164,11 +171,11 @@ describe("HTTP Sync Routes", () => {
         payload: { operations: [serialized] },
       });
 
-      // Validação ocorre no SyncService, retorna 200 com rejected
-      expect(response.statusCode).toBe(200);
-      const body = response.json() as { accepted: string[]; rejected: any[] };
-      expect(body.rejected).toHaveLength(1);
-      expect(body.rejected[0].reason).toContain("content is required");
+      // HTTP layer validation returns 400 for invalid payload types
+      expect(response.statusCode).toBe(400);
+      const body = response.json() as { error: string; message: string };
+      expect(body.error).toBe("Bad Request");
+      expect(body.message).toContain("content must be string");
     });
 
     it("retorna 400 para body malformado", async () => {
@@ -365,7 +372,7 @@ describe("HTTP Sync Routes", () => {
       expect(body.error).toBe("Forbidden");
     });
 
-    it.skip("operações retornadas têm formato correto - known issue: vectorClockMap serialization in Fastify schema", async () => {
+    it("operações retornadas têm formato correto", async () => {
       const response = await injectWithAuth({
         method: "GET",
         url: "/sync/pull?documentId=doc-1",
@@ -385,7 +392,7 @@ describe("HTTP Sync Routes", () => {
   });
 
   describe("Cenários de sincronização completa", () => {
-    it.skip("push + pull roundtrip preserva operações - known issue: vectorClockMap serialization in Fastify schema", async () => {
+    it("push + pull roundtrip preserva operações", async () => {
       const ops = [
         insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
         insert("op-2", "device-A", VectorClock.from({ "device-A": 2 }), null, "B"),

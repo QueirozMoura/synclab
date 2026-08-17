@@ -82,6 +82,12 @@ export async function createServer(): Promise<FastifyInstance> {
     logger: {
       level: process.env.LOG_LEVEL ?? "info",
     },
+    ajv: {
+      customOptions: {
+        strict: true,
+        coerceTypes: false,
+      },
+    },
   });
 
   const repository = createRepository();

@@ -100,11 +100,14 @@ export class SyncService {
     const accepted: string[] = [];
     const rejected: Array<{ operationId: string; reason: string }> = [];
 
+    // Validate all operations first
+    const validOperations: Operation[] = [];
     for (const operation of operations) {
       try {
         this.validateOperation(operation);
         this.validateDeviceId(operation, authContext);
         await this.validateDocumentAccess(authContext.clientId, operation.documentId);
+        validOperations.push(operation);
       } catch (error) {
         if (error instanceof OperationValidationError) {
           rejected.push({ operationId: error.operationId, reason: error.message });
@@ -120,13 +123,29 @@ export class SyncService {
         }
         throw error;
       }
+    }
 
-      const saved = await this.repository.save(operation);
-
-      if (saved) {
-        accepted.push(operation.id);
+    // Check for duplicate operationIds within the same batch
+    const seenIds = new Set<string>();
+    const operationsToSave: Operation[] = [];
+    for (const operation of validOperations) {
+      if (seenIds.has(operation.id)) {
+        rejected.push({ operationId: operation.id, reason: "Duplicate operationId within batch" });
       } else {
-        rejected.push({ operationId: operation.id, reason: "Duplicate operationId" });
+        seenIds.add(operation.id);
+        operationsToSave.push(operation);
+      }
+    }
+
+    // Batch save valid operations
+    if (operationsToSave.length > 0) {
+      const saveResults = await this.repository.saveMany(operationsToSave);
+      for (let i = 0; i < operationsToSave.length; i++) {
+        if (saveResults[i]) {
+          accepted.push(operationsToSave[i].id);
+        } else {
+          rejected.push({ operationId: operationsToSave[i].id, reason: "Duplicate operationId" });
+        }
       }
     }
 
@@ -152,17 +171,14 @@ export class SyncService {
     const missing = await this.repository.findMissingOperations(
       documentId,
       knownOperationIds,
+      limit,
     );
 
-    let operations = missing;
-
-    if (limit && limit > 0) {
-      operations = missing.slice(0, limit);
-    }
+    const hasMore = limit !== undefined && limit > 0 && missing.length >= limit;
 
     return {
-      operations,
-      hasMore: missing.length > (limit ?? missing.length),
+      operations: missing,
+      hasMore,
     };
   }
 

@@ -219,7 +219,7 @@ describe("SyncClient", () => {
     expect(crdt.getState()).toBe("ACB");
   });
 
-  it.skip("sincronização bidirecional: Device A e Device B convergem - known issue: CRDT convergence order", async () => {
+  it("sincronização bidirecional: Device A e Device B convergem", async () => {
     const dbA = await SqliteFactory.createDatabase();
     const repoA = new SqliteOperationRepository(dbA);
     const clientA = new SyncClient(
@@ -264,7 +264,7 @@ describe("SyncClient", () => {
     expect(["AB", "BA"]).toContain(crdtA.getState());
   });
 
-  it.skip("três dispositivos sincronizando - known issue: CRDT convergence order with 3+ concurrent devices", async () => {
+  it("três dispositivos sincronizando", async () => {
     const clients = [
       { id: "device-A", apiKey: API_KEY_CLIENT_A_DEVICE_A, op: insert("op-a", "device-A", VectorClock.from({ "device-A": 1 }), null, "A") },
       { id: "device-B", apiKey: API_KEY_CLIENT_A_DEVICE_B, op: insert("op-b", "device-B", VectorClock.from({ "device-B": 1 }), null, "B") },
