@@ -10,3 +10,4 @@
 export { SqliteOperationRepository } from "./persistence/sqlite/SqliteOperationRepository.js";
 export { SqliteFactory } from "./persistence/sqlite/SqliteFactory.js";
 export { SCHEMA, QUERIES } from "./persistence/sqlite/schema.js";
+export { InMemoryOperationRepository } from "./persistence/server/InMemoryOperationRepository.js";
