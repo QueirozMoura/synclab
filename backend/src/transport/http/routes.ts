@@ -1,6 +1,9 @@
-import type { FastifyInstance } from "fastify";
-import { SyncService } from "@application/sync/SyncService.js";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import { SyncService, DocumentAccessDeniedError } from "@application/sync/SyncService.js";
 import type { ServerOperationRepository } from "@domain/sync/ServerOperationRepository.js";
+import type { DocumentAuthorizationRepository } from "@domain/auth/DocumentAuthorizationRepository.js";
+import type { AuthContext } from "@domain/auth/AuthContext.js";
+import { ApiKeyValidator, InvalidApiKeyError } from "@application/auth/ApiKeyValidator.js";
 import type { Operation } from "@domain/operations/Operation.js";
 import { OperationSerializer } from "@domain/operations/OperationSerializer.js";
 
@@ -37,19 +40,50 @@ interface SerializedOperation {
 }
 
 /**
+ * Estende FastifyRequest para incluir o contexto de autenticação.
+ */
+declare module "fastify" {
+  interface FastifyRequest {
+    authContext?: AuthContext;
+  }
+}
+
+/**
  * Registra as rotas de sincronização no servidor Fastify.
  */
 export function registerSyncRoutes(
   app: FastifyInstance,
   repository: ServerOperationRepository,
+  authzRepository: DocumentAuthorizationRepository,
+  apiKeyValidator: ApiKeyValidator,
 ): void {
-  const syncService = new SyncService(repository);
+  const syncService = new SyncService(repository, authzRepository);
   const serializer = new OperationSerializer();
+
+  /**
+   * Middleware de autenticação.
+   * Extrai e valida a API Key do header Authorization.
+   * Anexa o AuthContext ao request para uso nas rotas.
+   */
+  async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    try {
+      const authHeader = request.headers.authorization;
+      const authContext = apiKeyValidator.authenticate(authHeader);
+      request.authContext = authContext;
+    } catch (error) {
+      if (error instanceof InvalidApiKeyError) {
+        return reply.status(401).send({ error: "Unauthorized", message: error.message });
+      }
+      throw error;
+    }
+  }
 
   /**
    * POST /sync/push
    *
    * Recebe operações do cliente e as armazena no servidor.
+   *
+   * Requer autenticação via header Authorization: Bearer <api-key>
    *
    * Request body:
    * {
@@ -70,6 +104,11 @@ export function registerSyncRoutes(
    *   "accepted": ["op-id-1"],
    *   "rejected": [{ "operationId": "op-id-2", "reason": "Duplicate operationId" }]
    * }
+   *
+   * Erros:
+   * - 401: Não autenticado
+   * - 400: Payload inválido
+   * - 403: deviceId da operação não corresponde ao autenticado, ou sem acesso ao documento
    */
   app.post<{ Body: PushRequest }>(
     "/sync/push",
@@ -78,23 +117,30 @@ export function registerSyncRoutes(
         body: {
           type: "object",
           required: ["operations"],
-          properties: {
-            operations: {
-              type: "array",
-              items: {
-                type: "object",
-                required: ["id", "documentId", "deviceId", "type", "payload", "vectorClockMap"],
-                properties: {
-                  id: { type: "string" },
-                  documentId: { type: "string" },
-                  deviceId: { type: "string" },
-                  type: { type: "string", enum: ["INSERT", "DELETE"] },
-                  payload: { type: "object" },
-                  vectorClockMap: { type: "object" },
+properties: {
+              operations: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["id", "documentId", "deviceId", "type", "payload", "vectorClockMap"],
+                  properties: {
+                    id: { type: "string" },
+                    documentId: { type: "string" },
+                    deviceId: { type: "string" },
+                    type: { type: "string", enum: ["INSERT", "DELETE"] },
+                    payload: {
+                      type: "object",
+                      properties: {
+                        afterId: { type: ["string", "null"] },
+                        content: { type: "string" },
+                        elementIds: { type: "array", items: { type: "string" } },
+                      },
+                    },
+                    vectorClockMap: { type: "object" },
+                  },
                 },
               },
             },
-          },
         },
         response: {
           200: {
@@ -113,17 +159,43 @@ export function registerSyncRoutes(
               },
             },
           },
+          401: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+            },
+          },
+          400: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+            },
+          },
         },
       },
+      preHandler: authenticate,
     },
     async (request, reply) => {
       const { operations: serializedOps } = request.body;
+      const authContext = request.authContext!;
 
       const operations: Operation[] = serializedOps.map((serialized) =>
         serializer.deserialize(serialized as any),
       );
 
-      const result = await syncService.push(operations);
+      const result = await syncService.push(operations, authContext);
+
+      // Se todas as operações foram rejeitadas por deviceId mismatch ou acesso negado, retorna 403
+      const hasAuthRejections = result.rejected.some(
+        (r) => r.reason.includes("deviceId mismatch") || r.reason.includes("does not have access"),
+      );
+      const allRejected = result.accepted.length === 0 && result.rejected.length > 0;
+
+      if (hasAuthRejections && allRejected) {
+        return reply.status(403).send({ error: "Forbidden", rejected: result.rejected });
+      }
 
       return reply.send(result);
     },
@@ -133,6 +205,8 @@ export function registerSyncRoutes(
    * GET /sync/pull
    *
    * Retorna operações que o cliente ainda não possui.
+   *
+   * Requer autenticação via header Authorization: Bearer <api-key>
    *
    * Query params:
    * - documentId (required): ID do documento
@@ -144,6 +218,11 @@ export function registerSyncRoutes(
    *   "operations": [...],
    *   "hasMore": false
    * }
+   *
+   * Erros:
+   * - 401: Não autenticado
+   * - 400: Parâmetros inválidos (ex: documentId ausente)
+   * - 403: Sem acesso ao documento solicitado
    */
   app.get<{ Querystring: PullQuery }>(
     "/sync/pull",
@@ -158,10 +237,62 @@ export function registerSyncRoutes(
             limit: { type: "string", pattern: "^\\d+$" },
           },
         },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              operations: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    documentId: { type: "string" },
+                    deviceId: { type: "string" },
+                    type: { type: "string", enum: ["INSERT", "DELETE"] },
+                    payload: {
+                      type: "object",
+                      properties: {
+                        afterId: { type: ["string", "null"] },
+                        content: { type: "string" },
+                        elementIds: { type: "array", items: { type: "string" } },
+                      },
+                    },
+                    vectorClockMap: { type: "object" },
+                  },
+                },
+              },
+              hasMore: { type: "boolean" },
+            },
+          },
+          401: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+            },
+          },
+          400: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+            },
+          },
+          403: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+            },
+          },
+        },
       },
+      preHandler: authenticate,
     },
     async (request, reply) => {
       const { documentId, knownOperationIds, limit } = request.query;
+      const authContext = request.authContext!;
 
       const knownIds = knownOperationIds
         ? knownOperationIds.split(",").filter((id) => id.length > 0)
@@ -169,14 +300,22 @@ export function registerSyncRoutes(
 
       const limitNum = limit ? parseInt(limit, 10) : undefined;
 
-      const result = await syncService.pull(documentId, knownIds, limitNum);
+      try {
+        const result = await syncService.pull(documentId, knownIds, authContext, limitNum);
 
-      const serializedOps = result.operations.map((op: Operation) => serializer.serialize(op));
+        const serializedOps = result.operations.map((op: Operation) => serializer.serialize(op));
 
-      return reply.send({
-        operations: serializedOps,
-        hasMore: result.hasMore,
-      });
+        return reply.send({
+          operations: serializedOps,
+          hasMore: result.hasMore,
+        });
+      } catch (error) {
+        if (error instanceof DocumentAccessDeniedError) {
+          // Não revela se o documento existe - apenas nega acesso
+          return reply.status(403).send({ error: "Forbidden", message: "Access denied to document" });
+        }
+        throw error;
+      }
     },
   );
 }

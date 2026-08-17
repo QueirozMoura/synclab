@@ -1,0 +1,1 @@
+export * from "./InMemoryDocumentAuthorizationRepository.js";

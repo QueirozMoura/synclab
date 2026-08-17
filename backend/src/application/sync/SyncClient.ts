@@ -11,6 +11,8 @@ export interface SyncClientConfig {
   documentId: string;
   /** ID único deste dispositivo/cliente */
   deviceId: string;
+  /** API Key para autenticação (opcional, para servidores que exigem auth) */
+  apiKey?: string;
 }
 
 /**
@@ -69,6 +71,17 @@ export class SyncClient {
   }
 
   /**
+   * Cabeçalhos HTTP padrão incluindo autenticação se configurada.
+   */
+  private getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (this.config.apiKey) {
+      headers.Authorization = `Bearer ${this.config.apiKey}`;
+    }
+    return headers;
+  }
+
+  /**
    * Envia operações locais para o servidor.
    * O servidor deduplica por operationId, então é seguro enviar todas.
    * Retorna o número de operações aceitas pelo servidor.
@@ -84,7 +97,7 @@ export class SyncClient {
 
     const response = await fetch(`${this.config.serverUrl}/sync/push`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.getHeaders(),
       body: JSON.stringify({ operations: serialized }),
     });
 
@@ -116,7 +129,9 @@ export class SyncClient {
       params.set("knownOperationIds", knownIds.join(","));
     }
 
-    const response = await fetch(`${this.config.serverUrl}/sync/pull?${params.toString()}`);
+    const response = await fetch(`${this.config.serverUrl}/sync/pull?${params.toString()}`, {
+      headers: this.getHeaders(),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -154,7 +169,7 @@ export class SyncClient {
 
     const response = await fetch(`${this.config.serverUrl}/sync/push`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: this.getHeaders(),
       body: JSON.stringify({ operations: serialized }),
     });
 
@@ -175,7 +190,9 @@ export class SyncClient {
     const params = new URLSearchParams();
     params.set("documentId", this.config.documentId);
 
-    const response = await fetch(`${this.config.serverUrl}/sync/pull?${params.toString()}`);
+    const response = await fetch(`${this.config.serverUrl}/sync/pull?${params.toString()}`, {
+      headers: this.getHeaders(),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();

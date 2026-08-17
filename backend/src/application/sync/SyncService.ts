@@ -1,5 +1,7 @@
 import type { Operation } from "@domain/operations/Operation.js";
 import type { ServerOperationRepository } from "@domain/sync/ServerOperationRepository.js";
+import type { DocumentAuthorizationRepository } from "@domain/auth/DocumentAuthorizationRepository.js";
+import type { AuthContext } from "@domain/auth/AuthContext.js";
 import { OperationSerializer } from "@domain/operations/OperationSerializer.js";
 import { OperationType } from "@domain/operations/types.js";
 import { VectorClock } from "@domain/vector-clock/VectorClock.js";
@@ -35,6 +37,33 @@ export class OperationValidationError extends Error {
 }
 
 /**
+ * Erro de autorização - deviceId não corresponde ao autenticado.
+ */
+export class DeviceIdMismatchError extends Error {
+  constructor(
+    public readonly operationId: string,
+    public readonly expectedDeviceId: string,
+    public readonly actualDeviceId: string,
+  ) {
+    super(`Operation ${operationId}: deviceId mismatch. Expected ${expectedDeviceId}, got ${actualDeviceId}`);
+    this.name = "DeviceIdMismatchError";
+  }
+}
+
+/**
+ * Erro de autorização - acesso negado ao documento.
+ */
+export class DocumentAccessDeniedError extends Error {
+  constructor(
+    public readonly clientId: string,
+    public readonly documentId: string,
+  ) {
+    super(`Client ${clientId} does not have access to document ${documentId}`);
+    this.name = "DocumentAccessDeniedError";
+  }
+}
+
+/**
  * Serviço de sincronização do lado do servidor.
  *
  * Coordena:
@@ -45,10 +74,15 @@ export class OperationValidationError extends Error {
  */
 export class SyncService {
   private readonly repository: ServerOperationRepository;
+  private readonly authzRepository: DocumentAuthorizationRepository;
   private readonly serializer = new OperationSerializer();
 
-  constructor(repository: ServerOperationRepository) {
+  constructor(
+    repository: ServerOperationRepository,
+    authzRepository: DocumentAuthorizationRepository,
+  ) {
     this.repository = repository;
+    this.authzRepository = authzRepository;
   }
 
   /**
@@ -56,20 +90,32 @@ export class SyncService {
    *
    * Fluxo:
    * 1. Valida cada operação
-   * 2. Verifica duplicatas por operationId
-   * 3. Armazena operações novas
-   * 4. Retorna quais foram aceitas/rejeitadas
+   * 2. Verifica se deviceId da operação corresponde ao deviceId autenticado
+   * 3. Verifica autorização para os documentIds envolvidos
+   * 4. Verifica duplicatas por operationId
+   * 5. Armazena operações novas
+   * 6. Retorna quais foram aceitas/rejeitadas
    */
-  async push(operations: Operation[]): Promise<PushResult> {
+  async push(operations: Operation[], authContext: AuthContext): Promise<PushResult> {
     const accepted: string[] = [];
     const rejected: Array<{ operationId: string; reason: string }> = [];
 
     for (const operation of operations) {
       try {
         this.validateOperation(operation);
+        this.validateDeviceId(operation, authContext);
+        await this.validateDocumentAccess(authContext.clientId, operation.documentId);
       } catch (error) {
         if (error instanceof OperationValidationError) {
           rejected.push({ operationId: error.operationId, reason: error.message });
+          continue;
+        }
+        if (error instanceof DeviceIdMismatchError) {
+          rejected.push({ operationId: error.operationId, reason: error.message });
+          continue;
+        }
+        if (error instanceof DocumentAccessDeniedError) {
+          rejected.push({ operationId: operation.id, reason: error.message });
           continue;
         }
         throw error;
@@ -92,12 +138,17 @@ export class SyncService {
    *
    * O cliente informa quais operationIds já possui.
    * Retorna operações do documento que não estão no conjunto conhecido.
+   *
+   * Verifica autorização para o documentId antes de retornar operações.
    */
   async pull(
     documentId: string,
     knownOperationIds: string[],
+    authContext: AuthContext,
     limit?: number,
   ): Promise<PullResult> {
+    await this.validateDocumentAccess(authContext.clientId, documentId);
+
     const missing = await this.repository.findMissingOperations(
       documentId,
       knownOperationIds,
@@ -197,6 +248,28 @@ export class SyncService {
       VectorClock.from(clockMap);
     } catch {
       throw new OperationValidationError(id, "vectorClock", "Invalid vector clock format");
+    }
+  }
+
+  /**
+   * Valida que o deviceId da operação corresponde ao deviceId autenticado.
+   *
+   * Impede spoofing de deviceId - o cliente não pode enviar operações
+   * em nome de outro dispositivo.
+   */
+  private validateDeviceId(operation: Operation, authContext: AuthContext): void {
+    if (operation.deviceId !== authContext.deviceId) {
+      throw new DeviceIdMismatchError(operation.id, authContext.deviceId, operation.deviceId);
+    }
+  }
+
+  /**
+   * Valida se o cliente tem acesso ao documento.
+   */
+  private async validateDocumentAccess(clientId: string, documentId: string): Promise<void> {
+    const hasAccess = await this.authzRepository.canAccessDocument(clientId, documentId);
+    if (!hasAccess) {
+      throw new DocumentAccessDeniedError(clientId, documentId);
     }
   }
 

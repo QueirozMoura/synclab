@@ -91,6 +91,7 @@ export class InMemoryOperationRepository implements ServerOperationRepository {
       return Object.freeze({
         ...operation,
         payload: Object.freeze({ ...operation.payload }),
+        vectorClock: operation.vectorClock,
       });
     }
 
@@ -99,6 +100,7 @@ export class InMemoryOperationRepository implements ServerOperationRepository {
       payload: Object.freeze({
         elementIds: Object.freeze([...operation.payload.elementIds]),
       }),
+      vectorClock: operation.vectorClock,
     });
   }
 }
