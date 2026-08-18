@@ -75,6 +75,9 @@ export class VectorClock {
    * - Caso contrário, são concorrentes (CONCURRENT)
    */
   compare(other: VectorClock): ClockOrdering {
+    if (!(other instanceof VectorClock)) {
+      throw new TypeError("VectorClock.compare: 'other' must be a VectorClock instance");
+    }
     const allKeys = new Set([
       ...Object.keys(this.clock),
       ...Object.keys(other.clock),

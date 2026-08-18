@@ -5,6 +5,8 @@ import {
   OperationLog,
   OperationType,
   type Operation,
+  OperationSerializer,
+  DeserializationError,
 } from "../src/domain/operations/index.js";
 
 describe("Operation", () => {
@@ -95,6 +97,276 @@ describe("Operation", () => {
     });
 
     expect(op.vectorClock.get("device-A")).toBe(2);
+  });
+});
+
+describe("OperationSerializer", () => {
+  const serializer = new OperationSerializer();
+  const validVectorClock = { "device-A": 1 };
+
+  function makeValidInsertData(overrides: Partial<{ id: string; documentId: string; deviceId: string; payload: any; vectorClockMap: any }> = {}) {
+    return {
+      id: "op-1",
+      documentId: "doc-1",
+      deviceId: "device-A",
+      type: OperationType.INSERT,
+      payload: { afterId: null, content: "hello" },
+      vectorClockMap: validVectorClock,
+      ...overrides,
+    };
+  }
+
+  function makeValidDeleteData(overrides: Partial<{ id: string; documentId: string; deviceId: string; payload: any; vectorClockMap: any }> = {}) {
+    return {
+      id: "op-1",
+      documentId: "doc-1",
+      deviceId: "device-A",
+      type: OperationType.DELETE,
+      payload: { elementIds: ["elem-1", "elem-2"] },
+      vectorClockMap: validVectorClock,
+      ...overrides,
+    };
+  }
+
+  describe("serialize", () => {
+    it("deve serializar operação INSERT corretamente", () => {
+      const vc = VectorClock.from({ "device-A": 2, "device-B": 1 });
+      const op = createOperation({
+        documentId: "doc-1",
+        deviceId: "device-A",
+        type: OperationType.INSERT,
+        payload: { afterId: null, content: "hello" },
+        vectorClock: vc,
+      });
+
+      const serialized = serializer.serialize(op);
+
+      expect(serialized.id).toBe(op.id);
+      expect(serialized.documentId).toBe("doc-1");
+      expect(serialized.deviceId).toBe("device-A");
+      expect(serialized.type).toBe(OperationType.INSERT);
+      expect(serialized.payload).toEqual({ afterId: null, content: "hello" });
+      expect(serialized.vectorClockMap).toEqual({ "device-A": 2, "device-B": 1 });
+    });
+
+    it("deve serializar operação DELETE corretamente", () => {
+      const vc = VectorClock.from({ "device-A": 1 });
+      const op = createOperation({
+        documentId: "doc-1",
+        deviceId: "device-A",
+        type: OperationType.DELETE,
+        payload: { elementIds: ["elem-1", "elem-2"] },
+        vectorClock: vc,
+      });
+
+      const serialized = serializer.serialize(op);
+
+      expect(serialized.type).toBe(OperationType.DELETE);
+      expect(serialized.payload).toEqual({ elementIds: ["elem-1", "elem-2"] });
+    });
+  });
+
+  describe("deserialize - operações válidas", () => {
+    it("deve desserializar operação INSERT válida", () => {
+      const data = makeValidInsertData();
+      const op = serializer.deserialize(data);
+
+      expect(op.id).toBe("op-1");
+      expect(op.documentId).toBe("doc-1");
+      expect(op.deviceId).toBe("device-A");
+      expect(op.type).toBe(OperationType.INSERT);
+      expect(op.payload).toEqual({ afterId: null, content: "hello" });
+      expect(op.vectorClock.toMap()).toEqual(validVectorClock);
+    });
+
+    it("deve desserializar operação INSERT com afterId", () => {
+      const data = makeValidInsertData({
+        payload: { afterId: "op-abc:0", content: "world" },
+      });
+      const op = serializer.deserialize(data);
+
+      expect(op.type).toBe(OperationType.INSERT);
+      expect(op.payload.afterId).toBe("op-abc:0");
+      expect(op.payload.content).toBe("world");
+    });
+
+    it("deve desserializar operação DELETE válida", () => {
+      const data = makeValidDeleteData();
+      const op = serializer.deserialize(data);
+
+      expect(op.id).toBe("op-1");
+      expect(op.type).toBe(OperationType.DELETE);
+      expect(op.payload.elementIds).toEqual(["elem-1", "elem-2"]);
+    });
+  });
+
+  describe("deserialize - validação de campos obrigatórios", () => {
+    it("deve lançar erro se data for null", () => {
+      expect(() => serializer.deserialize(null as any)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se data não for objeto", () => {
+      expect(() => serializer.deserialize("string" as any)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se id estiver ausente", () => {
+      const data = makeValidInsertData({ id: undefined as any });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se id for string vazia", () => {
+      const data = makeValidInsertData({ id: "" });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se documentId estiver ausente", () => {
+      const data = makeValidInsertData({ documentId: undefined as any });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se documentId for string vazia", () => {
+      const data = makeValidInsertData({ documentId: "" });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se deviceId estiver ausente", () => {
+      const data = makeValidInsertData({ deviceId: undefined as any });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se deviceId for string vazia", () => {
+      const data = makeValidInsertData({ deviceId: "" });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se type estiver ausente", () => {
+      const data = makeValidInsertData({ type: undefined as any });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se type for inválido", () => {
+      const data = makeValidInsertData({ type: "INVALID" as any });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se payload estiver ausente", () => {
+      const data = makeValidInsertData({ payload: undefined as any });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se payload não for objeto", () => {
+      const data = makeValidInsertData({ payload: "string" as any });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se vectorClockMap estiver ausente", () => {
+      const data = makeValidInsertData({ vectorClockMap: undefined as any });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se vectorClockMap não for objeto", () => {
+      const data = makeValidInsertData({ vectorClockMap: "string" as any });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+  });
+
+  describe("deserialize - validação de vectorClockMap", () => {
+    it("deve lançar erro se vectorClockMap tiver chave vazia", () => {
+      const data = makeValidInsertData({ vectorClockMap: { "": 1 } });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se vectorClockMap tiver valor não inteiro", () => {
+      const data = makeValidInsertData({ vectorClockMap: { "device-A": 1.5 } });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se vectorClockMap tiver valor negativo", () => {
+      const data = makeValidInsertData({ vectorClockMap: { "device-A": -1 } });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se vectorClockMap tiver valor não numérico", () => {
+      const data = makeValidInsertData({ vectorClockMap: { "device-A": "um" } });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+  });
+
+  describe("deserialize - validação de payload INSERT", () => {
+    it("deve lançar erro se INSERT payload não tiver content", () => {
+      const data = makeValidInsertData({ payload: { afterId: null } });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se INSERT content não for string", () => {
+      const data = makeValidInsertData({ payload: { afterId: null, content: 123 } });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se INSERT afterId for string vazia", () => {
+      const data = makeValidInsertData({ payload: { afterId: "", content: "x" } });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve aceitar INSERT afterId null", () => {
+      const data = makeValidInsertData({ payload: { afterId: null, content: "x" } });
+      const op = serializer.deserialize(data);
+      expect(op.payload.afterId).toBeNull();
+    });
+  });
+
+  describe("deserialize - validação de payload DELETE", () => {
+    it("deve lançar erro se DELETE payload não tiver elementIds", () => {
+      const data = makeValidDeleteData({ payload: {} });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se DELETE elementIds não for array", () => {
+      const data = makeValidDeleteData({ payload: { elementIds: "not-array" } });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve lançar erro se DELETE elementIds contiver string vazia", () => {
+      const data = makeValidDeleteData({ payload: { elementIds: ["elem-1", ""] } });
+      expect(() => serializer.deserialize(data)).toThrow(DeserializationError);
+    });
+
+    it("deve aceitar DELETE elementIds vazio", () => {
+      const data = makeValidDeleteData({ payload: { elementIds: [] } });
+      const op = serializer.deserialize(data);
+      expect(op.payload.elementIds).toEqual([]);
+    });
+  });
+
+  describe("toJSON / fromJSON", () => {
+    it("deve serializar e desserializar via JSON roundtrip", () => {
+      const vc = VectorClock.from({ "device-A": 1 });
+      const op = createOperation({
+        documentId: "doc-1",
+        deviceId: "device-A",
+        type: OperationType.INSERT,
+        payload: { afterId: null, content: "hello" },
+        vectorClock: vc,
+      });
+
+      const json = serializer.toJSON(op);
+      const deserialized = serializer.fromJSON(json);
+
+      expect(deserialized.id).toBe(op.id);
+      expect(deserialized.documentId).toBe(op.documentId);
+      expect(deserialized.deviceId).toBe(op.deviceId);
+      expect(deserialized.type).toBe(op.type);
+      expect(deserialized.payload).toEqual(op.payload);
+      expect(deserialized.vectorClock.equals(op.vectorClock)).toBe(true);
+    });
+
+    it("deve lançar erro em fromJSON com JSON inválido", () => {
+      expect(() => serializer.fromJSON("not valid json")).toThrow();
+    });
+
+    it("deve lançar erro em fromJSON com objeto inválido", () => {
+      expect(() => serializer.fromJSON('{"id": ""}')).toThrow(DeserializationError);
+    });
   });
 });
 

@@ -110,6 +110,26 @@ describe("VectorClock", () => {
       const b = VectorClock.from({ "device-B": 1 });
       expect(a.compare(b)).toBe(ClockOrdering.CONCURRENT);
     });
+
+    it("deve lançar TypeError quando 'other' não é VectorClock (null)", () => {
+      const a = VectorClock.from({ "device-A": 1 });
+      expect(() => a.compare(null as any)).toThrow(TypeError);
+    });
+
+    it("deve lançar TypeError quando 'other' não é VectorClock (objeto plano)", () => {
+      const a = VectorClock.from({ "device-A": 1 });
+      expect(() => a.compare({ "device-A": 1 } as any)).toThrow(TypeError);
+    });
+
+    it("deve lançar TypeError quando 'other' não é VectorClock (array)", () => {
+      const a = VectorClock.from({ "device-A": 1 });
+      expect(() => a.compare([] as any)).toThrow(TypeError);
+    });
+
+    it("deve lançar TypeError quando 'other' não é VectorClock (string)", () => {
+      const a = VectorClock.from({ "device-A": 1 });
+      expect(() => a.compare("invalid" as any)).toThrow(TypeError);
+    });
   });
 
   describe("isBefore / isConcurrentWith / equals", () => {

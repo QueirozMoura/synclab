@@ -11,6 +11,13 @@ const SYNC_RATE_LIMIT_MAX = parseInt(process.env.SYNC_RATE_LIMIT_MAX ?? "100", 1
 const SYNC_RATE_LIMIT_WINDOW = process.env.SYNC_RATE_LIMIT_WINDOW ?? "1 minute";
 
 /**
+ * Gera um ID de requisição curto para correlação de logs.
+ */
+function generateRequestId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
  * DTO para request de push.
  */
 interface PushRequest {
@@ -43,17 +50,18 @@ interface SerializedOperation {
 }
 
 /**
- * Estende FastifyRequest para incluir o contexto de autenticação.
+ * Estende FastifyRequest para incluir o contexto de autenticação e requestId.
  */
 declare module "fastify" {
   interface FastifyRequest {
     authContext?: AuthContext;
+    requestId?: string;
   }
 }
 
 /**
-   * Registra as rotas de sincronização no servidor Fastify.
-   */
+ * Registra as rotas de sincronização no servidor Fastify.
+ */
 export function registerSyncRoutes(
   app: FastifyInstance,
   repository: ServerOperationRepository,
@@ -63,7 +71,27 @@ export function registerSyncRoutes(
   const syncService = new SyncService(repository, authzRepository);
   const serializer = new OperationSerializer();
 
-  app.setErrorHandler((error: unknown, _request: FastifyRequest, reply: FastifyReply) => {
+  // Request ID hook para correlação de logs
+  app.addHook("onRequest", async (request) => {
+    request.requestId = request.headers["x-request-id"] as string ?? generateRequestId();
+  });
+
+  // Logging estruturado de request/response
+  app.addHook("onResponse", async (request, reply) => {
+    const authContext = request.authContext;
+    app.log.info({
+      requestId: request.requestId,
+      method: request.method,
+      url: request.url,
+      statusCode: reply.statusCode,
+      responseTime: reply.elapsedTime,
+      clientId: authContext?.clientId,
+      deviceId: authContext?.deviceId,
+    }, "HTTP request completed");
+  });
+
+  // Logging de erros não tratados
+  app.setErrorHandler((error: unknown, request: FastifyRequest, reply: FastifyReply) => {
     const err = error as FastifyError & { statusCode?: number; retryAfter?: number; customBody?: Record<string, unknown> };
     const statusCode = err.statusCode ?? 500;
     let errorName = err.name;
@@ -91,6 +119,21 @@ export function registerSyncRoutes(
           errorName = "Error";
       }
     }
+
+    // Log estruturado do erro (sem dados sensíveis)
+    const authContext = request.authContext;
+    app.log.error({
+      requestId: request.requestId,
+      method: request.method,
+      url: request.url,
+      statusCode,
+      error: errorName,
+      message: err.message,
+      stack: statusCode >= 500 ? err.stack : undefined,
+      clientId: authContext?.clientId,
+      deviceId: authContext?.deviceId,
+    }, "HTTP request error");
+
     const response: Record<string, unknown> = {
       error: errorName,
       message: err.message,
@@ -110,14 +153,34 @@ export function registerSyncRoutes(
    * Anexa o AuthContext ao request para uso nas rotas.
    */
   async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    const startTime = Date.now();
     try {
       const authHeader = request.headers.authorization;
       const authContext = apiKeyValidator.authenticate(authHeader);
       request.authContext = authContext;
+
+      app.log.info({
+        requestId: request.requestId,
+        clientId: authContext.clientId,
+        deviceId: authContext.deviceId,
+        durationMs: Date.now() - startTime,
+      }, "Authentication successful");
     } catch (error) {
       if (error instanceof InvalidApiKeyError) {
+        app.log.warn({
+          requestId: request.requestId,
+          ip: request.ip,
+          durationMs: Date.now() - startTime,
+          reason: error.message,
+        }, "Authentication failed");
         return reply.status(401).send({ error: "Unauthorized", message: error.message });
       }
+      app.log.error({
+        requestId: request.requestId,
+        ip: request.ip,
+        durationMs: Date.now() - startTime,
+        error: error instanceof Error ? error.message : String(error),
+      }, "Authentication error");
       throw error;
     }
   }
@@ -200,64 +263,64 @@ export function registerSyncRoutes(
         body: {
           type: "object",
           required: ["operations"],
-properties: {
-              operations: {
-                type: "array",
-                items: {
-                  type: "object",
-                  required: ["id", "documentId", "deviceId", "type", "payload", "vectorClockMap"],
-                  properties: {
-                    id: { type: "string" },
-                    documentId: { type: "string" },
-                    deviceId: { type: "string" },
-                    type: { type: "string", enum: ["INSERT", "DELETE"] },
-payload: {
-                      type: "object",
-                      properties: {
-                        afterId: { type: ["string", "null"] },
-                        content: { type: "string" },
-                        elementIds: { type: "array", items: { type: "string" } },
-                      },
-                      additionalProperties: false,
+          properties: {
+            operations: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["id", "documentId", "deviceId", "type", "payload", "vectorClockMap"],
+                properties: {
+                  id: { type: "string" },
+                  documentId: { type: "string" },
+                  deviceId: { type: "string" },
+                  type: { type: "string", enum: ["INSERT", "DELETE"] },
+                  payload: {
+                    type: "object",
+                    properties: {
+                      afterId: { type: ["string", "null"] },
+                      content: { type: "string" },
+                      elementIds: { type: "array", items: { type: "string" } },
                     },
-                    vectorClockMap: { type: "object", additionalProperties: { type: "number" } },
+                    additionalProperties: false,
                   },
+                  vectorClockMap: { type: "object", additionalProperties: { type: "number" } },
                 },
               },
-            },
-          },
-          response: {
-          200: {
-            type: "object",
-            properties: {
-              accepted: { type: "array", items: { type: "string" } },
-              rejected: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    operationId: { type: "string" },
-                    reason: { type: "string" },
-                  },
-                },
-              },
-            },
-          },
-          401: {
-            type: "object",
-            properties: {
-              error: { type: "string" },
-              message: { type: "string" },
-            },
-          },
-          400: {
-            type: "object",
-            properties: {
-              error: { type: "string" },
-              message: { type: "string" },
             },
           },
         },
+        response: {
+        200: {
+          type: "object",
+          properties: {
+            accepted: { type: "array", items: { type: "string" } },
+            rejected: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  operationId: { type: "string" },
+                  reason: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        401: {
+          type: "object",
+          properties: {
+            error: { type: "string" },
+            message: { type: "string" },
+          },
+        },
+        400: {
+          type: "object",
+          properties: {
+            error: { type: "string" },
+            message: { type: "string" },
+          },
+        },
+      },
       },
       preHandler: authenticate,
       config: {
@@ -267,18 +330,68 @@ payload: {
     async (request, reply) => {
       const { operations: serializedOps } = request.body;
       const authContext = request.authContext!;
+      const startTime = Date.now();
 
-      const operations: Operation[] = serializedOps.map((serialized) =>
-        serializer.deserialize(serialized as any),
-      );
+      // Log estruturado do push recebido (sem conteúdo sensível)
+      const operationSummary = serializedOps.map((op) => ({
+        id: op.id,
+        documentId: op.documentId,
+        deviceId: op.deviceId,
+        type: op.type,
+        // Não logar payload.content nem elementIds (dados sensíveis)
+      }));
 
-      const result = await syncService.push(operations, authContext);
+      app.log.info({
+        requestId: request.requestId,
+        clientId: authContext.clientId,
+        deviceId: authContext.deviceId,
+        operationCount: serializedOps.length,
+        operations: operationSummary,
+      }, "Sync push received");
+
+      let operations: Operation[];
+      try {
+        operations = serializedOps.map((serialized) =>
+          serializer.deserialize(serialized as any),
+        );
+      } catch (error) {
+        app.log.warn({
+          requestId: request.requestId,
+          clientId: authContext.clientId,
+          deviceId: authContext.deviceId,
+          error: error instanceof Error ? error.message : String(error),
+        }, "Sync push deserialization failed");
+        throw error;
+      }
+
+      let result;
+      try {
+        result = await syncService.push(operations, authContext);
+      } catch (error) {
+        app.log.error({
+          requestId: request.requestId,
+          clientId: authContext.clientId,
+          deviceId: authContext.deviceId,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        }, "Sync push service error");
+        throw error;
+      }
 
       // Se todas as operações foram rejeitadas por deviceId mismatch ou acesso negado, retorna 403
       const hasAuthRejections = result.rejected.some(
         (r) => r.reason.includes("deviceId mismatch") || r.reason.includes("does not have access"),
       );
       const allRejected = result.accepted.length === 0 && result.rejected.length > 0;
+
+      app.log.info({
+        requestId: request.requestId,
+        clientId: authContext.clientId,
+        deviceId: authContext.deviceId,
+        acceptedCount: result.accepted.length,
+        rejectedCount: result.rejected.length,
+        durationMs: Date.now() - startTime,
+      }, "Sync push completed");
 
       if (hasAuthRejections && allRejected) {
         return reply.status(403).send({ error: "Forbidden", rejected: result.rejected });
@@ -383,6 +496,7 @@ payload: {
     async (request, reply) => {
       const { documentId, knownOperationIds, limit } = request.query;
       const authContext = request.authContext!;
+      const startTime = Date.now();
 
       const knownIds = knownOperationIds
         ? knownOperationIds.split(",").filter((id) => id.length > 0)
@@ -390,8 +504,27 @@ payload: {
 
       const limitNum = limit ? parseInt(limit, 10) : undefined;
 
+      app.log.info({
+        requestId: request.requestId,
+        clientId: authContext.clientId,
+        deviceId: authContext.deviceId,
+        documentId,
+        knownOperationCount: knownIds.length,
+        limit: limitNum,
+      }, "Sync pull requested");
+
       try {
         const result = await syncService.pull(documentId, knownIds, authContext, limitNum);
+
+        app.log.info({
+          requestId: request.requestId,
+          clientId: authContext.clientId,
+          deviceId: authContext.deviceId,
+          documentId,
+          returnedOperationCount: result.operations.length,
+          hasMore: result.hasMore,
+          durationMs: Date.now() - startTime,
+        }, "Sync pull completed");
 
         const serializedOps = result.operations.map((op: Operation) => serializer.serialize(op));
 
@@ -401,9 +534,25 @@ payload: {
         });
       } catch (error) {
         if (error instanceof DocumentAccessDeniedError) {
+          app.log.warn({
+            requestId: request.requestId,
+            clientId: authContext.clientId,
+            deviceId: authContext.deviceId,
+            documentId,
+            durationMs: Date.now() - startTime,
+          }, "Sync pull access denied");
           // Não revela se o documento existe - apenas nega acesso
           return reply.status(403).send({ error: "Forbidden", message: "Access denied to document" });
         }
+        app.log.error({
+          requestId: request.requestId,
+          clientId: authContext.clientId,
+          deviceId: authContext.deviceId,
+          documentId,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          durationMs: Date.now() - startTime,
+        }, "Sync pull error");
         throw error;
       }
     },

@@ -3,6 +3,55 @@ import { OperationLog } from "../operations/OperationLog.js";
 import { ClockOrdering } from "../vector-clock/types.js";
 
 /**
+ * Union-Find (Disjoint Set) para agrupamento eficiente.
+ * Complexidade amortizada O(α(n)) por operação, onde α é a função inversa de Ackermann.
+ */
+class UnionFind {
+  private readonly parent: number[];
+  private readonly rank: number[];
+
+  constructor(size: number) {
+    this.parent = Array.from({ length: size }, (_, i) => i);
+    this.rank = new Array(size).fill(0);
+  }
+
+  find(x: number): number {
+    if (this.parent[x] !== x) {
+      this.parent[x] = this.find(this.parent[x]); // path compression
+    }
+    return this.parent[x];
+  }
+
+  union(x: number, y: number): void {
+    const rootX = this.find(x);
+    const rootY = this.find(y);
+    if (rootX === rootY) return;
+
+    // union by rank
+    if (this.rank[rootX] < this.rank[rootY]) {
+      this.parent[rootX] = rootY;
+    } else if (this.rank[rootX] > this.rank[rootY]) {
+      this.parent[rootY] = rootX;
+    } else {
+      this.parent[rootY] = rootX;
+      this.rank[rootX]++;
+    }
+  }
+
+  getGroups(): number[][] {
+    const groupsMap = new Map<number, number[]>();
+    for (let i = 0; i < this.parent.length; i++) {
+      const root = this.find(i);
+      if (!groupsMap.has(root)) {
+        groupsMap.set(root, []);
+      }
+      groupsMap.get(root)!.push(i);
+    }
+    return Array.from(groupsMap.values());
+  }
+}
+
+/**
  * Motor de sincronização do SyncLab.
  *
  * Responsabilidades:
@@ -121,28 +170,41 @@ export class SyncEngine {
    * concorrentes com nenhuma outra não aparecem em nenhum grupo.
    *
    * Útil para identificar onde resolução de conflitos (CRDT) será necessária.
+   *
+   * Implementação usando Union-Find (Disjoint Set) para O(n² α(n)) tempo,
+   * onde α é a função inversa de Ackermann (praticamente constante).
    */
   getConcurrentGroups(documentId: string): Operation[][] {
     const ops = this.log.getByDocument(documentId);
-    const groups: Operation[][] = [];
+    const n = ops.length;
+    if (n < 2) return [];
 
-    for (let i = 0; i < ops.length; i++) {
-      for (let j = i + 1; j < ops.length; j++) {
+    const uf = new UnionFind(n);
+
+    // União de operações concorrentes
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
         if (ops[i].vectorClock.isConcurrentWith(ops[j].vectorClock)) {
-          // Encontra ou cria um grupo que contém ops[i] ou ops[j]
-          let group = groups.find(
-            (g) => g.includes(ops[i]) || g.includes(ops[j]),
-          );
-
-          if (!group) {
-            group = [];
-            groups.push(group);
-          }
-
-          if (!group.includes(ops[i])) group.push(ops[i]);
-          if (!group.includes(ops[j])) group.push(ops[j]);
+          uf.union(i, j);
         }
       }
+    }
+
+    // Agrupa por raiz e filtra grupos de tamanho 1 (sem concorrência)
+    const groups = uf.getGroups()
+      .filter((group) => group.length > 1)
+      .map((indices) => indices.map((i) => ops[i]));
+
+    // Ordena grupos e operações dentro dos grupos para determinismo
+    groups.sort((a, b) => {
+      // Ordena por primeiro ID do grupo
+      return a[0].id.localeCompare(b[0].id);
+    });
+    for (const group of groups) {
+      group.sort((a, b) => {
+        if (a.deviceId !== b.deviceId) return a.deviceId.localeCompare(b.deviceId);
+        return a.id.localeCompare(b.id);
+      });
     }
 
     return groups;

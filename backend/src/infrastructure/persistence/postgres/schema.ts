@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS operations (
 CREATE INDEX IF NOT EXISTS idx_operations_document_id ON operations(document_id);
 CREATE INDEX IF NOT EXISTS idx_operations_device_id ON operations(device_id);
 CREATE INDEX IF NOT EXISTS idx_operations_created_at ON operations(created_at);
+CREATE INDEX IF NOT EXISTS idx_operations_document_id_created_at ON operations(document_id, created_at);
 `;
 
 /**
