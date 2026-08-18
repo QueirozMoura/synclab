@@ -39,8 +39,15 @@ export class PostgresOperationRepository implements ServerOperationRepository {
       idleTimeoutMillis: poolConfig?.idleTimeoutMillis ?? 30000,
       connectionTimeoutMillis: poolConfig?.connectionTimeoutMillis ?? 5000,
     });
+  }
 
-    this.initializeSchema();
+  static async create(
+    connectionString: string,
+    poolConfig?: Partial<pg.PoolConfig>,
+  ): Promise<PostgresOperationRepository> {
+    const repository = new PostgresOperationRepository(connectionString, poolConfig);
+    await repository.initializeSchema();
+    return repository;
   }
 
   /**

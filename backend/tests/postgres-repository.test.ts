@@ -43,13 +43,13 @@ function remove(
 describe("PostgresOperationRepository", () => {
   let repository: PostgresOperationRepository | null = null;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) {
       console.warn("DATABASE_URL não definida - testes de integração PostgreSQL serão pulados");
       return;
     }
-    repository = new PostgresOperationRepository(databaseUrl);
+    repository = await PostgresOperationRepository.create(databaseUrl);
   });
 
   afterAll(async () => {
@@ -316,7 +316,7 @@ describe("PostgresOperationRepository", () => {
   skipIfNoDb("close fecha o pool de conexões", async () => {
     // Cria uma instância separada para testar o close sem afetar os outros testes
     const databaseUrl = process.env.DATABASE_URL!;
-    const testRepo = new PostgresOperationRepository(databaseUrl);
+    const testRepo = await PostgresOperationRepository.create(databaseUrl);
     await expect(testRepo.close()).resolves.not.toThrow();
     expect(await testRepo.healthCheck()).toBe(false);
   });
@@ -325,13 +325,13 @@ describe("PostgresOperationRepository", () => {
 describe("PostgresOperationRepository - Reconstrução CRDT", () => {
   let repository: PostgresOperationRepository | null = null;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) {
       console.warn("DATABASE_URL não definida - testes de integração PostgreSQL serão pulados");
       return;
     }
-    repository = new PostgresOperationRepository(databaseUrl);
+    repository = await PostgresOperationRepository.create(databaseUrl);
   });
 
   afterAll(async () => {

@@ -8,7 +8,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts"
+    "dev": "node --env-file=.env --import=tsx/esm src/server.ts"
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",

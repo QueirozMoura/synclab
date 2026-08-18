@@ -13,11 +13,11 @@ import { registerSyncRoutes } from "./routes.js";
  * 1. Se DATABASE_URL estiver definido, usa PostgresOperationRepository
  * 2. Caso contrário, usa InMemoryOperationRepository (desenvolvimento/testes)
  */
-function createRepository(): InMemoryOperationRepository | PostgresOperationRepository {
+async function createRepository(): Promise<InMemoryOperationRepository | PostgresOperationRepository> {
   const databaseUrl = process.env.DATABASE_URL;
 
   if (databaseUrl) {
-    return new PostgresOperationRepository(databaseUrl);
+    return await PostgresOperationRepository.create(databaseUrl);
   }
 
   return new InMemoryOperationRepository();
@@ -96,7 +96,7 @@ export async function createServer(): Promise<FastifyInstance> {
     hook: "preHandler",
   });
 
-  const repository = createRepository();
+  const repository = await createRepository();
   const authzRepository = createAuthzRepository();
   const apiKeyValidator = createApiKeyValidator();
 
