@@ -75,7 +75,7 @@ export class TextDocumentCrdt {
         }
 
         let afterId = operation.payload.afterId;
-        for (const [index, value] of Array.from(operation.payload.content).entries()) {
+        for (const [index, value] of Array.from(operatuion.payload.content).entries()) {
           const id = createElementId(operation.id, index);
           nodes.set(id, { id, afterId, value, operationOrder, index });
           afterId = id;

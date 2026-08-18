@@ -2,9 +2,10 @@ import React from "react";
 
 interface NavbarProps {
   onOpenApp?: () => void;
+  onOpenDashboard?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onOpenApp }) => {
+export const Navbar: React.FC<NavbarProps> = ({ onOpenApp, onOpenDashboard }) => {
   return (
     <nav className="fixed top-0 w-full z-50 border-line glass-effect">
       <div className="container-main h-16 flex items-center justify-between">
@@ -62,6 +63,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenApp }) => {
         <div className="flex items-center gap-3">
           <button className="text-[#C7C4D7] text-sm hover:text-[#E4E1ED] transition-colors hidden sm:block">
             Log in
+          </button>
+          <button
+            onClick={onOpenDashboard}
+            className="btn-secondary text-sm hidden sm:block"
+          >
+            Dashboard
           </button>
           <button 
             onClick={onOpenApp}
