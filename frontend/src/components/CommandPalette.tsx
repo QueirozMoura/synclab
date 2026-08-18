@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Icon } from "./Icon";
+import { useNavigate } from "react-router-dom";
+import { useDocuments } from "../hooks/useDocuments";
 
 type IconName = 
   | "search" 
@@ -31,71 +33,84 @@ interface CommandPaletteProps {
   onClose: () => void;
 }
 
-const COMMANDS: Command[] = [
-  {
-    id: "new-document",
-    label: "New document",
-    icon: "note_add",
-    shortcut: "↵",
-    action: () => console.log("New document"),
-    section: "suggestions",
-  },
-  {
-    id: "search-documents",
-    label: "Search documents",
-    icon: "manage_search",
-    action: () => console.log("Search documents"),
-    section: "suggestions",
-  },
-  {
-    id: "open-recent",
-    label: "Open recent",
-    icon: "history",
-    action: () => console.log("Open recent"),
-    section: "suggestions",
-  },
-  {
-    id: "sync-now",
-    label: "Sync now",
-    icon: "sync",
-    action: () => console.log("Sync now"),
-    section: "suggestions",
-    showIndicator: true,
-  },
-  {
-    id: "view-history",
-    label: "View history",
-    icon: "update",
-    action: () => console.log("View history"),
-    section: "suggestions",
-  },
-  {
-    id: "settings",
-    label: "Settings",
-    icon: "settings",
-    action: () => console.log("Settings"),
-    section: "settings",
-  },
-];
-
-const MAC_OS = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
-
 export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const isFirstOpenRef = useRef(true);
+  const navigate = useNavigate();
+  const { createDocument } = useDocuments();
+
+  const handleNewDocument = useCallback(() => {
+    const document = createDocument();
+    navigate(`/app/documents/${document.id}`);
+  }, [createDocument, navigate]);
+
+  const commands = useMemo<Command[]>(
+    () => [
+      {
+        id: "new-document",
+        label: "New document",
+        icon: "note_add",
+        shortcut: "↵",
+        action: handleNewDocument,
+        section: "suggestions",
+      },
+      {
+        id: "search-documents",
+        label: "Search documents",
+        icon: "manage_search",
+        action: () => navigate("/app/documents"),
+        section: "suggestions",
+      },
+      {
+        id: "open-recent",
+        label: "Open recent",
+        icon: "history",
+        action: () => navigate("/app"),
+        section: "suggestions",
+      },
+      {
+        id: "sync-now",
+        label: "Sync now",
+        icon: "sync",
+        action: () => {
+          // Show syncing state visually
+          console.log("Sync initiated");
+        },
+        section: "suggestions",
+        showIndicator: true,
+      },
+      {
+        id: "view-history",
+        label: "View history",
+        icon: "update",
+        action: () => navigate("/app/documents/history"),
+        section: "suggestions",
+      },
+      {
+        id: "settings",
+        label: "Settings",
+        icon: "settings",
+        action: () => navigate("/app/settings"),
+        section: "settings",
+      },
+    ],
+    [handleNewDocument, navigate]
+  );
 
   const filteredCommands = useMemo(() => {
-    if (!query.trim()) return COMMANDS;
+    if (!query.trim()) return commands;
     const lowerQuery = query.toLowerCase();
-    return COMMANDS.filter(
+    return commands.filter(
       (cmd) =>
         cmd.label.toLowerCase().includes(lowerQuery) ||
         cmd.id.toLowerCase().includes(lowerQuery)
     );
-  }, [query]);
+  }, [query, commands]);
+
+  const MAC_OS = typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
 
   const currentSection = useMemo(() => {
     if (!query.trim()) return null;
@@ -161,7 +176,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, filteredCommands, selectedIndex, onClose]);
+  }, [isOpen, filteredCommands, selectedIndex, onClose, navigate]);
 
   const handleOverlayClick = (e: React.MouseEvent) => {
     if (e.target === overlayRef.current) {

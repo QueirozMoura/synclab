@@ -1,19 +1,17 @@
 import React from "react";
+import { Link, NavLink } from "react-router-dom";
 
 interface WorkspaceSidebarProps {
   onSelectDocument: (docName: string) => void;
   activeDocument: string;
 }
 
-export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
-  onSelectDocument,
-  activeDocument,
-}) => {
+export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = () => {
   const documents = [
-    "Roadmap 2024",
-    "Architecture",
-    "API Specs",
-    "Meeting Notes",
+    { id: "roadmap-2024", label: "Roadmap 2024" },
+    { id: "architecture", label: "Architecture" },
+    { id: "api-specs", label: "API Specs" },
+    { id: "meeting-notes", label: "Meeting Notes" },
   ];
 
   return (
@@ -23,7 +21,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
         <p className="text-xs font-semibold text-[#908fa0] uppercase tracking-wider">
           Engineering
         </p>
-        <button className="text-[#c0c1ff] hover:bg-[#1f1f27] p-1 rounded transition-colors">
+        <Link
+          to="/app/documents/new"
+          className="text-[#c0c1ff] hover:bg-[#1f1f27] p-1 rounded transition-colors"
+        >
           <svg
             className="w-4 h-4"
             viewBox="0 0 24 24"
@@ -34,28 +35,32 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-        </button>
+        </Link>
       </div>
 
       {/* Documents List */}
       <nav className="flex-1 p-2 space-y-1">
         {documents.map((doc) => (
-          <button
-            key={doc}
-            onClick={() => onSelectDocument(doc)}
-            className={`w-full text-left px-3 py-2.5 rounded text-sm transition-colors relative ${
-              activeDocument === doc
+          <NavLink
+            key={doc.id}
+            to={`/app/documents/${doc.id}`}
+            className={({ isActive }) => `w-full text-left px-3 py-2.5 rounded text-sm transition-colors relative ${
+              isActive
                 ? "bg-[#292932] text-[#e4e1ed]"
                 : "text-[#c7c4d7] hover:bg-[#1f1f27]"
             }`}
           >
-            {activeDocument === doc && (
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#c0c1ff] rounded-r" />
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#c0c1ff] rounded-r" />
+                )}
+                <span className={isActive ? "pl-2" : ""}>
+                  {doc.label}
+                </span>
+              </>
             )}
-            <span className={activeDocument === doc ? "pl-2" : ""}>
-              {doc}
-            </span>
-          </button>
+          </NavLink>
         ))}
       </nav>
     </div>

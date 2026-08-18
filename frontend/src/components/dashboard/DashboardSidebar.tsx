@@ -1,22 +1,27 @@
 import React from "react";
+import { NavLink } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useDocuments } from "../../hooks/useDocuments";
 
-interface DashboardSidebarProps {
-  onNewDocument: () => void;
-}
+export const DashboardSidebar: React.FC = () => {
+  const navigate = useNavigate();
+  const { createDocument } = useDocuments();
 
-export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ onNewDocument }) => {
-  const [activeItem, setActiveItem] = React.useState<string>("recent");
+  const handleNewDocument = () => {
+    const document = createDocument();
+    navigate(`/app/documents/${document.id}`);
+  };
 
   const navigationItems = [
-    { id: "search", label: "Search", icon: "search" },
-    { id: "recent", label: "Recent", icon: "history" },
-    { id: "favorites", label: "Favorites", icon: "star" },
-    { id: "documents", label: "Documents", icon: "description" },
+    { id: "search", label: "Search", icon: "search", path: "/app/documents" },
+    { id: "recent", label: "Recent", icon: "history", path: "/app" },
+    { id: "favorites", label: "Favorites", icon: "star", path: "/app/favorites" },
+    { id: "documents", label: "Documents", icon: "description", path: "/app/documents" },
   ];
 
   const footerItems = [
-    { id: "settings", label: "Settings", icon: "settings" },
-    { id: "help", label: "Help", icon: "help" },
+    { id: "settings", label: "Settings", icon: "settings", path: "/app/settings" },
+    { id: "help", label: "Help", icon: "help", path: "/app/help" },
   ];
 
   const getIcon = (name: string) => {
@@ -85,7 +90,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ onNewDocumen
           </div>
         </div>
         <button
-          onClick={onNewDocument}
+          onClick={handleNewDocument}
           className="w-full bg-[#c0c1ff] text-[#1000a9] py-2 px-3 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
         >
           <span>+</span>
@@ -96,31 +101,36 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ onNewDocumen
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-2">
         {navigationItems.map((item) => (
-          <button
+          <NavLink
             key={item.id}
-            onClick={() => setActiveItem(item.id)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
-              activeItem === item.id
+            to={item.path}
+            className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
+              isActive
                 ? "bg-[#34343d]/50 text-[#c0c1ff]"
                 : "text-[#c7c4d7] hover:bg-[#292932]"
             }`}
           >
             {getIcon(item.icon)}
             <span>{item.label}</span>
-          </button>
+          </NavLink>
         ))}
       </nav>
 
       {/* Footer */}
       <div className="border-t border-[#464554] p-4 space-y-2">
         {footerItems.map((item) => (
-          <button
+          <NavLink
             key={item.id}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm text-[#c7c4d7] hover:bg-[#292932] transition-colors"
+            to={item.path}
+            className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
+              isActive
+                ? "bg-[#34343d]/50 text-[#c0c1ff]"
+                : "text-[#c7c4d7] hover:bg-[#292932]"
+            }`}
           >
             {getIcon(item.icon)}
             <span>{item.label}</span>
-          </button>
+          </NavLink>
         ))}
         <div className="pt-4 border-t border-[#464554] flex items-center gap-3 px-3 py-2">
           <div className="w-8 h-8 rounded-full border border-[#464554] bg-gradient-to-br from-[#c0c1ff] to-[#8083ff] flex items-center justify-center text-white text-xs font-bold">

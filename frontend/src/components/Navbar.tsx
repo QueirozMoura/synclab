@@ -1,16 +1,17 @@
 import React from "react";
+import { Link, NavLink } from "react-router-dom";
 
 interface NavbarProps {
   onOpenApp?: () => void;
   onOpenDashboard?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onOpenApp, onOpenDashboard }) => {
+export const Navbar: React.FC<NavbarProps> = () => {
   return (
     <nav className="fixed top-0 w-full z-50 border-line glass-effect">
       <div className="container-main h-16 flex items-center justify-between">
         {/* Logo */}
-        <div className="flex items-center gap-2">
+        <Link to="/" className="flex items-center gap-2">
           <div className="w-6 h-6 relative">
             <svg
               viewBox="0 0 24 24"
@@ -35,47 +36,52 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenApp, onOpenDashboard }) =>
           <span className="text-base font-semibold text-[#E4E1ED]">
             Synclab
           </span>
-        </div>
+        </Link>
 
         {/* Center Navigation - Desktop only */}
         <div className="hidden md:flex items-center gap-8">
-          <a
-            href="#features"
+          <NavLink
+            to="#features"
             className="text-[#C7C4D7] text-sm hover:text-[#E4E1ED] transition-colors"
           >
             Features
-          </a>
-          <a
-            href="#architecture"
+          </NavLink>
+          <NavLink
+            to="#architecture"
             className="text-[#C7C4D7] text-sm hover:text-[#E4E1ED] transition-colors"
           >
             Architecture
-          </a>
-          <a
-            href="#docs"
+          </NavLink>
+          <NavLink
+            to="#docs"
             className="text-[#C7C4D7] text-sm hover:text-[#E4E1ED] transition-colors"
           >
             Docs
-          </a>
+          </NavLink>
         </div>
 
         {/* Right Actions */}
         <div className="flex items-center gap-3">
-          <button className="text-[#C7C4D7] text-sm hover:text-[#E4E1ED] transition-colors hidden sm:block">
+          <Link
+            to="/login"
+            className="text-[#C7C4D7] text-sm hover:text-[#E4E1ED] transition-colors hidden sm:block"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
             Log in
-          </button>
-          <button
-            onClick={onOpenDashboard}
+          </Link>
+          <Link
+            to="/app"
             className="btn-secondary text-sm hidden sm:block"
           >
             Dashboard
-          </button>
-          <button 
-            onClick={onOpenApp}
+          </Link>
+          <Link
+            to="/app"
             className="btn-primary text-sm"
           >
             Open App
-          </button>
+          </Link>
         </div>
       </div>
     </nav>

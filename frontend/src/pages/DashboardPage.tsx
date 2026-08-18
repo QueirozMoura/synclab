@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { DashboardSidebar } from "../components/dashboard/DashboardSidebar";
 import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { DocumentCard } from "../components/dashboard/DocumentCard";
@@ -8,16 +9,8 @@ import { MobileTopbar } from "../components/dashboard/MobileTopbar";
 export const DashboardPage: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
-  const handleNewDocument = () => {
-    console.log("New document clicked");
-  };
-
   const handleFilterClick = () => {
     console.log("Filter clicked");
-  };
-
-  const handleNewClick = () => {
-    console.log("New clicked");
   };
 
   const toggleSidebar = () => {
@@ -38,7 +31,7 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {/* Sidebar */}
-      <DashboardSidebar onNewDocument={handleNewDocument} />
+      <DashboardSidebar />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden lg:pl-0">
@@ -47,7 +40,6 @@ export const DashboardPage: React.FC = () => {
             {/* Dashboard Header */}
             <DashboardHeader
               onFilterClick={handleFilterClick}
-              onNewClick={handleNewClick}
             />
 
             {/* Main Grid: Documents (8/12) + Activity (4/12) on desktop */}
@@ -60,9 +52,12 @@ export const DashboardPage: React.FC = () => {
                     <h2 className="text-lg font-semibold text-[#e4e1ed]">
                       Continue where you left off
                     </h2>
-                    <button className="text-sm text-[#c0c1ff] hover:underline transition-colors">
+                    <Link
+                      to="/app/documents"
+                      className="text-sm text-[#c0c1ff] hover:underline transition-colors"
+                    >
                       View all
-                    </button>
+                    </Link>
                   </div>
 
                   {/* Document Grid - 2 columns on desktop, 1 on mobile */}
@@ -75,6 +70,7 @@ export const DashboardPage: React.FC = () => {
                       badge="architecture"
                       badgeColor="#c0c1ff"
                       timeAgo="Just now"
+                      href="/app/documents/architecture"
                     />
 
                     {/* Right column - CRDT Notes and README */}
@@ -84,12 +80,14 @@ export const DashboardPage: React.FC = () => {
                         icon="code"
                         iconColor="#ffb783"
                         timeAgo="Synced 2h ago"
+                        href="/app/documents/crdt-notes"
                       />
                       <DocumentCard
                         title="README.md"
                         icon="markdown"
                         iconColor="#908fa0"
                         timeAgo="Synced yesterday"
+                        href="/app/documents/readme"
                       />
                     </div>
                   </div>

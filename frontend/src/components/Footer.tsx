@@ -32,20 +32,22 @@ export const Footer: React.FC = () => {
           {/* Right Side - Links */}
           <div className="flex items-center gap-6 md:gap-8">
             <a
-              href="#github"
+              href="https://github.com"
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-sm text-[#C7C4D7] hover:text-[#E4E1ED] transition-colors"
             >
               GitHub
             </a>
             <a
-              href="#documentation"
+              href="/help"
               className="text-sm text-[#C7C4D7] hover:text-[#E4E1ED] transition-colors"
             >
               Documentation
             </a>
             <a
               href="#privacy"
-              className="text-sm text-[#C7C4D7] hover:text-[#E4E1ED] transition-colors"
+              className="text-sm text#[C7C4D7] hover:text-[#E4E1ED] transition-colors"
             >
               Privacy
             </a>

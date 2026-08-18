@@ -1,13 +1,21 @@
 import React from "react";
+import { NavLink } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { useDocuments } from "../../hooks/useDocuments";
 
 export const GlobalSidebar: React.FC = () => {
-  const [activeItem, setActiveItem] = React.useState<string>("documents");
+  const navigate = useNavigate();
+  const { createDocument } = useDocuments();
 
+  const handleNewDocument = () => {
+    const document = createDocument();
+    navigate(`/app/documents/${document.id}`);
+  };
   const navigationItems = [
-    { id: "search", label: "Search", icon: "search" },
-    { id: "recent", label: "Recent", icon: "history" },
-    { id: "favorites", label: "Favorites", icon: "star" },
-    { id: "documents", label: "Documents", icon: "description" },
+    { id: "search", label: "Search", icon: "search", path: "/app/documents" },
+    { id: "recent", label: "Recent", icon: "history", path: "/app" },
+    { id: "favorites", label: "Favorites", icon: "star", path: "/app/favorites" },
+    { id: "documents", label: "Documents", icon: "description", path: "/app/documents" },
   ];
 
   const getIcon = (name: string) => {
@@ -84,7 +92,10 @@ export const GlobalSidebar: React.FC = () => {
             <p className="text-xs text-[#c7c4d7]">Offline-first Editor</p>
           </div>
         </div>
-        <button className="w-full bg-[#c0c1ff] text-[#1000a9] py-2 px-3 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+        <button
+          onClick={handleNewDocument}
+          className="w-full bg-[#c0c1ff] text-[#1000a9] py-2 px-3 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+        >
           <span>+</span>
           <span>New Document</span>
         </button>
@@ -93,24 +104,31 @@ export const GlobalSidebar: React.FC = () => {
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-2">
         {navigationItems.map((item) => (
-          <button
+          <NavLink
             key={item.id}
-            onClick={() => setActiveItem(item.id)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
-              activeItem === item.id
+            to={item.path}
+            className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
+              isActive
                 ? "bg-[#34343d] text-[#c0c1ff]"
                 : "text-[#c7c4d7] hover:bg-[#292932]"
             }`}
           >
             {getIcon(item.icon)}
             <span>{item.label}</span>
-          </button>
+          </NavLink>
         ))}
       </nav>
 
       {/* Footer */}
       <div className="border-t border-[#464554] p-4 space-y-2">
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm text-[#c7c4d7] hover:bg-[#292932] transition-colors">
+        <NavLink
+          to="/app/settings"
+          className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
+            isActive
+              ? "bg-[#34343d] text-[#c0c1ff]"
+              : "text-[#c7c4d7] hover:bg-[#292932]"
+          }`}
+        >
           <svg
             className="w-5 h-5"
             viewBox="0 0 24 24"
@@ -123,8 +141,15 @@ export const GlobalSidebar: React.FC = () => {
             <circle cx="12" cy="19" r="1" />
           </svg>
           <span>Settings</span>
-        </button>
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm text-[#c7c4d7] hover:bg-[#292932] transition-colors">
+        </NavLink>
+        <NavLink
+          to="/app/help"
+          className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
+            isActive
+              ? "bg-[#34343d] text-[#c0c1ff]"
+              : "text-[#c7c4d7] hover:bg-[#292932]"
+          }`}
+        >
           <svg
             className="w-5 h-5"
             viewBox="0 0 24 24"
@@ -136,7 +161,7 @@ export const GlobalSidebar: React.FC = () => {
             <path d="M12 16v-4M12 8h.01" />
           </svg>
           <span>Help</span>
-        </button>
+        </NavLink>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 interface DocumentCardProps {
   title: string;
@@ -11,6 +12,7 @@ interface DocumentCardProps {
   status?: "synced" | "syncing" | "offline";
   featured?: boolean;
   onClick?: () => void;
+  href?: string;
 }
 
 export const DocumentCard: React.FC<DocumentCardProps> = ({
@@ -24,6 +26,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
   status = "synced",
   featured = false,
   onClick,
+  href,
 }) => {
   const getIcon = (name: string, color: string) => {
     const iconSize = "w-10 h-10";
@@ -91,10 +94,16 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
     }
   };
 
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    }
+  };
+
   if (featured) {
-    return (
+    const content = (
       <div
-        onClick={onClick}
+        onClick={handleClick}
         className="relative h-48 md:h-[192px] bg-[#151517] border border-[#27272A] rounded-xl cursor-pointer hover:bg-[#1a1a1f] transition-colors overflow-hidden"
       >
         <div className="p-6 h-full flex flex-col justify-between">
@@ -126,11 +135,16 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
         </div>
       </div>
     );
+
+    if (href) {
+      return <Link to={href}>{content}</Link>;
+    }
+    return content;
   }
 
-  return (
+  const content = (
     <div
-      onClick={onClick}
+      onClick={handleClick}
       className="flex items-center gap-4 p-4 bg-[#151517] border border-[#27272A] rounded-xl cursor-pointer hover:bg-[#1a1a1f] transition-colors"
     >
       <div className="flex-shrink-0">{icon && getIcon(icon, iconColor)}</div>
@@ -143,4 +157,9 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
       </div>
     </div>
   );
+
+  if (href) {
+    return <Link to={href}>{content}</Link>;
+  }
+  return content;
 };

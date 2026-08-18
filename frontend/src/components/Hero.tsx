@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 export const Hero: React.FC = () => {
   return (
@@ -32,11 +33,11 @@ export const Hero: React.FC = () => {
 
         {/* Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-in">
-          <button className="btn-primary flex items-center gap-2">
+          <Link to="/app" className="btn-primary flex items-center gap-2">
             Open Synclab
             <span>→</span>
-          </button>
-          <button className="btn-secondary">View Architecture</button>
+          </Link>
+          <Link to="/app/documents/architecture" className="btn-secondary">View Architecture</Link>
         </div>
       </div>
     </section>
