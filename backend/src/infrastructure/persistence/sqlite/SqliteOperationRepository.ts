@@ -52,31 +52,52 @@ export class SqliteOperationRepository implements OperationRepository {
   }
 
   /**
-   * Salva múltiplas operações em lote.
+   * Salva múltiplas operações em lote dentro de uma transação.
    * Idempotente: duplicatas são ignoradas por PRIMARY KEY.
+   * Atômico: falha no meio faz rollback de todas as operações do batch.
    */
   async saveMany(operations: Operation[]): Promise<void> {
+    if (operations.length === 0) {
+      return;
+    }
+
+    const statements: string[] = ["BEGIN TRANSACTION;"];
+
+    for (const operation of operations) {
+      const serialized = this.serializer.serialize(operation);
+      const values = [
+        this.escapeSqlString(serialized.id),
+        this.escapeSqlString(serialized.documentId),
+        this.escapeSqlString(serialized.deviceId),
+        this.escapeSqlString(serialized.type),
+        this.escapeSqlString(JSON.stringify(serialized.payload)),
+        this.escapeSqlString(JSON.stringify(serialized.vectorClockMap)),
+      ];
+      statements.push(`INSERT OR IGNORE INTO operations (id, document_id, device_id, type, payload_json, vector_clock_json) VALUES (${values.join(", ")});`);
+    }
+
+    statements.push("COMMIT;");
+
+    const transactionSql = statements.join(" ");
+
     try {
-      const stmt = this.db.prepare(QUERIES.insert);
-
-      for (const operation of operations) {
-        const serialized = this.serializer.serialize(operation);
-        stmt.bind([
-          serialized.id,
-          serialized.documentId,
-          serialized.deviceId,
-          serialized.type,
-          JSON.stringify(serialized.payload),
-          JSON.stringify(serialized.vectorClockMap),
-        ]);
-        stmt.step();
-        stmt.reset();
-      }
-
-      stmt.free();
+      this.db.exec(transactionSql);
     } catch (error) {
+      try {
+        this.db.exec("ROLLBACK;");
+      } catch {
+        // Ignore rollback errors
+      }
       throw new Error(`Failed to save operations: ${error}`);
     }
+  }
+
+  /**
+   * Escapa uma string para uso seguro em SQL.
+   * Substitui aspas simples por duas aspas simples (padrão SQL).
+   */
+  private escapeSqlString(value: string): string {
+    return "'" + value.replace(/'/g, "''") + "'";
   }
 
   /**

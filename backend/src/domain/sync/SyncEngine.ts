@@ -49,39 +49,56 @@ export class SyncEngine {
    * de B, A aparece antes de B na lista. Operações concorrentes são
    * ordenadas por um tiebreaker determinístico (deviceId, depois id),
    * garantindo que todas as réplicas cheguem à mesma ordem.
+   *
+   * Implementação usando algoritmo de Kahn (O(V+E)) para ordenação topológica
+   * com fila de prioridade para desempate determinístico.
    */
   getOrderedOperations(documentId: string): Operation[] {
     const ops = this.log.getByDocument(documentId);
     if (ops.length <= 1) return [...ops];
 
-    // Uma comparação par-a-par que mistura causalidade com o desempate não é
-    // necessariamente transitiva. Portanto, `Array.sort` não pode ser usada
-    // como ordenação topológica. Escolhemos, a cada passo, uma operação sem
-    // predecessores causais restantes e aplicamos o desempate apenas entre
-    // essas operações prontas.
-    const remaining = new Set(ops);
+    const n = ops.length;
+    const opIndex = new Map<Operation, number>();
+    ops.forEach((op, idx) => opIndex.set(op, idx));
+
+    const adj: number[][] = Array.from({ length: n }, () => []);
+    const inDegree = new Array(n).fill(0);
+
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i === j) continue;
+        const ordering = ops[i].vectorClock.compare(ops[j].vectorClock);
+        if (ordering === ClockOrdering.BEFORE) {
+          adj[i].push(j);
+          inDegree[j]++;
+        }
+      }
+    }
+
+    const ready: number[] = [];
+    for (let i = 0; i < n; i++) {
+      if (inDegree[i] === 0) {
+        ready.push(i);
+      }
+    }
+
     const ordered: Operation[] = [];
 
-    while (remaining.size > 0) {
-      const ready = [...remaining].filter((candidate) =>
-        [...remaining].every(
-          (other) =>
-            other === candidate ||
-            other.vectorClock.compare(candidate.vectorClock) !==
-              ClockOrdering.BEFORE,
-        ),
-      );
+    while (ready.length > 0) {
+      ready.sort((a, b) => this.compareTieBreaker(ops[a], ops[b]));
+      const current = ready.shift()!;
+      ordered.push(ops[current]);
 
-      // O happened-before de vector clocks é acíclico; chegar aqui sem uma
-      // operação pronta indicaria clocks inválidos, não uma escolha de ordem.
-      if (ready.length === 0) {
-        throw new Error("Cannot topologically order operations with cyclic causality");
+      for (const neighbor of adj[current]) {
+        inDegree[neighbor]--;
+        if (inDegree[neighbor] === 0) {
+          ready.push(neighbor);
+        }
       }
+    }
 
-      ready.sort((a, b) => this.compareTieBreaker(a, b));
-      const next = ready[0];
-      remaining.delete(next);
-      ordered.push(next);
+    if (ordered.length !== n) {
+      throw new Error("Cannot topologically order operations with cyclic causality");
     }
 
     return ordered;

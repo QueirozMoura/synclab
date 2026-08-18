@@ -128,6 +128,30 @@ describe("SQLiteOperationRepository", () => {
     expect(all[2].id).toBe("op-3");
   });
 
+  it("saveMany insere operações únicas e ignora duplicatas (SQLite)", async () => {
+    const op1 = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
+    await repository.saveMany([op1]);
+
+    const op2 = insert("op-2", "device-B", VectorClock.from({ "device-B": 1 }), null, "B");
+    const op3 = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "C"); // ID duplicado de op1
+
+    await repository.saveMany([op2, op3]);
+
+    const all = await repository.findAll();
+    // op1 (já existia) + op2 (nova) = 2 operações
+    // op3 é ignorada por ser duplicata (INSERT OR IGNORE)
+    expect(all).toHaveLength(2);
+    const ids = all.map((op) => op.id).sort();
+    expect(ids).toEqual(["op-1", "op-2"]);
+    expect(all.find((op) => op.id === "op-1")?.payload.content).toBe("A");
+  });
+
+  it("saveMany em batch vazio não faz nada", async () => {
+    await repository.saveMany([]);
+    const all = await repository.findAll();
+    expect(all).toHaveLength(0);
+  });
+
   it("filtra por documento", async () => {
     const op1 = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
     const op2: Operation = {

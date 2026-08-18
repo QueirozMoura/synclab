@@ -1,4 +1,5 @@
 import fastify, { type FastifyInstance } from "fastify";
+import fastifyRateLimit from "@fastify/rate-limit";
 import { InMemoryOperationRepository } from "@infrastructure/persistence/server/InMemoryOperationRepository.js";
 import { PostgresOperationRepository } from "@infrastructure/persistence/postgres/PostgresOperationRepository.js";
 import { InMemoryDocumentAuthorizationRepository } from "@infrastructure/auth/InMemoryDocumentAuthorizationRepository.js";
@@ -88,6 +89,11 @@ export async function createServer(): Promise<FastifyInstance> {
         coerceTypes: false,
       },
     },
+  });
+
+  await app.register(fastifyRateLimit, {
+    global: false,
+    hook: "preHandler",
   });
 
   const repository = createRepository();

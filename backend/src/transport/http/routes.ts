@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyReply, FastifyError } from "fastify";
 import { SyncService, DocumentAccessDeniedError } from "@application/sync/SyncService.js";
 import type { ServerOperationRepository } from "@domain/sync/ServerOperationRepository.js";
 import type { DocumentAuthorizationRepository } from "@domain/auth/DocumentAuthorizationRepository.js";
@@ -6,6 +6,9 @@ import type { AuthContext } from "@domain/auth/AuthContext.js";
 import { ApiKeyValidator, InvalidApiKeyError } from "@application/auth/ApiKeyValidator.js";
 import type { Operation } from "@domain/operations/Operation.js";
 import { OperationSerializer } from "@domain/operations/OperationSerializer.js";
+
+const SYNC_RATE_LIMIT_MAX = parseInt(process.env.SYNC_RATE_LIMIT_MAX ?? "100", 10);
+const SYNC_RATE_LIMIT_WINDOW = process.env.SYNC_RATE_LIMIT_WINDOW ?? "1 minute";
 
 /**
  * DTO para request de push.
@@ -49,8 +52,8 @@ declare module "fastify" {
 }
 
 /**
- * Registra as rotas de sincronização no servidor Fastify.
- */
+   * Registra as rotas de sincronização no servidor Fastify.
+   */
 export function registerSyncRoutes(
   app: FastifyInstance,
   repository: ServerOperationRepository,
@@ -59,6 +62,47 @@ export function registerSyncRoutes(
 ): void {
   const syncService = new SyncService(repository, authzRepository);
   const serializer = new OperationSerializer();
+
+  app.setErrorHandler((error: unknown, _request: FastifyRequest, reply: FastifyReply) => {
+    const err = error as FastifyError & { statusCode?: number; retryAfter?: number; customBody?: Record<string, unknown> };
+    const statusCode = err.statusCode ?? 500;
+    let errorName = err.name;
+    if (errorName === "Error") {
+      switch (statusCode) {
+        case 400:
+          errorName = "Bad Request";
+          break;
+        case 401:
+          errorName = "Unauthorized";
+          break;
+        case 403:
+          errorName = "Forbidden";
+          break;
+        case 404:
+          errorName = "Not Found";
+          break;
+        case 429:
+          errorName = "Too Many Requests";
+          break;
+        case 500:
+          errorName = "Internal Server Error";
+          break;
+        default:
+          errorName = "Error";
+      }
+    }
+    const response: Record<string, unknown> = {
+      error: errorName,
+      message: err.message,
+    };
+    if (err.retryAfter) {
+      response.retryAfter = err.retryAfter;
+    }
+    if (err.customBody) {
+      Object.assign(response, err.customBody);
+    }
+    return reply.status(statusCode).send(response);
+  });
 
   /**
    * Middleware de autenticação.
@@ -77,6 +121,45 @@ export function registerSyncRoutes(
       throw error;
     }
   }
+
+  /**
+   * Gera chave de rate limit baseada na identidade autenticada.
+   * Deve ser chamado após autenticação (hook preHandler).
+   */
+  function rateLimitKeyGenerator(request: FastifyRequest): string {
+    const authContext = request.authContext;
+    if (!authContext) {
+      return request.ip;
+    }
+    return `${authContext.clientId}:${authContext.deviceId}`;
+  }
+
+  const rateLimitConfig = {
+    max: SYNC_RATE_LIMIT_MAX,
+    timeWindow: SYNC_RATE_LIMIT_WINDOW,
+    keyGenerator: rateLimitKeyGenerator,
+    errorResponseBuilder: (
+      _req: FastifyRequest,
+      context: { statusCode: number; ban: boolean; after: string; max: number; ttl: number },
+    ) => {
+      const err = new Error(`Rate limit exceeded. Limit: ${context.max} requests per ${context.after}`);
+      const fastifyErr = err as FastifyError & { retryAfter?: number; customBody?: Record<string, unknown> };
+      fastifyErr.statusCode = context.statusCode;
+      fastifyErr.retryAfter = context.ttl;
+      fastifyErr.customBody = {
+        error: "Too Many Requests",
+        message: `Rate limit exceeded. Limit: ${context.max} requests per ${context.after}`,
+        retryAfter: context.ttl,
+      };
+      return fastifyErr;
+    },
+    addHeaders: {
+      "x-ratelimit-limit": true,
+      "x-ratelimit-remaining": true,
+      "x-ratelimit-reset": true,
+      "retry-after": true,
+    },
+  };
 
   /**
    * POST /sync/push
@@ -177,6 +260,9 @@ payload: {
         },
       },
       preHandler: authenticate,
+      config: {
+        rateLimit: rateLimitConfig,
+      },
     },
     async (request, reply) => {
       const { operations: serializedOps } = request.body;
@@ -290,6 +376,9 @@ payload: {
         },
       },
       preHandler: authenticate,
+      config: {
+        rateLimit: rateLimitConfig,
+      },
     },
     async (request, reply) => {
       const { documentId, knownOperationIds, limit } = request.query;

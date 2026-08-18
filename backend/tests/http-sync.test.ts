@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fastify, { type FastifyInstance } from "fastify";
+import fastifyRateLimit from "@fastify/rate-limit";
 import { InMemoryOperationRepository } from "@infrastructure/persistence/server/InMemoryOperationRepository.js";
 import { InMemoryDocumentAuthorizationRepository } from "@infrastructure/auth/InMemoryDocumentAuthorizationRepository.js";
 import { ApiKeyValidator } from "@application/auth/ApiKeyValidator.js";
@@ -8,6 +9,8 @@ import { VectorClock } from "@domain/vector-clock/VectorClock.js";
 import { OperationType, createElementId } from "@domain/operations/types.js";
 import type { Operation } from "@domain/operations/Operation.js";
 import { OperationSerializer } from "@domain/operations/OperationSerializer.js";
+
+const SYNC_RATE_LIMIT_MAX = parseInt(process.env.SYNC_RATE_LIMIT_MAX ?? "100", 10);
 
 function insert(
   id: string,
@@ -61,6 +64,10 @@ describe("HTTP Sync Routes", () => {
           coerceTypes: false,
         },
       },
+    });
+    await app.register(fastifyRateLimit, {
+      global: false,
+      hook: "preHandler",
     });
     repository = new InMemoryOperationRepository();
     authzRepository = new InMemoryDocumentAuthorizationRepository();
@@ -475,6 +482,115 @@ describe("HTTP Sync Routes", () => {
       expect(response.statusCode).toBe(200);
       const body = response.json() as { accepted: string[] };
       expect(body.accepted).toEqual(["op-1"]);
+    });
+  });
+
+  describe("Rate Limiting", () => {
+    const RATE_LIMIT_KEY = "client-A:device-A";
+
+    it("permite requests dentro do limite", async () => {
+      const op = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
+
+      for (let i = 0; i < 5; i++) {
+        const response = await injectWithAuth({
+          method: "POST",
+          url: "/sync/push",
+          payload: { operations: [serializeOp({ ...op, id: `op-${i + 1}` })] },
+        });
+        expect(response.statusCode).toBe(200);
+      }
+    });
+
+    it("retorna 429 quando excede o limite", async () => {
+      const op = insert("op-rate", "device-A", VectorClock.from({ "device-A": 1 }), null, "X");
+
+      for (let i = 0; i < SYNC_RATE_LIMIT_MAX + 5; i++) {
+        const response = await injectWithAuth({
+          method: "POST",
+          url: "/sync/push",
+          payload: { operations: [serializeOp({ ...op, id: `op-rate-${i}` })] },
+        });
+
+        if (i < SYNC_RATE_LIMIT_MAX) {
+          expect(response.statusCode).toBe(200);
+        } else {
+          expect(response.statusCode).toBe(429);
+          const body = response.json() as { error: string; retryAfter: number };
+          expect(body.error).toBe("Too Many Requests");
+          expect(body.retryAfter).toBeGreaterThan(0);
+        }
+      }
+    });
+
+    it("inclui headers de rate limit nas respostas", async () => {
+      const op = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
+
+      const response = await injectWithAuth({
+        method: "POST",
+        url: "/sync/push",
+        payload: { operations: [serializeOp(op)] },
+      });
+
+      expect(response.headers["x-ratelimit-limit"]).toBeDefined();
+      expect(response.headers["x-ratelimit-remaining"]).toBeDefined();
+      expect(response.headers["x-ratelimit-reset"]).toBeDefined();
+    });
+
+    it("rate limit é por identidade (clientId:deviceId)", async () => {
+      const deviceBAuth = { authorization: "Bearer dev-key-client-A-device-B" };
+
+      const opA = insert("op-a", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
+      const opB = insert("op-b", "device-B", VectorClock.from({ "device-B": 1 }), null, "B");
+
+      for (let i = 0; i < SYNC_RATE_LIMIT_MAX; i++) {
+        await injectWithAuth({
+          method: "POST",
+          url: "/sync/push",
+          payload: { operations: [serializeOp({ ...opA, id: `op-a-${i}` })] },
+        });
+      }
+
+      const responseA = await injectWithAuth({
+        method: "POST",
+        url: "/sync/push",
+        payload: { operations: [serializeOp({ ...opA, id: "op-a-last" })] },
+      });
+      expect(responseA.statusCode).toBe(429);
+
+      const responseB = await app.inject({
+        method: "POST",
+        url: "/sync/push",
+        headers: { ...deviceBAuth },
+        payload: { operations: [serializeOp({ ...opB, id: "op-b-first" })] },
+      });
+      expect(responseB.statusCode).toBe(200);
+    });
+
+    it("rate limit aplica-se a GET /sync/pull também", async () => {
+      for (let i = 0; i < SYNC_RATE_LIMIT_MAX; i++) {
+        await injectWithAuth({
+          method: "GET",
+          url: "/sync/pull?documentId=doc-1",
+        });
+      }
+
+      const response = await injectWithAuth({
+        method: "GET",
+        url: "/sync/pull?documentId=doc-1",
+      });
+      expect(response.statusCode).toBe(429);
+    });
+
+    it("autenticação continua retornando 401 quando ausente", async () => {
+      const op = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/sync/push",
+        payload: { operations: [serializeOp(op)] },
+      });
+
+      expect(response.statusCode).toBe(401);
     });
   });
 });
