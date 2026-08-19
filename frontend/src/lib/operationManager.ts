@@ -2,8 +2,13 @@ import { getDeviceId } from "./deviceIdentity";
 import { VectorClock } from "./vectorClock";
 import { OperationLog } from "./operationLog";
 import { createOperation } from "./operationFactory";
-import { getAllOperations, putOperation } from "./indexedDb";
+import { getAllOperations, putOperation, getSnapshot } from "./indexedDb";
+import { reconstructDocument } from "./documentStateEngine";
+import { orderOperations } from "./operationOrdering";
+import { reduceOperations } from "./documentReducer";
+import type { Document } from "../types/document";
 import type { Operation, OperationType, OperationPayload } from "../types/operation";
+import type { DocumentSnapshot } from "../types/documentSnapshot";
 
 export class OperationManager {
   private readonly deviceId: string;
@@ -70,5 +75,33 @@ export class OperationManager {
 
   getOperationsForDocument(documentId: string): Operation[] {
     return this.operationLog.getByDocument(documentId);
+  }
+
+  reconstructDocument(documentId: string, initialDocument?: Document): Document | null {
+    const operations = this.getOperationsForDocument(documentId);
+    return reconstructDocument(initialDocument ?? null, operations);
+  }
+
+  async reconstructDocumentFromSnapshot(documentId: string): Promise<Document | null> {
+    let snapshot: DocumentSnapshot | undefined;
+    try {
+      snapshot = await getSnapshot(documentId);
+    } catch {
+      return null;
+    }
+    if (!snapshot) {
+      return null;
+    }
+
+    const allOperations = this.getOperationsForDocument(documentId);
+    const snapshotTime = new Date(snapshot.updatedAt).getTime();
+
+    const laterOperations = allOperations.filter((op) => {
+      const opTime = new Date(op.timestamp).getTime();
+      return opTime > snapshotTime;
+    });
+
+    const orderedOperations = orderOperations(laterOperations);
+    return reduceOperations(snapshot.document, orderedOperations);
   }
 }

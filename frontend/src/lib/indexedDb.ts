@@ -1,10 +1,12 @@
 import type { Document } from "../types/document";
 import type { Operation } from "../types/operation";
+import type { DocumentSnapshot } from "../types/documentSnapshot";
 
 const DB_NAME = "synclab_store";
 const DOCUMENTS_STORE = "documents";
 const OPERATIONS_STORE = "operations";
-const DB_VERSION = 2;
+const SNAPSHOTS_STORE = "snapshots";
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -32,6 +34,9 @@ function openDatabase(): Promise<IDBDatabase> {
       }
       if (!database.objectStoreNames.contains(OPERATIONS_STORE)) {
         database.createObjectStore(OPERATIONS_STORE, { keyPath: "id" });
+      }
+      if (!database.objectStoreNames.contains(SNAPSHOTS_STORE)) {
+        database.createObjectStore(SNAPSHOTS_STORE, { keyPath: "documentId" });
       }
     };
   });
@@ -186,6 +191,98 @@ export async function clearOperations(): Promise<void> {
 
     request.onerror = () => {
       reject(new Error("Failed to clear operations"));
+    };
+  });
+}
+
+export async function getSnapshot(documentId: string): Promise<DocumentSnapshot | undefined> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(SNAPSHOTS_STORE, "readonly");
+    const store = transaction.objectStore(SNAPSHOTS_STORE);
+    const request = store.get(documentId);
+
+    request.onsuccess = () => {
+      resolve(request.result as DocumentSnapshot | undefined);
+    };
+
+    request.onerror = () => {
+      reject(new Error("Failed to get snapshot"));
+    };
+  });
+}
+
+export async function putSnapshot(snapshot: DocumentSnapshot): Promise<void> {
+  console.log("[IndexedDB] putSnapshot called:", { documentId: snapshot.documentId, operationCount: snapshot.operationCount });
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(SNAPSHOTS_STORE, "readwrite");
+    const store = transaction.objectStore(SNAPSHOTS_STORE);
+    const request = store.put(snapshot);
+
+    request.onsuccess = () => {
+      console.log("[IndexedDB] putSnapshot success:", snapshot.documentId);
+      resolve();
+    };
+
+    request.onerror = () => {
+      console.error("[IndexedDB] putSnapshot error:", request.error);
+      reject(new Error("Failed to put snapshot"));
+    };
+  });
+}
+
+export async function deleteSnapshot(documentId: string): Promise<void> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(SNAPSHOTS_STORE, "readwrite");
+    const store = transaction.objectStore(SNAPSHOTS_STORE);
+    const request = store.delete(documentId);
+
+    request.onsuccess = () => {
+      resolve();
+    };
+
+    request.onerror = () => {
+      reject(new Error("Failed to delete snapshot"));
+    };
+  });
+}
+
+export async function getAllSnapshots(): Promise<DocumentSnapshot[]> {
+  console.log("[IndexedDB] getAllSnapshots called");
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(SNAPSHOTS_STORE, "readonly");
+    const store = transaction.objectStore(SNAPSHOTS_STORE);
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+      const snapshots = request.result as DocumentSnapshot[];
+      console.log("[IndexedDB] getAllSnapshots result:", snapshots.length, "snapshots");
+      resolve(snapshots);
+    };
+
+    request.onerror = () => {
+      console.error("[IndexedDB] getAllSnapshots error:", request.error);
+      reject(new Error("Failed to get all snapshots"));
+    };
+  });
+}
+
+export async function clearSnapshots(): Promise<void> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(SNAPSHOTS_STORE, "readwrite");
+    const store = transaction.objectStore(SNAPSHOTS_STORE);
+    const request = store.clear();
+
+    request.onsuccess = () => {
+      resolve();
+    };
+
+    request.onerror = () => {
+      reject(new Error("Failed to clear snapshots"));
     };
   });
 }

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { OperationManager } from "../src/lib/operationManager";
 import { OperationLog } from "../src/lib/operationLog";
 import { VectorClock } from "../src/lib/vectorClock";
-import type { Operation } from "../src/types/operation";
+import type { Document, Operation } from "../src/types/operation";
 
 describe("OperationManager", () => {
   it("deve inicializar deviceId", () => {
@@ -387,6 +387,216 @@ describe("OperationManager", () => {
 
       expect(manager.getOperationsForDocument("doc-1")).toHaveLength(originalLength);
       expect(manager.getOperationLog().size()).toBe(1);
+    });
+  });
+
+  describe("reconstructDocument", () => {
+    it("deve reconstruir documento criado por CREATE_DOCUMENT", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test Doc",
+        content: "Test content",
+      });
+
+      const result = manager.reconstructDocument(docId);
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe(docId);
+      expect(result?.title).toBe("Test Doc");
+      expect(result?.content).toBe("Test content");
+    });
+
+    it("deve reconstruir CREATE + UPDATE_TITLE", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Initial",
+        content: "Content",
+      });
+      manager.createOperation(docId, "UPDATE_TITLE", {
+        type: "UPDATE_TITLE",
+        title: "Updated Title",
+      });
+
+      const result = manager.reconstructDocument(docId);
+
+      expect(result?.title).toBe("Updated Title");
+      expect(result?.content).toBe("Content");
+    });
+
+    it("deve reconstruir CREATE + UPDATE_CONTENT", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Title",
+        content: "Initial",
+      });
+      manager.createOperation(docId, "UPDATE_CONTENT", {
+        type: "UPDATE_CONTENT",
+        content: "Updated content",
+      });
+
+      const result = manager.reconstructDocument(docId);
+
+      expect(result?.title).toBe("Title");
+      expect(result?.content).toBe("Updated content");
+    });
+
+    it("deve retornar null para CREATE + DELETE", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Title",
+        content: "Content",
+      });
+      manager.createOperation(docId, "DELETE_DOCUMENT", {
+        type: "DELETE_DOCUMENT",
+        deleted: true,
+      });
+
+      const result = manager.reconstructDocument(docId);
+
+      expect(result).toBeNull();
+    });
+
+    it("deve reconstruir operações na ordem correta (CREATE -> UPDATE_TITLE -> UPDATE_CONTENT)", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Initial",
+        content: "Initial",
+      });
+      manager.createOperation(docId, "UPDATE_TITLE", {
+        type: "UPDATE_TITLE",
+        title: "Updated",
+      });
+      manager.createOperation(docId, "UPDATE_CONTENT", {
+        type: "UPDATE_CONTENT",
+        content: "Final",
+      });
+
+      const result = manager.reconstructDocument(docId);
+
+      expect(result?.title).toBe("Updated");
+      expect(result?.content).toBe("Final");
+    });
+
+    it("deve ignorar operações de outro documento", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      manager.createOperation("doc-2", "UPDATE_TITLE", {
+        type: "UPDATE_TITLE",
+        title: "Other Doc Title",
+      });
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Correct Title",
+        content: "Content",
+      });
+
+      const result = manager.reconstructDocument(docId);
+
+      expect(result?.title).toBe("Correct Title");
+    });
+
+    it("deve retornar null para documento inexistente", () => {
+      const manager = new OperationManager();
+
+      const result = manager.reconstructDocument("does-not-exist");
+
+      expect(result).toBeNull();
+    });
+
+    it("deve usar initialDocument quando fornecido", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      const initial: Document = {
+        id: docId,
+        title: "Initial Title",
+        content: "Initial content",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      };
+
+      manager.createOperation(docId, "UPDATE_TITLE", {
+        type: "UPDATE_TITLE",
+        title: "Updated from Initial",
+      });
+
+      const result = manager.reconstructDocument(docId, initial);
+
+      expect(result?.title).toBe("Updated from Initial");
+      expect(result?.content).toBe("Initial content");
+    });
+
+    it("deve ser determinístico - mesmo resultado para mesma sequência de operações", () => {
+      const docId = "doc-1";
+
+      const manager1 = new OperationManager();
+      manager1.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "T1",
+        content: "C1",
+      });
+      manager1.createOperation(docId, "UPDATE_TITLE", {
+        type: "UPDATE_TITLE",
+        title: "T2",
+      });
+      manager1.createOperation(docId, "UPDATE_CONTENT", {
+        type: "UPDATE_CONTENT",
+        content: "C3",
+      });
+
+      const manager2 = new OperationManager();
+      manager2.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "T1",
+        content: "C1",
+      });
+      manager2.createOperation(docId, "UPDATE_TITLE", {
+        type: "UPDATE_TITLE",
+        title: "T2",
+      });
+      manager2.createOperation(docId, "UPDATE_CONTENT", {
+        type: "UPDATE_CONTENT",
+        content: "C3",
+      });
+
+      const result1 = manager1.reconstructDocument(docId);
+      const result2 = manager2.reconstructDocument(docId);
+
+      expect(result1?.title).toBe(result2?.title);
+      expect(result1?.content).toBe(result2?.content);
+    });
+  });
+
+  describe("reconstructDocumentFromSnapshot", () => {
+    it("deve retornar null quando não há snapshot (sem IndexedDB no teste)", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      const result = await manager.reconstructDocumentFromSnapshot(docId);
+
+      expect(result).toBeNull();
     });
   });
 });
