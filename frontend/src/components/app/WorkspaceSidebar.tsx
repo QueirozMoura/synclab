@@ -1,5 +1,6 @@
 import React from "react";
 import { Link, NavLink } from "react-router-dom";
+import { useDocuments } from "../../hooks/useDocuments";
 
 interface WorkspaceSidebarProps {
   onSelectDocument: (docName: string) => void;
@@ -7,12 +8,7 @@ interface WorkspaceSidebarProps {
 }
 
 export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = () => {
-  const documents = [
-    { id: "roadmap-2024", label: "Roadmap 2024" },
-    { id: "architecture", label: "Architecture" },
-    { id: "api-specs", label: "API Specs" },
-    { id: "meeting-notes", label: "Meeting Notes" },
-  ];
+  const { documents } = useDocuments();
 
   return (
     <div className="hidden md:flex md:w-64 flex-col bg-[#13131b] border-r border-[#464554] overflow-y-auto">
@@ -56,7 +52,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = () => {
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#c0c1ff] rounded-r" />
                 )}
                 <span className={isActive ? "pl-2" : ""}>
-                  {doc.label}
+                  {doc.title}
                 </span>
               </>
             )}
