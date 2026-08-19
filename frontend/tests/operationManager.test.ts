@@ -186,5 +186,82 @@ describe("OperationManager", () => {
       expect(op3.type).toBe("DELETE_DOCUMENT");
       expect(op3.payload.deleted).toBe(true);
     });
+
+    it("criar 3 operações deve resultar em exatamente 3 operações no log", () => {
+      const manager = new OperationManager();
+
+      manager.createOperation(
+        "doc-1",
+        "CREATE_DOCUMENT",
+        { type: "CREATE_DOCUMENT", title: "Doc 1", content: "Content 1" }
+      );
+      manager.createOperation(
+        "doc-1",
+        "UPDATE_TITLE",
+        { type: "UPDATE_TITLE", title: "Updated Title" }
+      );
+      manager.createOperation(
+        "doc-1",
+        "UPDATE_CONTENT",
+        { type: "UPDATE_CONTENT", content: "Updated Content" }
+      );
+
+      expect(manager.getOperationLog().size()).toBe(3);
+    });
+
+    it("as operações devem permanecer no mesmo ordenamento em que foram criadas", () => {
+      const manager = new OperationManager();
+
+      const op1 = manager.createOperation(
+        "doc-1",
+        "CREATE_DOCUMENT",
+        { type: "CREATE_DOCUMENT", title: "Doc 1", content: "Content 1" }
+      );
+      const op2 = manager.createOperation(
+        "doc-1",
+        "UPDATE_TITLE",
+        { type: "UPDATE_TITLE", title: "Updated Title" }
+      );
+      const op3 = manager.createOperation(
+        "doc-1",
+        "UPDATE_CONTENT",
+        { type: "UPDATE_CONTENT", content: "Updated Content" }
+      );
+
+      const allOps = manager.getOperationLog().getAll();
+      expect(allOps).toHaveLength(3);
+      expect(allOps[0].id).toBe(op1.id);
+      expect(allOps[1].id).toBe(op2.id);
+      expect(allOps[2].id).toBe(op3.id);
+    });
+
+    it("cada operação deve ter VectorClock representando estado causal correto", () => {
+      const manager = new OperationManager();
+      const deviceId = manager.getDeviceId();
+
+      const op1 = manager.createOperation(
+        "doc-1",
+        "CREATE_DOCUMENT",
+        { type: "CREATE_DOCUMENT", title: "Doc 1", content: "Content 1" }
+      );
+      const op2 = manager.createOperation(
+        "doc-1",
+        "UPDATE_TITLE",
+        { type: "UPDATE_TITLE", title: "Updated Title" }
+      );
+      const op3 = manager.createOperation(
+        "doc-1",
+        "UPDATE_CONTENT",
+        { type: "UPDATE_CONTENT", content: "Updated Content" }
+      );
+
+      expect(op1.vectorClock.get(deviceId)).toBe(1);
+      expect(op2.vectorClock.get(deviceId)).toBe(2);
+      expect(op3.vectorClock.get(deviceId)).toBe(3);
+
+      expect(op1.vectorClock.isBefore(op2.vectorClock)).toBe(true);
+      expect(op2.vectorClock.isBefore(op3.vectorClock)).toBe(true);
+      expect(op1.vectorClock.isBefore(op3.vectorClock)).toBe(true);
+    });
   });
 });
