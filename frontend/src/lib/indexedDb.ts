@@ -178,6 +178,39 @@ export async function deleteOperation(id: string): Promise<void> {
   });
 }
 
+export async function deleteOperations(ids: string[]): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
+
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(OPERATIONS_STORE, "readwrite");
+    const store = transaction.objectStore(OPERATIONS_STORE);
+
+    let completed = 0;
+    let hasError = false;
+
+    for (const id of ids) {
+      const request = store.delete(id);
+
+      request.onsuccess = () => {
+        completed++;
+        if (completed === ids.length && !hasError) {
+          resolve();
+        }
+      };
+
+      request.onerror = () => {
+        if (!hasError) {
+          hasError = true;
+          reject(new Error("Failed to delete operations"));
+        }
+      };
+    }
+  });
+}
+
 export async function clearOperations(): Promise<void> {
   const database = await openDatabase();
   return new Promise((resolve, reject) => {
