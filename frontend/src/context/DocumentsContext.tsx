@@ -1,9 +1,11 @@
-import React, { useState, useCallback, useMemo, type ReactNode } from "react";
+import React, { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
 import type { Document } from "../types/document";
 import { DocumentsContext } from "./DocumentsContextType";
+import { getAllDocuments, putDocument, deleteDocument as deleteDocumentIdb } from "../lib/indexedDb";
 
 export interface DocumentsContextType {
   documents: Document[];
+  isLoading: boolean;
   createDocument: (title?: string) => Document;
   getDocument: (id: string) => Document | undefined;
   updateDocument: (id: string, data: Partial<Document>) => void;
@@ -196,7 +198,47 @@ open http://localhost:3000
 ];
 
 export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [documents, setDocuments] = useState<Document[]>(initialDocuments);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function initialize() {
+      try {
+        console.log("[Context] Initializing - loading from IndexedDB");
+        const storedDocuments = await getAllDocuments();
+        console.log("[Context] Initialization - loaded documents:", storedDocuments.length);
+        if (mounted) {
+          if (storedDocuments.length > 0) {
+            console.log("[Context] Using stored documents from IndexedDB");
+            setDocuments(storedDocuments);
+          } else {
+            console.log("[Context] No stored documents, using seeds");
+            setDocuments(initialDocuments);
+            for (const doc of initialDocuments) {
+              await putDocument(doc);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[DocumentsContext] Failed to initialize:", error);
+        if (mounted) {
+          setDocuments(initialDocuments);
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    initialize();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const createDocument = useCallback((title?: string): Document => {
     const now = new Date().toISOString();
@@ -208,6 +250,9 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       updatedAt: now,
     };
     setDocuments((prev) => [newDoc, ...prev]);
+    putDocument(newDoc).catch((error) => {
+      console.error("[DocumentsContext] Failed to persist new document:", error);
+    });
     return newDoc;
   }, []);
 
@@ -216,28 +261,42 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [documents]);
 
   const updateDocument = useCallback((id: string, data: Partial<Document>) => {
-    setDocuments((prev) =>
-      prev.map((doc) =>
+    console.log("[Context] updateDocument called:", { id, data });
+    setDocuments((prev) => {
+      const doc = prev.find((d) => d.id === id);
+      console.log("[Context] updateDocument found doc:", doc ? { id: doc.id, title: doc.title } : "not found");
+      if (doc) {
+        const updatedDoc = { ...doc, ...data, updatedAt: new Date().toISOString() };
+        console.log("[Context] updateDocument putting:", { id: updatedDoc.id, title: updatedDoc.title, contentLength: updatedDoc.content.length });
+        putDocument(updatedDoc).catch((error) => {
+          console.error("[DocumentsContext] Failed to persist document update:", error);
+        });
+      }
+      return prev.map((doc) =>
         doc.id === id
           ? { ...doc, ...data, updatedAt: new Date().toISOString() }
           : doc
-      )
-    );
+      );
+    });
   }, []);
 
   const deleteDocument = useCallback((id: string) => {
     setDocuments((prev) => prev.filter((doc) => doc.id !== id));
+    deleteDocumentIdb(id).catch((error) => {
+      console.error("[DocumentsContext] Failed to delete document:", error);
+    });
   }, []);
 
   const value = useMemo(
     () => ({
       documents,
+      isLoading,
       createDocument,
       getDocument,
       updateDocument,
       deleteDocument,
     }),
-    [documents, createDocument, getDocument, updateDocument, deleteDocument]
+    [documents, isLoading, createDocument, getDocument, updateDocument, deleteDocument]
   );
 
   return <DocumentsContext.Provider value={value}>{children}</DocumentsContext.Provider>;

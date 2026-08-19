@@ -5,6 +5,7 @@ import { WorkspaceSidebar } from "../components/app/WorkspaceSidebar";
 import { EditorHeader } from "../components/app/EditorHeader";
 import { EditorToolbar } from "../components/app/EditorToolbar";
 import { StatusFooter } from "../components/app/StatusFooter";
+import { MarkdownPreview } from "../components/app/MarkdownPreview";
 import { useDocuments } from "../hooks/useDocuments";
 
 export const EditorPage: React.FC = () => {
@@ -15,25 +16,41 @@ export const EditorPage: React.FC = () => {
 
   const [title, setTitle] = useState(() => document?.title || "");
   const [content, setContent] = useState(() => document?.content || "");
+  const [mode, setMode] = useState<"edit" | "preview">("edit");
   const isNewDocument = document ? (document.id === "new" || (document.content === "" && document.title === "Untitled Document")) : false;
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Sync local state with document from context (one-way: context → local)
+  // Only re-sync when document ID changes (document switch), not on content updates
+  useEffect(() => {
+    if (document) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTitle(document.title);
+      setContent(document.content);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [document?.id]);
+
   const handleTitleChange = (newTitle: string) => {
+    console.log("[Editor] handleTitleChange:", newTitle);
     setTitle(newTitle);
     if (document) {
+      console.log("[Editor] calling updateDocument for title:", document.id);
       updateDocument(document.id, { title: newTitle });
     }
   };
 
   const handleContentChange = (newContent: string) => {
+    console.log("[Editor] handleContentChange:", newContent.length, "chars");
     setContent(newContent);
     if (document) {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
       debounceRef.current = setTimeout(() => {
+        console.log("[Editor] debounced updateDocument for content:", document.id);
         updateDocument(document.id, { content: newContent });
       }, 300);
     }
@@ -182,7 +199,7 @@ export const EditorPage: React.FC = () => {
       <div className="flex flex-col flex-1 overflow-hidden">
         <EditorHeader title={title} />
         <div className="flex-1 overflow-y-auto bg-[#13131b]">
-          <div key={documentId} className="mx-auto max-w-3xl px-8 py-8">
+          <div className="mx-auto max-w-3xl px-8 py-8">
             {/* Title Input */}
             <input
               ref={titleRef}
@@ -194,23 +211,52 @@ export const EditorPage: React.FC = () => {
               className="w-full text-4xl font-bold text-[#e4e1ed] bg-transparent border-none outline-none placeholder-[#908fa0] mb-4"
               style={{ lineHeight: 1.1 }}
             />
-            <div className="w-12 h-1 bg-gradient-to-r from-[#c0c1ff] to-transparent rounded mb-8" />
+            <div className="w-12 h-1 bg-gradient-to-r from-[#c0c1ff] to-transparent rounded mb-4" />
 
-            {/* Content Editor */}
-            <textarea
-              ref={contentRef}
-              value={content}
-              onChange={(e) => handleContentChange(e.target.value)}
-              placeholder={isNewDocument ? "Start writing your document..." : ""}
-              className="w-full min-h-[500px] bg-transparent border-none outline-none text-[#c7c4d7] placeholder-[#908fa0] text-base leading-relaxed resize-none font-mono"
-              style={{ lineHeight: 1.7 }}
-              spellCheck={false}
-            />
+            {/* Edit / Preview Toggle */}
+            <div className="flex gap-2 mb-6">
+              <button
+                onClick={() => setMode("edit")}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  mode === "edit"
+                    ? "bg-[#c0c1ff] text-[#1000a9]"
+                    : "bg-[#1f1f27] text-[#c7c4d7] hover:bg-[#292932]"
+                }`}
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => setMode("preview")}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  mode === "preview"
+                    ? "bg-[#c0c1ff] text-[#1000a9]"
+                    : "bg-[#1f1f27] text-[#c7c4d7] hover:bg-[#292932]"
+                }`}
+              >
+                Preview
+              </button>
+            </div>
+
+            {/* Content Editor / Preview */}
+            {mode === "edit" ? (
+              <textarea
+                ref={contentRef}
+                value={content}
+                onChange={(e) => handleContentChange(e.target.value)}
+                placeholder={isNewDocument ? "Start writing your document..." : ""}
+                className="w-full min-h-[500px] bg-transparent border-none outline-none text-[#c7c4d7] placeholder-[#908fa0] text-base leading-relaxed resize-none font-mono"
+                style={{ lineHeight: 1.7 }}
+                spellCheck={false}
+              />
+            ) : (
+              <MarkdownPreview content={content} />
+            )}
 
             <div className="h-32" />
           </div>
         </div>
-        <EditorToolbar
+        {mode === "edit" && (
+          <EditorToolbar
             onH1={handleH1}
             onH2={handleH2}
             onBold={handleBold}
@@ -218,6 +264,7 @@ export const EditorPage: React.FC = () => {
             onCode={handleCode}
             onLink={handleLink}
           />
+        )}
         <StatusFooter />
       </div>
     </div>
