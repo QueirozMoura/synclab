@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { OperationLog } from "../src/lib/operationLog";
+import { VectorClock } from "../src/lib/vectorClock";
 import type { Operation, OperationType, OperationPayload } from "../src/types/operation";
 
 describe("OperationLog", () => {
@@ -16,6 +17,7 @@ describe("OperationLog", () => {
       type,
       payload,
       timestamp: new Date().toISOString(),
+      vectorClock: VectorClock.create(),
     };
   }
 

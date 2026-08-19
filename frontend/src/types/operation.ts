@@ -1,3 +1,5 @@
+import { VectorClock } from "../lib/vectorClock";
+
 export type OperationType =
   | "CREATE_DOCUMENT"
   | "UPDATE_TITLE"
@@ -17,4 +19,5 @@ export interface Operation {
   type: OperationType;
   payload: OperationPayload;
   timestamp: string;
+  vectorClock: VectorClock;
 }
