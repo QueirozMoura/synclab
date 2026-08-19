@@ -43,4 +43,12 @@ export class OperationManager {
     this.operationLog.append(operation);
     return operation;
   }
+
+  getOperations(): Operation[] {
+    return this.operationLog.getAll();
+  }
+
+  getOperationsForDocument(documentId: string): Operation[] {
+    return this.operationLog.getByDocument(documentId);
+  }
 }

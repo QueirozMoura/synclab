@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { OperationManager } from "../src/lib/operationManager";
 import { OperationLog } from "../src/lib/operationLog";
 import { VectorClock } from "../src/lib/vectorClock";
+import type { Operation } from "../src/types/operation";
 
 describe("OperationManager", () => {
   it("deve inicializar deviceId", () => {
@@ -262,6 +263,130 @@ describe("OperationManager", () => {
       expect(op1.vectorClock.isBefore(op2.vectorClock)).toBe(true);
       expect(op2.vectorClock.isBefore(op3.vectorClock)).toBe(true);
       expect(op1.vectorClock.isBefore(op3.vectorClock)).toBe(true);
+    });
+  });
+
+  describe("getOperations", () => {
+    it("deve retornar todas as operações na ordem em que foram criadas", () => {
+      const manager = new OperationManager();
+
+      const op1 = manager.createOperation(
+        "doc-1",
+        "CREATE_DOCUMENT",
+        { type: "CREATE_DOCUMENT", title: "Doc 1", content: "Content 1" }
+      );
+      const op2 = manager.createOperation(
+        "doc-1",
+        "UPDATE_TITLE",
+        { type: "UPDATE_TITLE", title: "Updated Title" }
+      );
+      const op3 = manager.createOperation(
+        "doc-1",
+        "UPDATE_CONTENT",
+        { type: "UPDATE_CONTENT", content: "Updated Content" }
+      );
+
+      const allOps = manager.getOperations();
+      expect(allOps).toHaveLength(3);
+      expect(allOps[0].id).toBe(op1.id);
+      expect(allOps[1].id).toBe(op2.id);
+      expect(allOps[2].id).toBe(op3.id);
+    });
+  });
+
+  describe("getOperationsForDocument", () => {
+    it("deve retornar somente operações do documento especificado", () => {
+      const manager = new OperationManager();
+
+      const op1 = manager.createOperation(
+        "document-a",
+        "CREATE_DOCUMENT",
+        { type: "CREATE_DOCUMENT", title: "Doc A", content: "Content A" }
+      );
+      const op2 = manager.createOperation(
+        "document-b",
+        "CREATE_DOCUMENT",
+        { type: "CREATE_DOCUMENT", title: "Doc B", content: "Content B" }
+      );
+      const op3 = manager.createOperation(
+        "document-a",
+        "UPDATE_TITLE",
+        { type: "UPDATE_TITLE", title: "Updated A" }
+      );
+
+      const docAOps = manager.getOperationsForDocument("document-a");
+      expect(docAOps).toHaveLength(2);
+      expect(docAOps[0].id).toBe(op1.id);
+      expect(docAOps[1].id).toBe(op3.id);
+
+      const docBOps = manager.getOperationsForDocument("document-b");
+      expect(docBOps).toHaveLength(1);
+      expect(docBOps[0].id).toBe(op2.id);
+    });
+
+    it("deve retornar array vazio para documento inexistente", () => {
+      const manager = new OperationManager();
+
+      manager.createOperation(
+        "doc-1",
+        "CREATE_DOCUMENT",
+        { type: "CREATE_DOCUMENT", title: "Test", content: "Content" }
+      );
+
+      const result = manager.getOperationsForDocument("does-not-exist");
+      expect(result).toEqual([]);
+    });
+
+    it("não deve permitir mutação externa do array retornado", () => {
+      const manager = new OperationManager();
+
+      manager.createOperation(
+        "doc-1",
+        "CREATE_DOCUMENT",
+        { type: "CREATE_DOCUMENT", title: "Test", content: "Content" }
+      );
+
+      const allOps = manager.getOperations();
+      const originalLength = allOps.length;
+      const fakeOp: Operation = {
+        id: "fake",
+        documentId: "fake",
+        deviceId: "fake",
+        type: "CREATE_DOCUMENT",
+        payload: { type: "CREATE_DOCUMENT", title: "", content: "" },
+        timestamp: new Date().toISOString(),
+        vectorClock: VectorClock.create(),
+      };
+      allOps.push(fakeOp);
+
+      expect(manager.getOperations()).toHaveLength(originalLength);
+      expect(manager.getOperationLog().size()).toBe(1);
+    });
+
+    it("não deve permitir mutação externa do array retornado por documento", () => {
+      const manager = new OperationManager();
+
+      manager.createOperation(
+        "doc-1",
+        "CREATE_DOCUMENT",
+        { type: "CREATE_DOCUMENT", title: "Test", content: "Content" }
+      );
+
+      const docOps = manager.getOperationsForDocument("doc-1");
+      const originalLength = docOps.length;
+      const fakeOp: Operation = {
+        id: "fake",
+        documentId: "fake",
+        deviceId: "fake",
+        type: "CREATE_DOCUMENT",
+        payload: { type: "CREATE_DOCUMENT", title: "", content: "" },
+        timestamp: new Date().toISOString(),
+        vectorClock: VectorClock.create(),
+      };
+      docOps.push(fakeOp);
+
+      expect(manager.getOperationsForDocument("doc-1")).toHaveLength(originalLength);
+      expect(manager.getOperationLog().size()).toBe(1);
     });
   });
 });
