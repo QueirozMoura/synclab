@@ -50,7 +50,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
         </div>
         <div>
           <h1 className="text-lg font-semibold text-[#e4e1ed]">{title}</h1>
-          <p className="text-xs text-[#908fa0] mt-1">Edited 2 min ago</p>
+          <p className="text-xs text-[#908fa0] mt-1">Saved locally</p>
         </div>
       </Link>
 
@@ -64,7 +64,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
               boxShadow: "0 0 8px rgba(16,185,129,0.5)",
             }}
           />
-          <span className="text-xs text-[#e4e1ed]">Synced</span>
+          <span className="text-xs text-[#e4e1ed]">Saved locally</span>
         </div>
 
         {/* Share Button */}

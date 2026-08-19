@@ -10,7 +10,7 @@ export const StatusFooter: React.FC = () => {
             boxShadow: "0 0 4px rgba(16,185,129,0.5)",
           }}
         />
-        <span>Synced | Last sync: just now</span>
+        <span>Saved locally</span>
       </div>
     </div>
   );
