@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { GlobalSidebar } from "../components/app/GlobalSidebar";
 import { WorkspaceSidebar } from "../components/app/WorkspaceSidebar";
@@ -47,6 +47,84 @@ export const EditorPage: React.FC = () => {
     };
   }, [documentId]);
 
+  const applyFormat = useCallback((prefix: string, suffix: string = prefix) => {
+    const textarea = contentRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = content.slice(start, end);
+    const hasSelection = start !== end;
+
+    let newContent: string;
+    let newCursorPos: number;
+
+    if (hasSelection) {
+      newContent = content.slice(0, start) + prefix + selectedText + suffix + content.slice(end);
+      newCursorPos = start + prefix.length + selectedText.length + suffix.length;
+    } else {
+      newContent = content.slice(0, start) + prefix + suffix + content.slice(start);
+      newCursorPos = start + prefix.length;
+    }
+
+    setContent(newContent);
+    if (document) {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+      debounceRef.current = setTimeout(() => {
+        updateDocument(document.id, { content: newContent });
+      }, 300);
+    }
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  }, [content, document, updateDocument]);
+
+  const handleH1 = useCallback(() => applyFormat("# "), [applyFormat]);
+  const handleH2 = useCallback(() => applyFormat("## "), [applyFormat]);
+  const handleBold = useCallback(() => applyFormat("**", "**"), [applyFormat]);
+  const handleItalic = useCallback(() => applyFormat("*", "*"), [applyFormat]);
+  const handleCode = useCallback(() => applyFormat("`", "`"), [applyFormat]);
+
+  const handleLink = useCallback(() => {
+    const textarea = contentRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = content.slice(start, end);
+    const hasSelection = start !== end;
+
+    let newContent: string;
+    let newCursorPos: number;
+
+    if (hasSelection) {
+      newContent = content.slice(0, start) + "[" + selectedText + "](https://)" + content.slice(end);
+      newCursorPos = start + selectedText.length + 3 + 1 + 8; // [text](https://)
+    } else {
+      newContent = content.slice(0, start) + "[](https://)" + content.slice(start);
+      newCursorPos = start + 1; // position after [
+    }
+
+    setContent(newContent);
+    if (document) {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+      debounceRef.current = setTimeout(() => {
+        updateDocument(document.id, { content: newContent });
+      }, 300);
+    }
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  }, [content, document, updateDocument]);
+
   const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -79,7 +157,14 @@ export const EditorPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <EditorToolbar />
+          <EditorToolbar
+            onH1={handleH1}
+            onH2={handleH2}
+            onBold={handleBold}
+            onItalic={handleItalic}
+            onCode={handleCode}
+            onLink={handleLink}
+          />
           <StatusFooter />
         </div>
       </div>
@@ -125,7 +210,14 @@ export const EditorPage: React.FC = () => {
             <div className="h-32" />
           </div>
         </div>
-        <EditorToolbar />
+        <EditorToolbar
+            onH1={handleH1}
+            onH2={handleH2}
+            onBold={handleBold}
+            onItalic={handleItalic}
+            onCode={handleCode}
+            onLink={handleLink}
+          />
         <StatusFooter />
       </div>
     </div>

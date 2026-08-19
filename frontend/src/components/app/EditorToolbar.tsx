@@ -1,27 +1,43 @@
 import React from "react";
 
-export const EditorToolbar: React.FC = () => {
+interface EditorToolbarProps {
+  onH1: () => void;
+  onH2: () => void;
+  onBold: () => void;
+  onItalic: () => void;
+  onCode: () => void;
+  onLink: () => void;
+}
+
+export const EditorToolbar: React.FC<EditorToolbarProps> = ({
+  onH1,
+  onH2,
+  onBold,
+  onItalic,
+  onCode,
+  onLink,
+}) => {
   const [hoverAction, setHoverAction] = React.useState<string | null>(null);
 
   const toolbarGroups = [
     {
       id: "headings",
       actions: [
-        { id: "h1", label: "H1", icon: "H1" },
-        { id: "h2", label: "H2", icon: "H2" },
+        { id: "h1", label: "H1", icon: "H1", onClick: onH1 },
+        { id: "h2", label: "H2", icon: "H2", onClick: onH2 },
       ],
     },
     {
       id: "formatting",
       actions: [
-        { id: "bold", label: "Bold", icon: "B" },
-        { id: "italic", label: "Italic", icon: "I" },
-        { id: "code", label: "Code", icon: "</>" },
+        { id: "bold", label: "Bold", icon: "B", onClick: onBold },
+        { id: "italic", label: "Italic", icon: "I", onClick: onItalic },
+        { id: "code", label: "Code", icon: "</>", onClick: onCode },
       ],
     },
     {
       id: "insert",
-      actions: [{ id: "link", label: "Link", icon: "🔗" }],
+      actions: [{ id: "link", label: "Link", icon: "🔗", onClick: onLink }],
     },
   ];
 
@@ -38,6 +54,7 @@ export const EditorToolbar: React.FC = () => {
             {group.actions.map((action) => (
               <button
                 key={action.id}
+                onClick={action.onClick}
                 onMouseEnter={() => setHoverAction(action.id)}
                 onMouseLeave={() => setHoverAction(null)}
                 className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${

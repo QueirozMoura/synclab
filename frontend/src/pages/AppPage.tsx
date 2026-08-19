@@ -9,6 +9,8 @@ import { StatusFooter } from "../components/app/StatusFooter";
 export const AppPage: React.FC = () => {
   const [activeDocument, setActiveDocument] = React.useState("Architecture");
 
+  const noop = () => {};
+
   return (
     <div className="flex h-screen bg-[#13131b] overflow-hidden">
       {/* Global Sidebar */}
@@ -29,7 +31,14 @@ export const AppPage: React.FC = () => {
         <EditorContent />
 
         {/* Floating Toolbar */}
-        <EditorToolbar />
+        <EditorToolbar
+          onH1={noop}
+          onH2={noop}
+          onBold={noop}
+          onItalic={noop}
+          onCode={noop}
+          onLink={noop}
+        />
 
         {/* Status Footer */}
         <StatusFooter />
