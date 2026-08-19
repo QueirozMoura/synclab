@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo, useEffect, type ReactNode } from
 import type { Document } from "../types/document";
 import { DocumentsContext } from "./DocumentsContextType";
 import { getAllDocuments, putDocument, deleteDocument as deleteDocumentIdb } from "../lib/indexedDb";
+import { useOperationManager } from "../hooks/useOperationManager";
 
 export interface DocumentsContextType {
   documents: Document[];
@@ -200,6 +201,7 @@ open http://localhost:3000
 export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { createOperation } = useOperationManager();
 
   useEffect(() => {
     let mounted = true;
@@ -253,8 +255,17 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     putDocument(newDoc).catch((error) => {
       console.error("[DocumentsContext] Failed to persist new document:", error);
     });
+
+    // Create operation for document creation
+    console.log("[Context] creating CREATE_DOCUMENT operation");
+    createOperation(newDoc.id, "CREATE_DOCUMENT", {
+      type: "CREATE_DOCUMENT",
+      title: newDoc.title,
+      content: newDoc.content,
+    });
+
     return newDoc;
-  }, []);
+  }, [createOperation]);
 
   const getDocument = useCallback((id: string): Document | undefined => {
     return documents.find((doc) => doc.id === id);

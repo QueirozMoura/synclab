@@ -23,6 +23,7 @@ export const EditorPage: React.FC = () => {
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPersistedContentRef = useRef<string>(document?.content || "");
 
   // Sync local state with document from context (one-way: context → local)
   // Only re-sync when document ID changes (document switch), not on content updates
@@ -31,6 +32,7 @@ export const EditorPage: React.FC = () => {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTitle(document.title);
       setContent(document.content);
+      lastPersistedContentRef.current = document.content;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [document?.id]);
@@ -67,8 +69,17 @@ export const EditorPage: React.FC = () => {
         clearTimeout(debounceRef.current);
       }
       debounceRef.current = setTimeout(() => {
-        console.log("[Editor] debounced updateDocument for content:", document.id);
-        updateDocument(document.id, { content: newContent });
+        // Only persist and create operation if content actually changed
+        if (newContent !== lastPersistedContentRef.current) {
+          console.log("[Editor] debounced updateDocument for content:", document.id);
+          updateDocument(document.id, { content: newContent });
+          
+          // Create operation for content change
+          console.log("[Editor] creating UPDATE_CONTENT operation");
+          createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          
+          lastPersistedContentRef.current = newContent;
+        }
       }, 300);
     }
   };
@@ -107,7 +118,15 @@ export const EditorPage: React.FC = () => {
         clearTimeout(debounceRef.current);
       }
       debounceRef.current = setTimeout(() => {
-        updateDocument(document.id, { content: newContent });
+        if (newContent !== lastPersistedContentRef.current) {
+          updateDocument(document.id, { content: newContent });
+          
+          // Create operation for content change
+          console.log("[Editor] creating UPDATE_CONTENT operation");
+          createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          
+          lastPersistedContentRef.current = newContent;
+        }
       }, 300);
     }
 
@@ -115,7 +134,7 @@ export const EditorPage: React.FC = () => {
       textarea.focus();
       textarea.setSelectionRange(newCursorPos, newCursorPos);
     }, 0);
-  }, [content, document, updateDocument]);
+  }, [content, document, updateDocument, createOperation]);
 
   const handleH1 = useCallback(() => applyFormat("# "), [applyFormat]);
   const handleH2 = useCallback(() => applyFormat("## "), [applyFormat]);
@@ -149,7 +168,15 @@ export const EditorPage: React.FC = () => {
         clearTimeout(debounceRef.current);
       }
       debounceRef.current = setTimeout(() => {
-        updateDocument(document.id, { content: newContent });
+        if (newContent !== lastPersistedContentRef.current) {
+          updateDocument(document.id, { content: newContent });
+          
+          // Create operation for content change
+          console.log("[Editor] creating UPDATE_CONTENT operation");
+          createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          
+          lastPersistedContentRef.current = newContent;
+        }
       }, 300);
     }
 
@@ -157,7 +184,7 @@ export const EditorPage: React.FC = () => {
       textarea.focus();
       textarea.setSelectionRange(newCursorPos, newCursorPos);
     }, 0);
-  }, [content, document, updateDocument]);
+  }, [content, document, updateDocument, createOperation]);
 
   const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
