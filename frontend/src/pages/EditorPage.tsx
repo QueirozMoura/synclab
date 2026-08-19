@@ -7,10 +7,12 @@ import { EditorToolbar } from "../components/app/EditorToolbar";
 import { StatusFooter } from "../components/app/StatusFooter";
 import { MarkdownPreview } from "../components/app/MarkdownPreview";
 import { useDocuments } from "../hooks/useDocuments";
+import { useOperationManager } from "../hooks/useOperationManager";
 
 export const EditorPage: React.FC = () => {
   const { documentId } = useParams<{ documentId: string }>();
   const { getDocument, updateDocument } = useDocuments();
+  const { createOperation } = useOperationManager();
 
   const document = getDocument(documentId || "");
 
@@ -35,11 +37,26 @@ export const EditorPage: React.FC = () => {
 
   const handleTitleChange = (newTitle: string) => {
     console.log("[Editor] handleTitleChange:", newTitle);
-    setTitle(newTitle);
-    if (document) {
-      console.log("[Editor] calling updateDocument for title:", document.id);
-      updateDocument(document.id, { title: newTitle });
+    
+    // Don't create operation if no valid document
+    if (!document) {
+      setTitle(newTitle);
+      return;
     }
+    
+    // Don't create operation if title hasn't actually changed
+    if (newTitle === document.title) {
+      setTitle(newTitle);
+      return;
+    }
+
+    setTitle(newTitle);
+    console.log("[Editor] calling updateDocument for title:", document.id);
+    updateDocument(document.id, { title: newTitle });
+
+    // Create operation for title change
+    console.log("[Editor] creating UPDATE_TITLE operation");
+    createOperation(document.id, "UPDATE_TITLE", { type: "UPDATE_TITLE", title: newTitle });
   };
 
   const handleContentChange = (newContent: string) => {
