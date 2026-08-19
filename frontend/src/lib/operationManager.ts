@@ -1,6 +1,8 @@
 import { getDeviceId } from "./deviceIdentity";
 import { VectorClock } from "./vectorClock";
 import { OperationLog } from "./operationLog";
+import { createOperation } from "./operationFactory";
+import type { Operation, OperationType, OperationPayload } from "../types/operation";
 
 export class OperationManager {
   private readonly deviceId: string;
@@ -23,5 +25,22 @@ export class OperationManager {
 
   getOperationLog(): OperationLog {
     return this.operationLog;
+  }
+
+  createOperation<T extends OperationType>(
+    documentId: string,
+    type: T,
+    payload: Extract<OperationPayload, { type: T }>
+  ): Operation;
+
+  createOperation(
+    documentId: string,
+    type: OperationType,
+    payload: OperationPayload
+  ): Operation {
+    this.vectorClock = this.vectorClock.increment(this.deviceId);
+    const operation = createOperation(documentId, type, payload, this.vectorClock);
+    this.operationLog.append(operation);
+    return operation;
   }
 }
