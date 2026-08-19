@@ -188,4 +188,57 @@ describe("OperationLog", () => {
       expect(stored.payload.title).toBe("Test Doc");
     });
   });
+
+  describe("loadInitial", () => {
+    it("deve carregar operações iniciais", () => {
+      const log = new OperationLog();
+      const ops = [
+        makeCreateOp("op-1", "doc-1"),
+        makeUpdateTitleOp("op-2", "doc-1"),
+        makeCreateOp("op-3", "doc-2"),
+      ];
+
+      log.loadInitial(ops);
+
+      expect(log.size()).toBe(3);
+      expect(log.getAll()).toHaveLength(3);
+    });
+
+    it("deve deduplicar operações já existentes", () => {
+      const log = new OperationLog();
+      const op1 = makeCreateOp("op-1", "doc-1");
+      const op2 = makeUpdateTitleOp("op-2", "doc-1");
+
+      log.append(op1);
+      log.loadInitial([op1, op2]);
+
+      expect(log.size()).toBe(2);
+    });
+
+    it("deve preservar ordem das operações carregadas", () => {
+      const log = new OperationLog();
+      const ops = [
+        makeCreateOp("op-1", "doc-1"),
+        makeUpdateTitleOp("op-2", "doc-1"),
+        makeCreateOp("op-3", "doc-2"),
+      ];
+
+      log.loadInitial(ops);
+
+      const all = log.getAll();
+      expect(all[0].id).toBe("op-1");
+      expect(all[1].id).toBe("op-2");
+      expect(all[2].id).toBe("op-3");
+    });
+
+    it("deve permitir adicionar novas operações após loadInitial", () => {
+      const log = new OperationLog();
+      const ops = [makeCreateOp("op-1", "doc-1")];
+
+      log.loadInitial(ops);
+      log.append(makeUpdateTitleOp("op-2", "doc-1"));
+
+      expect(log.size()).toBe(2);
+    });
+  });
 });

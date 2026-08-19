@@ -1,8 +1,10 @@
 import type { Document } from "../types/document";
+import type { Operation } from "../types/operation";
 
 const DB_NAME = "synclab_store";
-const STORE_NAME = "documents";
-const DB_VERSION = 1;
+const DOCUMENTS_STORE = "documents";
+const OPERATIONS_STORE = "operations";
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -25,8 +27,11 @@ function openDatabase(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event) => {
       const database = (event.target as IDBOpenDBRequest).result;
-      if (!database.objectStoreNames.contains(STORE_NAME)) {
-        database.createObjectStore(STORE_NAME, { keyPath: "id" });
+      if (!database.objectStoreNames.contains(DOCUMENTS_STORE)) {
+        database.createObjectStore(DOCUMENTS_STORE, { keyPath: "id" });
+      }
+      if (!database.objectStoreNames.contains(OPERATIONS_STORE)) {
+        database.createObjectStore(OPERATIONS_STORE, { keyPath: "id" });
       }
     };
   });
@@ -38,8 +43,8 @@ export async function getAllDocuments(): Promise<Document[]> {
   console.log("[IndexedDB] getAllDocuments called");
   const database = await openDatabase();
   return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readonly");
-    const store = transaction.objectStore(STORE_NAME);
+    const transaction = database.transaction(DOCUMENTS_STORE, "readonly");
+    const store = transaction.objectStore(DOCUMENTS_STORE);
     const request = store.getAll();
 
     request.onsuccess = () => {
@@ -59,8 +64,8 @@ export async function getAllDocuments(): Promise<Document[]> {
 export async function getDocument(id: string): Promise<Document | undefined> {
   const database = await openDatabase();
   return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readonly");
-    const store = transaction.objectStore(STORE_NAME);
+    const transaction = database.transaction(DOCUMENTS_STORE, "readonly");
+    const store = transaction.objectStore(DOCUMENTS_STORE);
     const request = store.get(id);
 
     request.onsuccess = () => {
@@ -77,8 +82,8 @@ export async function putDocument(document: Document): Promise<void> {
   console.log("[IndexedDB] putDocument called:", { id: document.id, title: document.title, contentLength: document.content.length });
   const database = await openDatabase();
   return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
+    const transaction = database.transaction(DOCUMENTS_STORE, "readwrite");
+    const store = transaction.objectStore(DOCUMENTS_STORE);
     const request = store.put(document);
 
     request.onsuccess = () => {
@@ -96,8 +101,8 @@ export async function putDocument(document: Document): Promise<void> {
 export async function deleteDocument(id: string): Promise<void> {
   const database = await openDatabase();
   return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
+    const transaction = database.transaction(DOCUMENTS_STORE, "readwrite");
+    const store = transaction.objectStore(DOCUMENTS_STORE);
     const request = store.delete(id);
 
     request.onsuccess = () => {
@@ -106,6 +111,81 @@ export async function deleteDocument(id: string): Promise<void> {
 
     request.onerror = () => {
       reject(new Error("Failed to delete document"));
+    };
+  });
+}
+
+export async function getAllOperations(): Promise<Operation[]> {
+  console.log("[IndexedDB] getAllOperations called");
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(OPERATIONS_STORE, "readonly");
+    const store = transaction.objectStore(OPERATIONS_STORE);
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+      const ops = request.result as Operation[];
+      console.log("[IndexedDB] getAllOperations result:", ops.length, "operations");
+      resolve(ops);
+    };
+
+    request.onerror = () => {
+      console.error("[IndexedDB] getAllOperations error:", request.error);
+      reject(new Error("Failed to get all operations"));
+    };
+  });
+}
+
+export async function putOperation(operation: Operation): Promise<void> {
+  console.log("[IndexedDB] putOperation called:", { id: operation.id, documentId: operation.documentId, type: operation.type });
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(OPERATIONS_STORE, "readwrite");
+    const store = transaction.objectStore(OPERATIONS_STORE);
+    const request = store.put(operation);
+
+    request.onsuccess = () => {
+      console.log("[IndexedDB] putOperation success:", operation.id);
+      resolve();
+    };
+
+    request.onerror = () => {
+      console.error("[IndexedDB] putOperation error:", request.error);
+      reject(new Error("Failed to put operation"));
+    };
+  });
+}
+
+export async function deleteOperation(id: string): Promise<void> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(OPERATIONS_STORE, "readwrite");
+    const store = transaction.objectStore(OPERATIONS_STORE);
+    const request = store.delete(id);
+
+    request.onsuccess = () => {
+      resolve();
+    };
+
+    request.onerror = () => {
+      reject(new Error("Failed to delete operation"));
+    };
+  });
+}
+
+export async function clearOperations(): Promise<void> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(OPERATIONS_STORE, "readwrite");
+    const store = transaction.objectStore(OPERATIONS_STORE);
+    const request = store.clear();
+
+    request.onsuccess = () => {
+      resolve();
+    };
+
+    request.onerror = () => {
+      reject(new Error("Failed to clear operations"));
     };
   });
 }

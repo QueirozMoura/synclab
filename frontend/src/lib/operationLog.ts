@@ -14,6 +14,15 @@ export class OperationLog {
     return true;
   }
 
+  loadInitial(operations: Operation[]): void {
+    for (const op of operations) {
+      if (!this.seenIds.has(op.id)) {
+        this.operations.push(this.cloneOperation(op));
+        this.seenIds.add(op.id);
+      }
+    }
+  }
+
   getByDocument(documentId: string): Operation[] {
     return this.operations.filter((op) => op.documentId === documentId);
   }

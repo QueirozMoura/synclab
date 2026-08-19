@@ -292,11 +292,18 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const deleteDocument = useCallback((id: string) => {
-    setDocuments((prev) => prev.filter((doc) => doc.id !== id));
+    setDocuments((prev) => {
+      const doc = prev.find((d) => d.id === id);
+      if (doc) {
+        console.log("[Context] creating DELETE_DOCUMENT operation");
+        createOperation(id, "DELETE_DOCUMENT", { type: "DELETE_DOCUMENT", deleted: true });
+      }
+      return prev.filter((d) => d.id !== id);
+    });
     deleteDocumentIdb(id).catch((error) => {
       console.error("[DocumentsContext] Failed to delete document:", error);
     });
-  }, []);
+  }, [createOperation]);
 
   const value = useMemo(
     () => ({
