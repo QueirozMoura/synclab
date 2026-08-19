@@ -2,13 +2,16 @@ import { getDeviceId } from "./deviceIdentity";
 import { VectorClock } from "./vectorClock";
 import { OperationLog } from "./operationLog";
 import { createOperation } from "./operationFactory";
-import { getAllOperations, putOperation, getSnapshot } from "./indexedDb";
+import { getAllOperations, putOperation, getSnapshot, putSnapshot } from "./indexedDb";
 import { reconstructDocument } from "./documentStateEngine";
 import { orderOperations } from "./operationOrdering";
 import { reduceOperations } from "./documentReducer";
+import { createDocumentSnapshot } from "./documentSnapshot";
 import type { Document } from "../types/document";
 import type { Operation, OperationType, OperationPayload } from "../types/operation";
 import type { DocumentSnapshot } from "../types/documentSnapshot";
+
+const SNAPSHOT_INTERVAL = 10;
 
 export class OperationManager {
   private readonly deviceId: string;
@@ -66,6 +69,20 @@ export class OperationManager {
     putOperation(operation).catch((error) => {
       console.error("[OperationManager] Failed to persist operation:", error);
     });
+
+    if (type !== "DELETE_DOCUMENT") {
+      const operations = this.getOperationsForDocument(documentId);
+      if (operations.length % SNAPSHOT_INTERVAL === 0) {
+        const document = this.reconstructDocument(documentId);
+        if (document) {
+          const snapshot = createDocumentSnapshot(documentId, document, operations.length);
+          putSnapshot(snapshot).catch((error) => {
+            console.error("[OperationManager] Failed to persist snapshot:", error);
+          });
+        }
+      }
+    }
+
     return operation;
   }
 

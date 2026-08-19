@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { OperationManager } from "../src/lib/operationManager";
 import { OperationLog } from "../src/lib/operationLog";
 import { VectorClock } from "../src/lib/vectorClock";
@@ -597,6 +597,148 @@ describe("OperationManager", () => {
       const result = await manager.reconstructDocumentFromSnapshot(docId);
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("criação automática de snapshots", () => {
+    it("não deve criar snapshot com 0 operações", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      const operations = manager.getOperationsForDocument(docId);
+      expect(operations.length).toBe(0);
+    });
+
+    it("não deve criar snapshot com 9 operações", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      for (let i = 1; i <= 9; i++) {
+        manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+      }
+
+      const operations = manager.getOperationsForDocument(docId);
+      expect(operations.length).toBe(9);
+    });
+
+    it("deve criar snapshot na 10ª operação", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+      }
+
+      const operations = manager.getOperationsForDocument(docId);
+      expect(operations.length).toBe(10);
+    });
+
+    it("deve atualizar snapshot na 20ª operação", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 20; i++) {
+        manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+      }
+
+      const operations = manager.getOperationsForDocument(docId);
+      expect(operations.length).toBe(20);
+    });
+
+    it("não deve criar snapshot para documento deletado", () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+      }
+
+      manager.createOperation(docId, "DELETE_DOCUMENT", {
+        type: "DELETE_DOCUMENT",
+        deleted: true,
+      });
+
+      const operations = manager.getOperationsForDocument(docId);
+      expect(operations.length).toBe(11);
+    });
+
+    it("deve ter contagem independente para documentos diferentes", () => {
+      const manager = new OperationManager();
+
+      for (let i = 1; i <= 10; i++) {
+        manager.createOperation("doc-a", "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title A ${i}`,
+        });
+      }
+
+      for (let i = 1; i <= 5; i++) {
+        manager.createOperation("doc-b", "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title B ${i}`,
+        });
+      }
+
+      const opsA = manager.getOperationsForDocument("doc-a");
+      const opsB = manager.getOperationsForDocument("doc-b");
+
+      expect(opsA.length).toBe(10);
+      expect(opsB.length).toBe(5);
+    });
+
+    it("falha ao salvar snapshot não invalida a operação", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      const { putSnapshot } = await import("../src/lib/indexedDb");
+      const putSnapshotSpy = vi.spyOn({ putSnapshot }, "putSnapshot")
+        .mockRejectedValue(new Error("IndexedDB error"));
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        const op = manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+        expect(op.id).toBeTruthy();
+      }
+
+      putSnapshotSpy.mockRestore();
     });
   });
 });
