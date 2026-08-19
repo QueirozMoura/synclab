@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { GlobalSidebar } from "../components/app/GlobalSidebar";
 import { WorkspaceSidebar } from "../components/app/WorkspaceSidebar";
@@ -18,6 +18,7 @@ export const EditorPage: React.FC = () => {
   const isNewDocument = document ? (document.id === "new" || (document.content === "" && document.title === "Untitled Document")) : false;
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
@@ -29,9 +30,22 @@ export const EditorPage: React.FC = () => {
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
     if (document) {
-      updateDocument(document.id, { content: newContent });
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+      debounceRef.current = setTimeout(() => {
+        updateDocument(document.id, { content: newContent });
+      }, 300);
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [documentId]);
 
   const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {

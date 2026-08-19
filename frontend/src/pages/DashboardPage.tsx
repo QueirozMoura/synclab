@@ -5,8 +5,17 @@ import { DashboardHeader } from "../components/dashboard/DashboardHeader";
 import { DocumentCard } from "../components/dashboard/DocumentCard";
 import { ActivityPanel } from "../components/dashboard/ActivityPanel";
 import { MobileTopbar } from "../components/dashboard/MobileTopbar";
+import { useDocuments } from "../hooks/useDocuments";
+
+const getDocumentIcon = (id: string) => {
+  if (id === "readme") return { icon: "markdown", iconColor: "#908fa0" };
+  if (id.includes("code") || id === "crdt-notes" || id === "architecture") return { icon: "code", iconColor: "#c0c1ff" };
+  if (id === "roadmap-2024") return { icon: "architecture", iconColor: "#c0c1ff" };
+  return { icon: "code", iconColor: "#ffb783" };
+};
 
 export const DashboardPage: React.FC = () => {
+  const { documents } = useDocuments();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   const handleFilterClick = () => {
@@ -16,6 +25,9 @@ export const DashboardPage: React.FC = () => {
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
+
+  const featuredDoc = documents[0];
+  const compactDocs = documents.slice(1, 3);
 
   return (
     <div className="flex h-screen bg-[#09090B] overflow-hidden">
@@ -62,33 +74,33 @@ export const DashboardPage: React.FC = () => {
 
                   {/* Document Grid - 2 columns on desktop, 1 on mobile */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Featured Card - Architecture Overview */}
-                    <DocumentCard
-                      featured
-                      title="Architecture Overview"
-                      description="Updated the system diagrams to reflect the new CRDT implementation for real-time collaboration."
-                      badge="architecture"
-                      badgeColor="#c0c1ff"
-                      timeAgo="Just now"
-                      href="/app/documents/architecture"
-                    />
+                    {/* Featured Card */}
+                    {featuredDoc && (
+                      <DocumentCard
+                        featured
+                        title={featuredDoc.title}
+                        badge={featuredDoc.id}
+                        badgeColor="#c0c1ff"
+                        timeAgo="Just now"
+                        href={`/app/documents/${featuredDoc.id}`}
+                      />
+                    )}
 
-                    {/* Right column - CRDT Notes and README */}
+                    {/* Right column - compact cards */}
                     <div className="space-y-4">
-                      <DocumentCard
-                        title="CRDT Notes"
-                        icon="code"
-                        iconColor="#ffb783"
-                        timeAgo="Synced 2h ago"
-                        href="/app/documents/crdt-notes"
-                      />
-                      <DocumentCard
-                        title="README.md"
-                        icon="markdown"
-                        iconColor="#908fa0"
-                        timeAgo="Synced yesterday"
-                        href="/app/documents/readme"
-                      />
+                      {compactDocs.map((doc) => {
+                        const { icon, iconColor } = getDocumentIcon(doc.id);
+                        return (
+                          <DocumentCard
+                            key={doc.id}
+                            title={doc.title}
+                            icon={icon}
+                            iconColor={iconColor}
+                            timeAgo="Synced recently"
+                            href={`/app/documents/${doc.id}`}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
