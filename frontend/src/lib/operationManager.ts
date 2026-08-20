@@ -150,6 +150,29 @@ export class OperationManager {
     const localSnapshots = await getAllSnapshots();
     const syncEngine = new SyncEngine();
     const { operations, result } = syncEngine.synchronize(localOperations, localSnapshots, remotePayload);
+
+    const localOperationIds = new Set(localOperations.map((op) => op.id));
+    for (const acceptedOp of result.acceptedOperations) {
+      if (!localOperationIds.has(acceptedOp.id)) {
+        await putOperation(acceptedOp);
+      }
+    }
+
+    const localSnapshotMap = new Map(localSnapshots.map((snap) => [snap.documentId, snap]));
+    const remoteSnapshots = remotePayload.snapshots;
+    for (const remoteSnapshot of remoteSnapshots) {
+      const localSnapshot = localSnapshotMap.get(remoteSnapshot.documentId);
+      if (!localSnapshot) {
+        await putSnapshot(remoteSnapshot);
+      } else {
+        const remoteTime = new Date(remoteSnapshot.updatedAt).getTime();
+        const localTime = new Date(localSnapshot.updatedAt).getTime();
+        if (remoteTime > localTime) {
+          await putSnapshot(remoteSnapshot);
+        }
+      }
+    }
+
     this.operationLog.loadInitial(operations);
     return result;
   }
