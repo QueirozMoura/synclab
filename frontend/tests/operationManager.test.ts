@@ -1,10 +1,33 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock dos módulos IndexedDB e compactação ANTES de importar OperationManager
+vi.mock("../src/lib/indexedDb", () => ({
+  getAllOperations: vi.fn().mockResolvedValue([]),
+  putOperation: vi.fn().mockResolvedValue(undefined),
+  putSnapshot: vi.fn().mockResolvedValue(undefined),
+  getSnapshot: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../src/lib/compactPersistedOperations", () => ({
+  compactPersistedOperations: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("../src/lib/deviceIdentity", () => ({
+  getDeviceId: () => "test-device-id",
+}));
+
 import { OperationManager } from "../src/lib/operationManager";
 import { OperationLog } from "../src/lib/operationLog";
 import { VectorClock } from "../src/lib/vectorClock";
+import { putSnapshot } from "../src/lib/indexedDb";
+import { compactPersistedOperations } from "../src/lib/compactPersistedOperations";
 import type { Document, Operation } from "../src/types/operation";
 
 describe("OperationManager", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("deve inicializar deviceId", () => {
     const manager = new OperationManager();
     const deviceId = manager.getDeviceId();
@@ -720,9 +743,7 @@ describe("OperationManager", () => {
       const manager = new OperationManager();
       const docId = "doc-1";
 
-      const { putSnapshot } = await import("../src/lib/indexedDb");
-      const putSnapshotSpy = vi.spyOn({ putSnapshot }, "putSnapshot")
-        .mockRejectedValue(new Error("IndexedDB error"));
+      vi.mocked(putSnapshot).mockRejectedValueOnce(new Error("IndexedDB error"));
 
       manager.createOperation(docId, "CREATE_DOCUMENT", {
         type: "CREATE_DOCUMENT",
@@ -737,8 +758,288 @@ describe("OperationManager", () => {
         });
         expect(op.id).toBeTruthy();
       }
+    });
+  });
 
-      putSnapshotSpy.mockRestore();
+  describe("compactação persistida integrada ao snapshot", () => {
+    it("10ª operação deve criar snapshot e compactar operações", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      vi.mocked(putSnapshot).mockResolvedValue(undefined);
+      vi.mocked(compactPersistedOperations).mockResolvedValue([]);
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(putSnapshot).toHaveBeenCalled();
+      expect(compactPersistedOperations).toHaveBeenCalled();
+    });
+
+    it("9 operações não devem compactar", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      for (let i = 1; i <= 9; i++) {
+        manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(putSnapshot).not.toHaveBeenCalled();
+      expect(compactPersistedOperations).not.toHaveBeenCalled();
+    });
+
+    it("20ª operação deve criar novo snapshot e compactar novamente", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      vi.mocked(putSnapshot).mockResolvedValue(undefined);
+      vi.mocked(compactPersistedOperations).mockResolvedValue([]);
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 20; i++) {
+        manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(putSnapshot).toHaveBeenCalledTimes(2);
+      expect(compactPersistedOperations).toHaveBeenCalledTimes(2);
+    });
+
+    it("snapshot deve ser persistido antes da compactação", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      const callOrder: string[] = [];
+
+      vi.mocked(putSnapshot).mockImplementation(() => {
+        callOrder.push("putSnapshot");
+        return Promise.resolve();
+      });
+      vi.mocked(compactPersistedOperations).mockImplementation(() => {
+        callOrder.push("compactPersistedOperations");
+        return Promise.resolve([]);
+      });
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(callOrder).toEqual(["putSnapshot", "compactPersistedOperations"]);
+    });
+
+    it("putSnapshot falhando deve impedir compactação", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      vi.mocked(putSnapshot).mockRejectedValue(new Error("IndexedDB error"));
+      vi.mocked(compactPersistedOperations).mockResolvedValue([]);
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(putSnapshot).toHaveBeenCalled();
+      expect(compactPersistedOperations).not.toHaveBeenCalled();
+    });
+
+    it("compactação falhando não deve invalidar a operação", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      vi.mocked(putSnapshot).mockResolvedValue(undefined);
+      vi.mocked(compactPersistedOperations).mockRejectedValue(new Error("Compaction failed"));
+
+      const op = manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        const newOp = manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+        expect(newOp.id).toBeTruthy();
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(putSnapshot).toHaveBeenCalled();
+      expect(compactPersistedOperations).toHaveBeenCalled();
+      expect(op.id).toBeTruthy();
+      expect(manager.getOperationLog().size()).toBe(10);
+    });
+
+    it("DELETE_DOCUMENT não deve criar snapshot nem compactar", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      vi.mocked(putSnapshot).mockResolvedValue(undefined);
+      vi.mocked(compactPersistedOperations).mockResolvedValue([]);
+
+      manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+      }
+
+      const deleteOp = manager.createOperation(docId, "DELETE_DOCUMENT", {
+        type: "DELETE_DOCUMENT",
+        deleted: true,
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(deleteOp.id).toBeTruthy();
+      expect(putSnapshot).toHaveBeenCalledTimes(1);
+      expect(compactPersistedOperations).toHaveBeenCalledTimes(1);
+    });
+
+    it("documentos diferentes devem ter contagem independente para compactação", async () => {
+      const manager = new OperationManager();
+
+      vi.mocked(putSnapshot).mockResolvedValue(undefined);
+      vi.mocked(compactPersistedOperations).mockResolvedValue([]);
+
+      manager.createOperation("doc-a", "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Doc A",
+        content: "Content A",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        manager.createOperation("doc-a", "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title A ${i}`,
+        });
+      }
+
+      manager.createOperation("doc-b", "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Doc B",
+        content: "Content B",
+      });
+
+      for (let i = 2; i <= 5; i++) {
+        manager.createOperation("doc-b", "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title B ${i}`,
+        });
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(putSnapshot).toHaveBeenCalledTimes(1);
+      expect(compactPersistedOperations).toHaveBeenCalledTimes(1);
+    });
+
+    it("operação deve continuar persistida mesmo quando snapshot falha", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      vi.mocked(putSnapshot).mockRejectedValue(new Error("IndexedDB error"));
+
+      const op = manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        const newOp = manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+        expect(newOp.id).toBeTruthy();
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(op.id).toBeTruthy();
+      expect(manager.getOperationLog().size()).toBe(10);
+    });
+
+    it("operação deve continuar persistida mesmo quando compactação falha", async () => {
+      const manager = new OperationManager();
+      const docId = "doc-1";
+
+      vi.mocked(putSnapshot).mockResolvedValue(undefined);
+      vi.mocked(compactPersistedOperations).mockRejectedValue(new Error("Compaction failed"));
+
+      const op = manager.createOperation(docId, "CREATE_DOCUMENT", {
+        type: "CREATE_DOCUMENT",
+        title: "Test",
+        content: "Content",
+      });
+
+      for (let i = 2; i <= 10; i++) {
+        const newOp = manager.createOperation(docId, "UPDATE_TITLE", {
+          type: "UPDATE_TITLE",
+          title: `Title ${i}`,
+        });
+        expect(newOp.id).toBeTruthy();
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      expect(op.id).toBeTruthy();
+      expect(manager.getOperationLog().size()).toBe(10);
     });
   });
 });

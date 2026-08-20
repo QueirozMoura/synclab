@@ -7,6 +7,7 @@ import { reconstructDocument } from "./documentStateEngine";
 import { orderOperations } from "./operationOrdering";
 import { reduceOperations } from "./documentReducer";
 import { createDocumentSnapshot } from "./documentSnapshot";
+import { compactPersistedOperations } from "./compactPersistedOperations";
 import type { Document } from "../types/document";
 import type { Operation, OperationType, OperationPayload } from "../types/operation";
 import type { DocumentSnapshot } from "../types/documentSnapshot";
@@ -76,9 +77,21 @@ export class OperationManager {
         const document = this.reconstructDocument(documentId);
         if (document) {
           const snapshot = createDocumentSnapshot(documentId, document, operations.length);
-          putSnapshot(snapshot).catch((error) => {
-            console.error("[OperationManager] Failed to persist snapshot:", error);
-          });
+          putSnapshot(snapshot)
+            .then(() => {
+              return compactPersistedOperations(operations, snapshot);
+            })
+            .then(() => {
+              // Compactação concluída com sucesso no IndexedDB
+              // O OperationLog em memória NÃO é alterado nesta etapa
+            })
+            .catch((error) => {
+              if (error.message?.includes("Failed to persist snapshot") || error.message?.includes("putSnapshot")) {
+                console.error("[OperationManager] Failed to persist snapshot, skipping compaction:", error);
+              } else {
+                console.error("[OperationManager] Compaction failed after successful snapshot:", error);
+              }
+            });
         }
       }
     }
