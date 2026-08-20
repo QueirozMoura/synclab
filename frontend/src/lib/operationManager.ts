@@ -186,4 +186,26 @@ export class OperationManager {
     this.operationLog.loadInitial(operations);
     return result;
   }
+
+  async synchronizeDocument(
+    documentId: string,
+    remotePayload: SyncPayload
+  ): Promise<{
+    syncResult: SyncResult;
+    document: Document | null;
+  }> {
+    const filteredOperations = remotePayload.operations.filter((op) => op.documentId === documentId);
+    const filteredSnapshots = remotePayload.snapshots.filter((snap) => snap.documentId === documentId);
+
+    const filteredPayload: SyncPayload = {
+      deviceId: remotePayload.deviceId,
+      operations: filteredOperations,
+      snapshots: filteredSnapshots,
+    };
+
+    const syncResult = await this.synchronize(filteredPayload);
+    const document = this.reconstructSyncedDocument(documentId);
+
+    return { syncResult, document };
+  }
 }

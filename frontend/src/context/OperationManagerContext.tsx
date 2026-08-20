@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
 import { OperationManager } from "../lib/operationManager";
 import type { Operation, OperationType, OperationPayload } from "../types/operation";
+import type { Document } from "../types/document";
+import type { SyncPayload, SyncResult } from "../types/sync";
 import { OperationManagerContext } from "./OperationManagerContextType";
 
 export const OperationManagerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -30,13 +32,32 @@ export const OperationManagerProvider: React.FC<{ children: ReactNode }> = ({ ch
     [manager]
   );
 
+  const synchronize = useCallback(
+    (remotePayload: SyncPayload): Promise<SyncResult> => {
+      return manager.synchronize(remotePayload);
+    },
+    [manager]
+  );
+
+  const synchronizeDocument = useCallback(
+    (documentId: string, remotePayload: SyncPayload): Promise<{
+      syncResult: SyncResult;
+      document: Document | null;
+    }> => {
+      return manager.synchronizeDocument(documentId, remotePayload);
+    },
+    [manager]
+  );
+
   const value = useMemo(
     () => ({
       createOperation,
       getOperations,
       getOperationsForDocument,
+      synchronize,
+      synchronizeDocument,
     }),
-    [createOperation, getOperations, getOperationsForDocument]
+    [createOperation, getOperations, getOperationsForDocument, synchronize, synchronizeDocument]
   );
 
   return <OperationManagerContext.Provider value={value}>{children}</OperationManagerContext.Provider>;
