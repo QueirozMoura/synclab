@@ -911,6 +911,446 @@ describe("HTTP Sync Routes", () => {
       expect(deserialized[1].id).toBe("op-2");
       expect(deserialized[0].vectorClock.toMap()).toEqual({ "device-A": 1 });
     });
+
+    it("POST /sync: sincronização bidirecional A→B→A", async () => {
+      const deviceBAuth = { authorization: "Bearer dev-key-client-A-device-B" };
+
+      const payloadA = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc from A",
+            content: "Content A",
+          }, { id: "op-a1", documentId: "doc-1" }),
+        ],
+        snapshots: [],
+      };
+
+      const responseA1 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: payloadA,
+      });
+      expect(responseA1.statusCode).toBe(200);
+      const bodyA1 = responseA1.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(bodyA1.acceptedOperations).toHaveLength(1);
+      expect(bodyA1.acceptedOperations[0].id).toBe("op-a1");
+
+      const payloadB = {
+        deviceId: "device-B",
+        operations: [
+          createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+            type: SyncOperationType.UPDATE_TITLE,
+            title: "Updated by B",
+          }, { id: "op-b1", documentId: "doc-1" }),
+        ],
+        snapshots: [],
+      };
+
+      const responseB = await app.inject({
+        method: "POST",
+        url: "/sync",
+        headers: { ...deviceBAuth, "content-type": "application/json" },
+        payload: payloadB,
+      });
+      expect(responseB.statusCode).toBe(200);
+      const bodyB = responseB.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(bodyB.acceptedOperations).toHaveLength(1);
+      expect(bodyB.acceptedOperations[0].id).toBe("op-b1");
+      expect(bodyB.missingOperations).toHaveLength(1);
+      expect(bodyB.missingOperations[0].id).toBe("op-a1");
+
+      const responseA2 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: {
+          deviceId: "device-A",
+          operations: [payloadA.operations[0], payloadB.operations[0]],
+          snapshots: [],
+        },
+      });
+      expect(responseA2.statusCode).toBe(200);
+      const bodyA2 = responseA2.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(bodyA2.acceptedOperations).toHaveLength(0);
+      expect(bodyA2.missingOperations).toHaveLength(0);
+    });
+
+    it("POST /sync: VectorClock round-trip com múltiplos dispositivos", async () => {
+      const deviceBAuth = { authorization: "Bearer dev-key-client-A-device-B" };
+      const deviceCAuth = { authorization: "Bearer dev-key-client-B-device-C" };
+
+      const payloadA = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc A",
+            content: "Content",
+          }, { id: "op-a1", documentId: "doc-1", vectorClock: { "device-A": 1 } }),
+        ],
+        snapshots: [],
+      };
+
+      const responseA = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: payloadA,
+      });
+      expect(responseA.statusCode).toBe(200);
+
+      const payloadB = {
+        deviceId: "device-B",
+        operations: [
+          createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+            type: SyncOperationType.UPDATE_TITLE,
+            title: "Updated by B",
+          }, { id: "op-b1", documentId: "doc-1", vectorClock: { "device-A": 1, "device-B": 1 } }),
+        ],
+        snapshots: [],
+      };
+
+      const responseB = await app.inject({
+        method: "POST",
+        url: "/sync",
+        headers: { ...deviceBAuth, "content-type": "application/json" },
+        payload: payloadB,
+      });
+      expect(responseB.statusCode).toBe(200);
+      const bodyB = responseB.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(bodyB.missingOperations).toHaveLength(1);
+      expect(bodyB.missingOperations[0].vectorClock).toEqual({ "device-A": 1 });
+
+      const payloadC = {
+        deviceId: "device-C",
+        operations: [
+          createSyncOperation(SyncOperationType.UPDATE_CONTENT, {
+            type: SyncOperationType.UPDATE_CONTENT,
+            content: "Updated by C",
+          }, { id: "op-c1", documentId: "doc-1", vectorClock: { "device-A": 1, "device-B": 1, "device-C": 1 } }),
+        ],
+        snapshots: [],
+      };
+
+      const responseC = await app.inject({
+        method: "POST",
+        url: "/sync",
+        headers: { ...deviceCAuth, "content-type": "application/json" },
+        payload: payloadC,
+      });
+      expect(responseC.statusCode).toBe(200);
+      const bodyC = responseC.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(bodyC.missingOperations).toHaveLength(2);
+      const missingClocks = bodyC.missingOperations.map((op: any) => op.vectorClock);
+      expect(missingClocks.some((vc: any) => vc["device-A"] === 1 && vc["device-B"] === 1)).toBe(true);
+      expect(missingClocks.some((vc: any) => vc["device-A"] === 1 && !vc["device-B"])).toBe(true);
+
+      const responseA2 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: {
+          deviceId: "device-A",
+          operations: [
+            payloadA.operations[0],
+            payloadB.operations[0],
+            payloadC.operations[0],
+          ],
+          snapshots: [],
+        },
+      });
+      expect(responseA2.statusCode).toBe(200);
+      const bodyA2 = responseA2.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(bodyA2.acceptedOperations).toHaveLength(0);
+      expect(bodyA2.missingOperations).toHaveLength(0);
+    });
+
+    it("POST /sync: snapshots concorrentes de múltiplos dispositivos", async () => {
+      const deviceBAuth = { authorization: "Bearer dev-key-client-A-device-B" };
+      const deviceCAuth = { authorization: "Bearer dev-key-client-B-device-C" };
+
+      const snapshotA = {
+        documentId: "doc-1",
+        document: { id: "doc-1", title: "From A", content: "Content A" },
+        operationCount: 1,
+        createdAt: "2024-01-15T10:00:00.000Z",
+        updatedAt: "2024-01-15T10:00:00.000Z",
+        vectorClock: { "device-A": 1 },
+      };
+
+      const snapshotB = {
+        documentId: "doc-1",
+        document: { id: "doc-1", title: "From B", content: "Content B" },
+        operationCount: 1,
+        createdAt: "2024-01-15T11:00:00.000Z",
+        updatedAt: "2024-01-15T11:00:00.000Z",
+        vectorClock: { "device-B": 1 },
+      };
+
+      const payloadA = {
+        deviceId: "device-A",
+        operations: [],
+        snapshots: [snapshotA],
+      };
+
+      const responseA = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: payloadA,
+      });
+      expect(responseA.statusCode).toBe(200);
+
+      const payloadB = {
+        deviceId: "device-B",
+        operations: [],
+        snapshots: [snapshotB],
+      };
+
+      const responseB = await app.inject({
+        method: "POST",
+        url: "/sync",
+        headers: { ...deviceBAuth, "content-type": "application/json" },
+        payload: payloadB,
+      });
+      expect(responseB.statusCode).toBe(200);
+      const bodyB = responseB.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(bodyB.snapshots).toHaveLength(0);
+
+      const snapshotC = {
+        documentId: "doc-1",
+        document: { id: "doc-1", title: "From C", content: "Content C" },
+        operationCount: 2,
+        createdAt: "2024-01-15T12:00:00.000Z",
+        updatedAt: "2024-01-15T12:00:00.000Z",
+        vectorClock: { "device-C": 1 },
+      };
+
+      const payloadC = {
+        deviceId: "device-C",
+        operations: [],
+        snapshots: [snapshotC],
+      };
+
+      const responseC = await app.inject({
+        method: "POST",
+        url: "/sync",
+        headers: { ...deviceCAuth, "content-type": "application/json" },
+        payload: payloadC,
+      });
+      expect(responseC.statusCode).toBe(200);
+      const bodyC = responseC.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(bodyC.snapshots).toHaveLength(0);
+
+      const payloadA2 = {
+        deviceId: "device-A",
+        operations: [],
+        snapshots: [snapshotA],
+      };
+
+      const responseA2 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: payloadA2,
+      });
+      expect(responseA2.statusCode).toBe(200);
+      const bodyA2 = responseA2.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(bodyA2.snapshots).toHaveLength(1);
+      expect(bodyA2.snapshots[0].updatedAt).toBe("2024-01-15T12:00:00.000Z");
+    });
+
+    it("POST /sync: validação completa do contrato HTTP", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Contract Test",
+            content: "Content",
+          }, { id: "op-contract-1", documentId: "doc-contract" }),
+          createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+            type: SyncOperationType.UPDATE_TITLE,
+            title: "Updated Title",
+          }, { id: "op-contract-2", documentId: "doc-contract" }),
+          createSyncOperation(SyncOperationType.UPDATE_CONTENT, {
+            type: SyncOperationType.UPDATE_CONTENT,
+            content: "Updated Content",
+          }, { id: "op-contract-3", documentId: "doc-contract" }),
+          createSyncOperation(SyncOperationType.DELETE_DOCUMENT, {
+            type: SyncOperationType.DELETE_DOCUMENT,
+            deleted: true,
+          }, { id: "op-contract-4", documentId: "doc-contract" }),
+        ],
+        snapshots: [
+          {
+            documentId: "doc-contract",
+            document: { id: "doc-contract", title: "Contract Test", content: "Content" },
+            operationCount: 4,
+            createdAt: "2024-01-15T10:30:00.000Z",
+            updatedAt: "2024-01-15T10:30:00.000Z",
+            vectorClock: { "device-A": 4 },
+          },
+        ],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+
+      expect(body.acceptedOperations).toHaveLength(4);
+      const acceptedTypes = body.acceptedOperations.map((op: any) => op.type).sort();
+      expect(acceptedTypes).toEqual([
+        SyncOperationType.CREATE_DOCUMENT,
+        SyncOperationType.DELETE_DOCUMENT,
+        SyncOperationType.UPDATE_CONTENT,
+        SyncOperationType.UPDATE_TITLE,
+      ]);
+
+      for (const op of body.acceptedOperations) {
+        expect(op).toHaveProperty("id");
+        expect(op).toHaveProperty("documentId");
+        expect(op).toHaveProperty("deviceId");
+        expect(op).toHaveProperty("type");
+        expect(op).toHaveProperty("payload");
+        expect(op).toHaveProperty("timestamp");
+        expect(op).toHaveProperty("vectorClock");
+        expect(typeof op.timestamp).toBe("string");
+        expect(typeof op.vectorClock).toBe("object");
+      }
+
+      expect(body.missingOperations).toEqual([]);
+      expect(body.snapshots).toEqual([]);
+    });
+
+    it("POST /sync: idempotência end-to-end com múltiplas chamadas", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Idempotent Doc",
+            content: "Content",
+          }, { id: "op-idempotent-1", documentId: "doc-idempotent" }),
+        ],
+        snapshots: [
+          {
+            documentId: "doc-idempotent",
+            document: { id: "doc-idempotent", title: "Idempotent Doc", content: "Content" },
+            operationCount: 1,
+            createdAt: "2024-01-15T10:30:00.000Z",
+            updatedAt: "2024-01-15T10:30:00.000Z",
+            vectorClock: { "device-A": 1 },
+          },
+        ],
+      };
+
+      const response1 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+      expect(response1.statusCode).toBe(200);
+      const body1 = response1.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(body1.acceptedOperations).toHaveLength(1);
+      expect(body1.snapshots).toEqual([]);
+
+      const response2 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+      expect(response2.statusCode).toBe(200);
+      const body2 = response2.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(body2.acceptedOperations).toHaveLength(0);
+      expect(body2.missingOperations).toEqual([]);
+      expect(body2.snapshots).toEqual([]);
+
+      const response3 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+      expect(response3.statusCode).toBe(200);
+      const body3 = response3.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(body3.acceptedOperations).toHaveLength(0);
+      expect(body3.missingOperations).toEqual([]);
+      expect(body3.snapshots).toEqual([]);
+    });
+
+    it("POST /sync: múltiplos documentos isolados", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 1",
+            content: "Content 1",
+          }, { id: "op-1", documentId: "doc-1" }),
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 2",
+            content: "Content 2",
+          }, { id: "op-2", documentId: "doc-2" }),
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 3",
+            content: "Content 3",
+          }, { id: "op-3", documentId: "doc-3" }),
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(body.acceptedOperations).toHaveLength(3);
+      const docIds = body.acceptedOperations.map((op: any) => op.documentId).sort();
+      expect(docIds).toEqual(["doc-1", "doc-2", "doc-3"]);
+
+      const payload2 = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+            type: SyncOperationType.UPDATE_TITLE,
+            title: "Doc 1 Updated",
+          }, { id: "op-4", documentId: "doc-1" }),
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 1",
+            content: "Content 1",
+          }, { id: "op-1", documentId: "doc-1" }),
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 2",
+            content: "Content 2",
+          }, { id: "op-2", documentId: "doc-2" }),
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 3",
+            content: "Content 3",
+          }, { id: "op-3", documentId: "doc-3" }),
+        ],
+        snapshots: [],
+      };
+
+      const response2 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: payload2,
+      });
+      expect(response2.statusCode).toBe(200);
+      const body2 = response2.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(body2.acceptedOperations).toHaveLength(1);
+      expect(body2.acceptedOperations[0].documentId).toBe("doc-1");
+      expect(body2.missingOperations).toHaveLength(0);
+    });
   });
 
   describe("Autenticação e Autorização", () => {
