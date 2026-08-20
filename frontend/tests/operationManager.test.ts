@@ -6,6 +6,7 @@ vi.mock("../src/lib/indexedDb", () => ({
   putOperation: vi.fn().mockResolvedValue(undefined),
   putSnapshot: vi.fn().mockResolvedValue(undefined),
   getSnapshot: vi.fn().mockResolvedValue(undefined),
+  getAllSnapshots: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../src/lib/compactPersistedOperations", () => ({
@@ -19,9 +20,10 @@ vi.mock("../src/lib/deviceIdentity", () => ({
 import { OperationManager } from "../src/lib/operationManager";
 import { OperationLog } from "../src/lib/operationLog";
 import { VectorClock } from "../src/lib/vectorClock";
-import { putSnapshot } from "../src/lib/indexedDb";
+import { putSnapshot, getAllSnapshots } from "../src/lib/indexedDb";
 import { compactPersistedOperations } from "../src/lib/compactPersistedOperations";
 import type { Document, Operation } from "../src/types/operation";
+import type { DocumentSnapshot, SyncPayload } from "../src/types/documentSnapshot";
 
 describe("OperationManager", () => {
   beforeEach(() => {
@@ -1040,6 +1042,285 @@ describe("OperationManager", () => {
 
       expect(op.id).toBeTruthy();
       expect(manager.getOperationLog().size()).toBe(10);
+    });
+  });
+
+  describe("synchronize", () => {
+    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
+      id,
+      documentId: "doc-1",
+      deviceId: "test-device-id",
+      type: "CREATE_DOCUMENT",
+      payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
+      timestamp: "2024-01-01T00:00:00.000Z",
+      vectorClock: VectorClock.from({ "test-device-id": 1 }),
+      ...overrides,
+    });
+
+    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
+      id,
+      title: "Test",
+      content: "Content",
+      createdAt: "2024-01-01T00:00:00.000Z",
+      updatedAt: "2024-01-01T00:00:00.000Z",
+      ...overrides,
+    });
+
+    const createRemotePayload = (operations: Operation[] = [], snapshots: DocumentSnapshot[] = []): SyncPayload => ({
+      deviceId: "remote-device",
+      operations,
+      snapshots,
+    });
+
+    it("deve sincronizar com payload remoto vazio", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remotePayload = createRemotePayload([], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual([localOp.id]);
+      expect(manager.getOperationLog().size()).toBe(1);
+    });
+
+    it("deve sincronizar quando estados são idênticos", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remotePayload = createRemotePayload([localOp], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations).toEqual([]);
+      expect(manager.getOperationLog().size()).toBe(1);
+    });
+
+    it("deve sincronizar quando apenas existem operações locais", async () => {
+      const manager = new OperationManager();
+      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const localOp2 = manager.createOperation("doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Updated" });
+
+      const remotePayload = createRemotePayload([], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual([localOp1.id, localOp2.id]);
+      expect(manager.getOperationLog().size()).toBe(2);
+    });
+
+    it("deve sincronizar quando apenas existem operações remotas", async () => {
+      const manager = new OperationManager();
+      const remoteOp1 = createOp("op-1", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remoteOp2 = createOp("op-2", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 2 }) });
+      const remotePayload = createRemotePayload([remoteOp1, remoteOp2], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.missingOperations).toEqual([]);
+      expect(manager.getOperationLog().size()).toBe(2);
+    });
+
+    it("deve adicionar operações novas vindas do remoto", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp("op-2", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remotePayload = createRemotePayload([remoteOp], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-2"]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual([localOp.id]);
+      expect(manager.getOperationLog().size()).toBe(2);
+    });
+
+    it("deve identificar operações faltantes no remoto", async () => {
+      const manager = new OperationManager();
+      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const localOp2 = manager.createOperation("doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Updated" });
+      const localOp3 = manager.createOperation("doc-1", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "Updated" });
+
+      const remotePayload = createRemotePayload([localOp1, localOp3], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual([localOp2.id]);
+      expect(manager.getOperationLog().size()).toBe(3);
+    });
+
+    it("deve funcionar com múltiplos documentos", async () => {
+      const manager = new OperationManager();
+      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const localOp2 = manager.createOperation("doc-2", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp3 = createOp("op-3", { documentId: "doc-2", deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remotePayload = createRemotePayload([localOp1, remoteOp3], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-3"]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual([localOp2.id]);
+      expect(manager.getOperationLog().size()).toBe(3);
+    });
+
+    it("deve funcionar com múltiplos dispositivos", async () => {
+      const manager = new OperationManager();
+      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const localOp2 = manager.createOperation("doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Updated" });
+
+      const remoteOp3 = createOp("op-3", { deviceId: "device-C", vectorClock: VectorClock.from({ "device-C": 1 }) });
+      const remotePayload = createRemotePayload([localOp1, remoteOp3], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-3"]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual([localOp2.id]);
+      expect(manager.getOperationLog().size()).toBe(3);
+    });
+
+it("deve lidar com duplicatas", async () => {
+      const manager = new OperationManager();
+      // Create local operations with known IDs to test deduplication
+      const localOp1 = createOp("op-1", { deviceId: "test-device-id", vectorClock: VectorClock.from({ "test-device-id": 1 }) });
+      const localOp2 = createOp("op-2", { deviceId: "test-device-id", vectorClock: VectorClock.from({ "test-device-id": 2 }) });
+      manager.getOperationLog().loadInitial([localOp1, localOp2]);
+
+      const remoteOp1 = createOp("op-1", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remoteOp2 = createOp("op-1", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remoteOp3 = createOp("op-2", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 2 }) });
+      const remotePayload = createRemotePayload([remoteOp1, remoteOp2, remoteOp3], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      // Local has 1 op-1 and 1 op-2. Remote has 2 op-1 and 1 op-2.
+      // Deduplication: 1 remote op-1 is filtered (matches local), 1 remote op-1 is accepted, 1 remote op-2 is filtered (matches local)
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-1"]);
+      expect(result.missingOperations).toEqual([]);
+      // mergeOperations filters acceptedOperations against local again, so the accepted op-1 is not added (local already has op-1)
+      expect(manager.getOperationLog().size()).toBe(2);
+    });
+
+    it("deve retornar SyncResult correto", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp("op-2", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remotePayload = createRemotePayload([remoteOp], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      expect(result).toHaveProperty("acceptedOperations");
+      expect(result).toHaveProperty("missingOperations");
+      expect(result).toHaveProperty("snapshots");
+      expect(Array.isArray(result.acceptedOperations)).toBe(true);
+      expect(Array.isArray(result.missingOperations)).toBe(true);
+      expect(Array.isArray(result.snapshots)).toBe(true);
+    });
+
+    it("deve atualizar OperationLog com operações aceitas", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp("op-2", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remotePayload = createRemotePayload([remoteOp], []);
+
+      await manager.synchronize(remotePayload);
+
+      const allOps = manager.getOperations();
+      expect(allOps.map((op) => op.id)).toContain(localOp.id);
+      expect(allOps.map((op) => op.id)).toContain("op-2");
+    });
+
+    it("deve preservar operações locais", async () => {
+      const manager = new OperationManager();
+      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const localOp2 = manager.createOperation("doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Updated" });
+
+      const remoteOp = createOp("op-3", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remotePayload = createRemotePayload([remoteOp], []);
+
+      await manager.synchronize(remotePayload);
+
+      const allOps = manager.getOperations();
+      expect(allOps.map((op) => op.id)).toContain(localOp1.id);
+      expect(allOps.map((op) => op.id)).toContain(localOp2.id);
+      expect(allOps.map((op) => op.id)).toContain("op-3");
+    });
+
+    it("deve utilizar snapshots locais", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const localSnapshot = createSnapshot("snap-1");
+      vi.mocked(getAllSnapshots).mockResolvedValueOnce([localSnapshot]);
+
+      const remotePayload = createRemotePayload([], []);
+
+      const result = await manager.synchronize(remotePayload);
+
+      expect(result.snapshots).toHaveLength(1);
+      expect(result.snapshots[0].id).toBe("snap-1");
+    });
+
+    it("não deve alterar VectorClock", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const originalClock = manager.getVectorClock().toMap();
+
+      const remoteOp = createOp("op-2", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remotePayload = createRemotePayload([remoteOp], []);
+
+      await manager.synchronize(remotePayload);
+
+      const newClock = manager.getVectorClock().toMap();
+      expect(newClock).toEqual(originalClock);
+    });
+
+    it("deve ser determinístico", async () => {
+      // Test 1: same initial state produces same result
+      const remoteOp = createOp("op-2", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remotePayload = createRemotePayload([remoteOp], []);
+
+      const manager1 = new OperationManager();
+      manager1.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const result1 = await manager1.synchronize(remotePayload);
+
+      const manager2 = new OperationManager();
+      manager2.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const result2 = await manager2.synchronize(remotePayload);
+
+      const manager3 = new OperationManager();
+      manager3.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const result3 = await manager3.synchronize(remotePayload);
+
+      // Compare structure: acceptedOperations length and missingOperations length should be same
+      expect(result1.acceptedOperations).toHaveLength(result2.acceptedOperations.length);
+      expect(result2.acceptedOperations).toHaveLength(result3.acceptedOperations.length);
+      expect(result1.missingOperations).toHaveLength(result2.missingOperations.length);
+      expect(result2.missingOperations).toHaveLength(result3.missingOperations.length);
+      // The specific IDs may differ (generated by createOperation), but the count should be deterministic
+    });
+
+    it("não deve persistir operações recebidas no IndexedDB", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp("op-2", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remotePayload = createRemotePayload([remoteOp], []);
+
+      await manager.synchronize(remotePayload);
+
+      // putOperation não deve ter sido chamado para a operação remota
+      const { putOperation } = await import("../src/lib/indexedDb");
+      const calls = vi.mocked(putOperation).mock.calls;
+      const remoteOpCalls = calls.filter((call) => call[0].id === "op-2");
+      expect(remoteOpCalls).toHaveLength(0);
     });
   });
 });

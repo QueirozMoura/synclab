@@ -1435,4 +1435,267 @@ describe("SyncEngine", () => {
       expect(result).toEqual(expected);
     });
   });
+
+  describe("synchronize", () => {
+    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
+      id,
+      documentId: "doc-1",
+      deviceId: "device-A",
+      type: "CREATE_DOCUMENT",
+      payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
+      timestamp: "2024-01-01T00:00:00.000Z",
+      vectorClock: VectorClock.from({ "device-A": 1 }),
+      ...overrides,
+    });
+
+    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
+      id,
+      title: "Test",
+      content: "Content",
+      createdAt: "2024-01-01T00:00:00.000Z",
+      updatedAt: "2024-01-01T00:00:00.000Z",
+      ...overrides,
+    });
+
+    it("deve sincronizar quando ambos os estados são vazios", () => {
+      const localOperations: Operation[] = [];
+      const localSnapshots: DocumentSnapshot[] = [];
+      const remotePayload = { deviceId: "device-B", operations: [], snapshots: [] };
+
+      const { operations, result } = engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(operations).toEqual([]);
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations).toEqual([]);
+      expect(result.snapshots).toEqual([]);
+    });
+
+    it("deve sincronizar quando estados são idênticos", () => {
+      const localOperations = [createOp("op-1"), createOp("op-2")];
+      const localSnapshots = [createSnapshot("snap-1")];
+      const remotePayload = { deviceId: "device-B", operations: [...localOperations], snapshots: [...localSnapshots] };
+
+      const { operations, result } = engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(operations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations).toEqual([]);
+      expect(result.snapshots).toHaveLength(2);
+    });
+
+    it("deve sincronizar quando apenas existem operações locais", () => {
+      const localOperations = [createOp("op-1"), createOp("op-2")];
+      const localSnapshots = [createSnapshot("snap-1")];
+      const remotePayload = { deviceId: "device-B", operations: [], snapshots: [] };
+
+      const { operations, result } = engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(operations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.snapshots).toHaveLength(1);
+    });
+
+    it("deve sincronizar quando apenas existem operações remotas", () => {
+      const localOperations: Operation[] = [];
+      const localSnapshots: DocumentSnapshot[] = [];
+      const remoteOperations = [createOp("op-1"), createOp("op-2")];
+      const remoteSnapshots = [createSnapshot("snap-1")];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: remoteSnapshots };
+
+      const { operations, result } = engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(operations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.missingOperations).toEqual([]);
+      expect(result.snapshots).toHaveLength(1);
+    });
+
+    it("deve sincronizar operações diferentes nos dois lados", () => {
+      const localOperations = [createOp("op-1"), createOp("op-2")];
+      const remoteOperations = [createOp("op-3"), createOp("op-4")];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: [] };
+
+      const { operations, result } = engine.synchronize(localOperations, [], remotePayload);
+
+      expect(operations.map((op) => op.id)).toEqual(["op-1", "op-2", "op-3", "op-4"]);
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-3", "op-4"]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+    });
+
+    it("deve sincronizar quando algumas operações são novas", () => {
+      const localOperations = [createOp("op-1"), createOp("op-2"), createOp("op-3")];
+      const remoteOperations = [createOp("op-1"), createOp("op-3")];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: [] };
+
+      const { operations, result } = engine.synchronize(localOperations, [], remotePayload);
+
+      expect(operations.map((op) => op.id)).toEqual(["op-1", "op-2", "op-3"]);
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual(["op-2"]);
+    });
+
+    it("deve funcionar com múltiplos documentos", () => {
+      const localOperations = [
+        createOp("op-1", { documentId: "doc-1" }),
+        createOp("op-2", { documentId: "doc-2" }),
+      ];
+      const remoteOperations = [
+        createOp("op-1", { documentId: "doc-1" }),
+        createOp("op-3", { documentId: "doc-2" }),
+      ];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: [] };
+
+      const { operations, result } = engine.synchronize(localOperations, [], remotePayload);
+
+      expect(operations.map((op) => op.id)).toEqual(["op-1", "op-2", "op-3"]);
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-3"]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual(["op-2"]);
+    });
+
+    it("deve funcionar com múltiplos dispositivos", () => {
+      const localOperations = [
+        createOp("op-1", { deviceId: "device-A" }),
+        createOp("op-2", { deviceId: "device-B" }),
+      ];
+      const remoteOperations = [
+        createOp("op-1", { deviceId: "device-A" }),
+        createOp("op-3", { deviceId: "device-C" }),
+      ];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: [] };
+
+      const { operations, result } = engine.synchronize(localOperations, [], remotePayload);
+
+      expect(operations.map((op) => op.id)).toEqual(["op-1", "op-2", "op-3"]);
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-3"]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual(["op-2"]);
+    });
+
+    it("deve lidar com duplicatas", () => {
+      const localOperations = [createOp("op-1"), createOp("op-1")];
+      const remoteOperations = [createOp("op-1"), createOp("op-1"), createOp("op-1"), createOp("op-2")];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: [] };
+
+      const { operations, result } = engine.synchronize(localOperations, [], remotePayload);
+
+      expect(operations.map((op) => op.id)).toEqual(["op-1", "op-1", "op-2"]);
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.missingOperations).toEqual([]);
+    });
+
+    it("deve manter histórico final correto (locais + aceitas)", () => {
+      const localOperations = [createOp("op-1"), createOp("op-3")];
+      const remoteOperations = [createOp("op-1"), createOp("op-2"), createOp("op-3")];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: [] };
+
+      const { operations, result } = engine.synchronize(localOperations, [], remotePayload);
+
+      expect(operations.map((op) => op.id)).toEqual(["op-1", "op-3", "op-2"]);
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-2"]);
+    });
+
+    it("deve retornar SyncResult correto", () => {
+      const localOperations = [createOp("op-1")];
+      const remoteOperations = [createOp("op-2")];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: [] };
+
+      const { result } = engine.synchronize(localOperations, [], remotePayload);
+
+      expect(result).toHaveProperty("acceptedOperations");
+      expect(result).toHaveProperty("missingOperations");
+      expect(result).toHaveProperty("snapshots");
+      expect(Array.isArray(result.acceptedOperations)).toBe(true);
+      expect(Array.isArray(result.missingOperations)).toBe(true);
+      expect(Array.isArray(result.snapshots)).toBe(true);
+    });
+
+    it("não deve mutar localOperations", () => {
+      const localOperations = [createOp("op-1"), createOp("op-2")];
+      const localCopy = [...localOperations];
+      const localSnapshots = [createSnapshot("snap-1")];
+      const remotePayload = { deviceId: "device-B", operations: [createOp("op-3")], snapshots: [] };
+
+      engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(localOperations).toEqual(localCopy);
+    });
+
+    it("não deve mutar localSnapshots", () => {
+      const localOperations = [createOp("op-1")];
+      const localSnapshots = [createSnapshot("snap-1"), createSnapshot("snap-2")];
+      const snapshotsCopy = [...localSnapshots];
+      const remotePayload = { deviceId: "device-B", operations: [createOp("op-2")], snapshots: [createSnapshot("snap-3")] };
+
+      engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(localSnapshots).toEqual(snapshotsCopy);
+    });
+
+    it("não deve mutar remotePayload", () => {
+      const localOperations = [createOp("op-1")];
+      const localSnapshots: DocumentSnapshot[] = [];
+      const remoteOperations = [createOp("op-1"), createOp("op-2")];
+      const remoteCopy = [...remoteOperations];
+      const remoteSnapshots = [createSnapshot("snap-1")];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: remoteSnapshots };
+
+      engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(remoteOperations).toEqual(remoteCopy);
+    });
+
+    it("deve ser determinístico", () => {
+      const localOperations = [createOp("op-1"), createOp("op-2")];
+      const remoteOperations = [createOp("op-2"), createOp("op-3")];
+      const localSnapshots = [createSnapshot("snap-1")];
+      const remoteSnapshots = [createSnapshot("snap-2")];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: remoteSnapshots };
+
+      const sync1 = engine.synchronize(localOperations, localSnapshots, remotePayload);
+      const sync2 = engine.synchronize(localOperations, localSnapshots, remotePayload);
+      const sync3 = engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(sync1.operations).toEqual(sync2.operations);
+      expect(sync2.operations).toEqual(sync3.operations);
+      expect(sync1.result).toEqual(sync2.result);
+      expect(sync2.result).toEqual(sync3.result);
+    });
+
+    it("deve ser equivalente a processSyncPayload() + applySyncResult()", () => {
+      const localOperations = [createOp("op-1"), createOp("op-3")];
+      const localSnapshots = [createSnapshot("snap-1")];
+      const remoteOperations = [createOp("op-1"), createOp("op-2"), createOp("op-3")];
+      const remoteSnapshots = [createSnapshot("snap-2")];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: remoteSnapshots };
+
+      const processResult = engine.processSyncPayload(localOperations, localSnapshots, remotePayload);
+      const applyResult = engine.applySyncResult(localOperations, processResult);
+
+      const syncResult = engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(syncResult.operations).toEqual(applyResult);
+      expect(syncResult.result).toEqual(processResult);
+    });
+
+    it("deve retornar referências originais das operações locais", () => {
+      const localOperations = [createOp("op-1")];
+      const localSnapshots: DocumentSnapshot[] = [];
+      const remotePayload = { deviceId: "device-B", operations: [], snapshots: [] };
+
+      const { operations } = engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(operations[0]).toBe(localOperations[0]);
+    });
+
+    it("deve retornar referências originais das operações aceitas", () => {
+      const localOperations: Operation[] = [];
+      const localSnapshots: DocumentSnapshot[] = [];
+      const remoteOperations = [createOp("op-1")];
+      const remotePayload = { deviceId: "device-B", operations: remoteOperations, snapshots: [] };
+
+      const { operations } = engine.synchronize(localOperations, localSnapshots, remotePayload);
+
+      expect(operations[0]).toBe(remoteOperations[0]);
+    });
+  });
 });

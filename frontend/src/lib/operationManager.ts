@@ -8,9 +8,11 @@ import { orderOperations } from "./operationOrdering";
 import { reduceOperations } from "./documentReducer";
 import { createDocumentSnapshot } from "./documentSnapshot";
 import { compactPersistedOperations } from "./compactPersistedOperations";
+import { SyncEngine } from "./syncEngine";
 import type { Document } from "../types/document";
 import type { Operation, OperationType, OperationPayload } from "../types/operation";
 import type { DocumentSnapshot } from "../types/documentSnapshot";
+import type { SyncPayload, SyncResult } from "../types/sync";
 
 const SNAPSHOT_INTERVAL = 10;
 
@@ -141,5 +143,14 @@ export class OperationManager {
 
     const orderedOperations = orderOperations(laterOperations);
     return reduceOperations(snapshot.document, orderedOperations);
+  }
+
+  async synchronize(remotePayload: SyncPayload): Promise<SyncResult> {
+    const localOperations = this.getOperations();
+    const localSnapshots = await getAllSnapshots();
+    const syncEngine = new SyncEngine();
+    const { operations, result } = syncEngine.synchronize(localOperations, localSnapshots, remotePayload);
+    this.operationLog.loadInitial(operations);
+    return result;
   }
 }

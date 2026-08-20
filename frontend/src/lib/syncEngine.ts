@@ -88,4 +88,17 @@ export class SyncEngine {
   ): Operation[] {
     return this.mergeOperations(localOperations, syncResult.acceptedOperations);
   }
+
+  synchronize(
+    localOperations: Operation[],
+    localSnapshots: DocumentSnapshot[],
+    remotePayload: SyncPayload
+  ): {
+    operations: Operation[];
+    result: SyncResult;
+  } {
+    const result = this.processSyncPayload(localOperations, localSnapshots, remotePayload);
+    const operations = this.applySyncResult(localOperations, result);
+    return { operations, result };
+  }
 }
