@@ -18,3 +18,22 @@ export function getMissingOperations(
     return true;
   });
 }
+
+export function getMissingRemoteOperations(
+  localOperations: Operation[],
+  remoteOperations: Operation[]
+): Operation[] {
+  const localCounts = new Map<string, number>();
+  for (const op of localOperations) {
+    localCounts.set(op.id, (localCounts.get(op.id) ?? 0) + 1);
+  }
+
+  return remoteOperations.filter((op) => {
+    const count = localCounts.get(op.id) ?? 0;
+    if (count > 0) {
+      localCounts.set(op.id, count - 1);
+      return false;
+    }
+    return true;
+  });
+}
