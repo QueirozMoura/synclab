@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply, FastifyError } from
 import { SyncService, DocumentSyncService, DocumentAccessDeniedError } from "@application/sync/SyncService.js";
 import type { ServerOperationRepository } from "@domain/sync/ServerOperationRepository.js";
 import type { DocumentOperationRepository } from "@domain/document-operations/DocumentOperationRepository.js";
+import type { DocumentSnapshotRepository } from "@domain/document-operations/DocumentSnapshotRepository.js";
 import type { DocumentAuthorizationRepository } from "@domain/auth/DocumentAuthorizationRepository.js";
 import type { AuthContext } from "@domain/auth/AuthContext.js";
 import { ApiKeyValidator, InvalidApiKeyError } from "@application/auth/ApiKeyValidator.js";
@@ -68,11 +69,12 @@ export function registerSyncRoutes(
   app: FastifyInstance,
   repository: ServerOperationRepository,
   documentRepository: DocumentOperationRepository,
+  snapshotRepository: DocumentSnapshotRepository,
   authzRepository: DocumentAuthorizationRepository,
   apiKeyValidator: ApiKeyValidator,
 ): void {
   const syncService = new SyncService(repository, authzRepository);
-  const documentSyncService = new DocumentSyncService(documentRepository);
+  const documentSyncService = new DocumentSyncService(documentRepository, snapshotRepository);
   const serializer = new OperationSerializer();
 
   // Request ID hook para correlação de logs
@@ -570,7 +572,7 @@ export function registerSyncRoutes(
    * Recebe um SyncPayload completo do cliente e retorna um SyncResult contendo:
    * - acceptedOperations: operações novas aceitas pelo servidor
    * - missingOperations: operações que o servidor possui e o cliente não tem
-   * - snapshots: sempre array vazio (implementação futura)
+   * - snapshots: snapshots relevantes (novos ou mais recentes que o cliente)
    *
    * Requer autenticação via header Authorization: Bearer <api-key>
    *
@@ -595,7 +597,7 @@ export function registerSyncRoutes(
    * {
    *   "acceptedOperations": [...],
    *   "missingOperations": [...],
-   *   "snapshots": []
+   *   "snapshots": [...]
    * }
    *
    * Erros:

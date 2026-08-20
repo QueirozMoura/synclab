@@ -3,6 +3,7 @@ import fastify, { type FastifyInstance } from "fastify";
 import fastifyRateLimit from "@fastify/rate-limit";
 import { InMemoryOperationRepository } from "@infrastructure/persistence/server/InMemoryOperationRepository.js";
 import { InMemoryDocumentOperationRepository } from "@infrastructure/persistence/document-operations/InMemoryDocumentOperationRepository.js";
+import { InMemoryDocumentSnapshotRepository } from "@infrastructure/persistence/document-operations/InMemoryDocumentSnapshotRepository.js";
 import { InMemoryDocumentAuthorizationRepository } from "@infrastructure/auth/InMemoryDocumentAuthorizationRepository.js";
 import { ApiKeyValidator } from "@application/auth/ApiKeyValidator.js";
 import { registerSyncRoutes } from "@transport/http/routes.js";
@@ -72,6 +73,7 @@ describe("HTTP Sync Routes", () => {
   let app: FastifyInstance;
   let repository: InMemoryOperationRepository;
   let documentRepository: InMemoryDocumentOperationRepository;
+  let snapshotRepository: InMemoryDocumentSnapshotRepository;
   let authzRepository: InMemoryDocumentAuthorizationRepository;
   let apiKeyValidator: ApiKeyValidator;
   let serializer: OperationSerializer;
@@ -91,6 +93,7 @@ describe("HTTP Sync Routes", () => {
     });
     repository = new InMemoryOperationRepository();
     documentRepository = new InMemoryDocumentOperationRepository();
+    snapshotRepository = new InMemoryDocumentSnapshotRepository();
     authzRepository = new InMemoryDocumentAuthorizationRepository();
     authzRepository.grantAccess("client-A", ["doc-1", "doc-2", "doc-inexistente"]);
     authzRepository.grantAccess("client-B", ["doc-3"]);
@@ -101,7 +104,7 @@ describe("HTTP Sync Routes", () => {
     ]);
     serializer = new OperationSerializer();
 
-    registerSyncRoutes(app, repository, documentRepository, authzRepository, apiKeyValidator);
+    registerSyncRoutes(app, repository, documentRepository, snapshotRepository, authzRepository, apiKeyValidator);
     await app.ready();
   });
 

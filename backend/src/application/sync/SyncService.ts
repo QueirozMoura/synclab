@@ -307,9 +307,10 @@ export class SyncService {
 }
 
 import type { DocumentOperationRepository } from "@domain/document-operations/DocumentOperationRepository.js";
+import type { DocumentSnapshotRepository } from "@domain/document-operations/DocumentSnapshotRepository.js";
 import type { DocumentOperation } from "@domain/document-operations/DocumentOperation.js";
 import { DocumentOperationAdapter } from "./DocumentOperationAdapter.js";
-import type { SyncPayload, SyncResult } from "../../types/sync.js";
+import type { SyncPayload, SyncResult, DocumentSnapshot } from "../../types/sync.js";
 import type { SyncOperation } from "../../types/syncOperation.js";
 
 /**
@@ -322,9 +323,14 @@ import type { SyncOperation } from "../../types/syncOperation.js";
  */
 export class DocumentSyncService {
   private readonly repository: DocumentOperationRepository;
+  private readonly snapshotRepository: DocumentSnapshotRepository;
 
-  constructor(repository: DocumentOperationRepository) {
+  constructor(
+    repository: DocumentOperationRepository,
+    snapshotRepository: DocumentSnapshotRepository,
+  ) {
     this.repository = repository;
+    this.snapshotRepository = snapshotRepository;
   }
 
   async synchronize(payload: SyncPayload): Promise<SyncResult> {
@@ -340,11 +346,56 @@ export class DocumentSyncService {
 
     const missingOperations = await this.findMissingOperations(payload.operations);
 
+    const snapshots = await this.processSnapshots(payload.snapshots);
+
     return {
       acceptedOperations,
       missingOperations,
-      snapshots: [],
+      snapshots,
     };
+  }
+
+  private async processSnapshots(clientSnapshots: readonly DocumentSnapshot[]): Promise<DocumentSnapshot[]> {
+    const clientSnapshotMap = new Map<string, DocumentSnapshot>();
+    for (const snapshot of clientSnapshots) {
+      clientSnapshotMap.set(snapshot.documentId, snapshot);
+    }
+
+    const serverSnapshots = await this.snapshotRepository.getAll();
+
+    const snapshotsToSave: DocumentSnapshot[] = [];
+    for (const clientSnapshot of clientSnapshots) {
+      const serverSnapshot = await this.snapshotRepository.getByDocumentId(clientSnapshot.documentId);
+      if (!serverSnapshot) {
+        snapshotsToSave.push(clientSnapshot);
+        continue;
+      }
+      const clientTime = Date.parse(clientSnapshot.updatedAt);
+      const serverTime = Date.parse(serverSnapshot.updatedAt);
+      if (clientTime > serverTime) {
+        snapshotsToSave.push(clientSnapshot);
+      }
+    }
+
+    if (snapshotsToSave.length > 0) {
+      await this.snapshotRepository.saveMany(snapshotsToSave);
+    }
+
+    const snapshotsToReturn: DocumentSnapshot[] = [];
+    for (const serverSnapshot of serverSnapshots) {
+      const clientSnapshot = clientSnapshotMap.get(serverSnapshot.documentId);
+      if (!clientSnapshot) {
+        snapshotsToReturn.push(serverSnapshot);
+        continue;
+      }
+      const serverTime = Date.parse(serverSnapshot.updatedAt);
+      const clientTime = Date.parse(clientSnapshot.updatedAt);
+      if (serverTime > clientTime) {
+        snapshotsToReturn.push(serverSnapshot);
+      }
+    }
+
+    return snapshotsToReturn;
   }
 
   private validatePayload(payload: SyncPayload): void {

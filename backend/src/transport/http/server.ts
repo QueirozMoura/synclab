@@ -4,10 +4,13 @@ import { InMemoryOperationRepository } from "@infrastructure/persistence/server/
 import { PostgresOperationRepository } from "@infrastructure/persistence/postgres/PostgresOperationRepository.js";
 import { InMemoryDocumentOperationRepository } from "@infrastructure/persistence/document-operations/InMemoryDocumentOperationRepository.js";
 import { PostgresDocumentOperationRepository } from "@infrastructure/persistence/document-operations/PostgresDocumentOperationRepository.js";
+import { InMemoryDocumentSnapshotRepository } from "@infrastructure/persistence/document-operations/InMemoryDocumentSnapshotRepository.js";
+import { PostgresDocumentSnapshotRepository } from "@infrastructure/persistence/document-operations/PostgresDocumentSnapshotRepository.js";
 import { InMemoryDocumentAuthorizationRepository } from "@infrastructure/auth/InMemoryDocumentAuthorizationRepository.js";
 import { ApiKeyValidator, type ApiKeyEntry } from "@application/auth/ApiKeyValidator.js";
 import { registerSyncRoutes } from "./routes.js";
 import type { DocumentOperationRepository } from "@domain/document-operations/DocumentOperationRepository.js";
+import type { DocumentSnapshotRepository } from "@domain/document-operations/DocumentSnapshotRepository.js";
 
 /**
  * Cria o repositório de operações baseado na configuração.
@@ -96,6 +99,23 @@ function createAuthzRepository(): InMemoryDocumentAuthorizationRepository {
 }
 
 /**
+ * Cria o repositório de snapshots de documento baseado na configuração.
+ *
+ * Prioridade:
+ * 1. Se DATABASE_URL estiver definido, usa PostgresDocumentSnapshotRepository
+ * 2. Caso contrário, usa InMemoryDocumentSnapshotRepository (desenvolvimento/testes)
+ */
+async function createSnapshotRepository(): Promise<DocumentSnapshotRepository> {
+  const databaseUrl = process.env.DATABASE_URL;
+
+  if (databaseUrl) {
+    return await PostgresDocumentSnapshotRepository.create(databaseUrl);
+  }
+
+  return new InMemoryDocumentSnapshotRepository();
+}
+
+/**
  * Cria e configura o servidor HTTP do SyncLab.
  */
 export async function createServer(): Promise<FastifyInstance> {
@@ -118,10 +138,11 @@ export async function createServer(): Promise<FastifyInstance> {
 
   const repository = await createRepository();
   const documentRepository = await createDocumentRepository();
+  const snapshotRepository = await createSnapshotRepository();
   const authzRepository = createAuthzRepository();
   const apiKeyValidator = createApiKeyValidator();
 
-  registerSyncRoutes(app, repository, documentRepository, authzRepository, apiKeyValidator);
+  registerSyncRoutes(app, repository, documentRepository, snapshotRepository, authzRepository, apiKeyValidator);
 
   app.get("/health", async () => {
     // Se usa PostgreSQL, verifica conexão
@@ -140,6 +161,9 @@ export async function createServer(): Promise<FastifyInstance> {
     }
     if (documentRepository instanceof PostgresDocumentOperationRepository) {
       await documentRepository.close();
+    }
+    if (snapshotRepository instanceof PostgresDocumentSnapshotRepository) {
+      await snapshotRepository.close();
     }
     await app.close();
   };

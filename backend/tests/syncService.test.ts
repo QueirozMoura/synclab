@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { DocumentSyncService } from "../src/application/sync/SyncService.js";
 import { InMemoryDocumentOperationRepository } from "../src/infrastructure/persistence/document-operations/InMemoryDocumentOperationRepository.js";
+import { InMemoryDocumentSnapshotRepository } from "../src/infrastructure/persistence/document-operations/InMemoryDocumentSnapshotRepository.js";
 import {
   DocumentOperationType,
   type DocumentOperation,
@@ -10,7 +11,7 @@ import {
   SyncOperationType,
   type SyncOperation,
 } from "../src/types/syncOperation.js";
-import type { SyncPayload } from "../src/types/sync.js";
+import type { SyncPayload, DocumentSnapshot } from "../src/types/sync.js";
 
 function createSyncOperation(
   type: SyncOperationType,
@@ -46,6 +47,18 @@ function createDocumentOperation(
   });
 }
 
+function createSnapshot(overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot {
+  return {
+    documentId: "doc-1",
+    document: { id: "doc-1", title: "Test", content: "Content" },
+    operationCount: 1,
+    createdAt: "2024-01-15T10:30:00.000Z",
+    updatedAt: "2024-01-15T10:30:00.000Z",
+    vectorClock: { "device-A": 1 },
+    ...overrides,
+  };
+}
+
 function createPayload(operations: SyncOperation[] = [], snapshots: SyncPayload["snapshots"] = []): SyncPayload {
   return {
     deviceId: "device-A",
@@ -56,11 +69,13 @@ function createPayload(operations: SyncOperation[] = [], snapshots: SyncPayload[
 
 describe("DocumentSyncService", () => {
   let repository: InMemoryDocumentOperationRepository;
+  let snapshotRepository: InMemoryDocumentSnapshotRepository;
   let syncService: DocumentSyncService;
 
   beforeEach(() => {
     repository = new InMemoryDocumentOperationRepository();
-    syncService = new DocumentSyncService(repository);
+    snapshotRepository = new InMemoryDocumentSnapshotRepository();
+    syncService = new DocumentSyncService(repository, snapshotRepository);
   });
 
   describe("validatePayload", () => {
@@ -715,11 +730,13 @@ describe("DocumentSyncService", () => {
       const payload = createPayload([operation]);
 
       const repo1 = setupRepository();
-      const service1 = new DocumentSyncService(repo1);
+      const snapshotRepo1 = new InMemoryDocumentSnapshotRepository();
+      const service1 = new DocumentSyncService(repo1, snapshotRepo1);
       const result1 = await service1.synchronize(payload);
 
       const repo2 = setupRepository();
-      const service2 = new DocumentSyncService(repo2);
+      const snapshotRepo2 = new InMemoryDocumentSnapshotRepository();
+      const service2 = new DocumentSyncService(repo2, snapshotRepo2);
       const result2 = await service2.synchronize(payload);
 
       expect(result1.acceptedOperations).toEqual(result2.acceptedOperations);
@@ -728,9 +745,11 @@ describe("DocumentSyncService", () => {
 
     it("não deve depender de ordem incidental de objetos", async () => {
       const repo1 = new InMemoryDocumentOperationRepository();
-      const service1 = new DocumentSyncService(repo1);
+      const snapshotRepo1 = new InMemoryDocumentSnapshotRepository();
+      const service1 = new DocumentSyncService(repo1, snapshotRepo1);
       const repo2 = new InMemoryDocumentOperationRepository();
-      const service2 = new DocumentSyncService(repo2);
+      const snapshotRepo2 = new InMemoryDocumentSnapshotRepository();
+      const service2 = new DocumentSyncService(repo2, snapshotRepo2);
 
       const operations = [
         createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
@@ -1071,6 +1090,440 @@ describe("DocumentSyncService", () => {
       const result2 = await syncService.synchronize(createPayload([clientOp]));
       expect(result2.missingOperations).toHaveLength(1);
       expect(result2.missingOperations[0].id).toBe("op-2");
+    });
+  });
+
+  describe("snapshots - processamento", () => {
+    it("payload sem snapshots", async () => {
+      const payload = createPayload([]);
+
+      const result = await syncService.synchronize(payload);
+
+      expect(result.snapshots).toEqual([]);
+    });
+
+    it("snapshot novo persistido", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
+      const payload = createPayload([], [snapshot]);
+
+      const result = await syncService.synchronize(payload);
+
+      expect(result.snapshots).toEqual([]);
+      const stored = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored).toBeDefined();
+      expect(stored?.updatedAt).toBe("2024-01-15T10:30:00.000Z");
+    });
+
+    it("snapshot existente atualizado quando remoto mais recente", async () => {
+      const oldSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      await snapshotRepository.save(oldSnapshot);
+
+      const newSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      const payload = createPayload([], [newSnapshot]);
+
+      const result = await syncService.synchronize(payload);
+
+      const stored = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+    });
+
+    it("snapshot remoto mais antigo ignorado", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const oldSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [oldSnapshot]);
+
+      const result = await syncService.synchronize(payload);
+
+      const stored = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+    });
+
+    it("timestamps iguais não sobrescreve snapshot local", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      const result = await syncService.synchronize(payload);
+
+      const stored = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored?.updatedAt).toBe("2024-01-15T10:30:00.000Z");
+    });
+
+    it("múltiplos documentos", async () => {
+      const snapshots = [
+        createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" }),
+        createSnapshot({ documentId: "doc-2", updatedAt: "2024-01-15T11:00:00.000Z" }),
+        createSnapshot({ documentId: "doc-3", updatedAt: "2024-01-15T12:00:00.000Z" }),
+      ];
+      const payload = createPayload([], snapshots);
+
+      const result = await syncService.synchronize(payload);
+
+      expect((await snapshotRepository.getByDocumentId("doc-1"))?.updatedAt).toBe("2024-01-15T10:00:00.000Z");
+      expect((await snapshotRepository.getByDocumentId("doc-2"))?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+      expect((await snapshotRepository.getByDocumentId("doc-3"))?.updatedAt).toBe("2024-01-15T12:00:00.000Z");
+    });
+  });
+
+  describe("snapshots - retorno ao cliente", () => {
+    it("snapshot retornado ao cliente quando servidor mais recente", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      const result = await syncService.synchronize(payload);
+
+      expect(result.snapshots).toHaveLength(1);
+      expect(result.snapshots[0].documentId).toBe("doc-1");
+      expect(result.snapshots[0].updatedAt).toBe("2024-01-15T11:00:00.000Z");
+    });
+
+    it("snapshot não retornado quando cliente possui versão igual", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      const result = await syncService.synchronize(payload);
+
+      expect(result.snapshots).toEqual([]);
+    });
+
+    it("snapshot não retornado quando cliente possui versão mais recente", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      const result = await syncService.synchronize(payload);
+
+      expect(result.snapshots).toEqual([]);
+    });
+
+    it("cliente sem snapshot recebe snapshot do servidor", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const payload = createPayload([]);
+
+      const result = await syncService.synchronize(payload);
+
+      expect(result.snapshots).toHaveLength(1);
+      expect(result.snapshots[0].documentId).toBe("doc-1");
+      expect(result.snapshots[0].updatedAt).toBe("2024-01-15T11:00:00.000Z");
+    });
+
+    it("operações e snapshots juntos", async () => {
+      const serverOp = createDocumentOperation(DocumentOperationType.CREATE_DOCUMENT, {
+        type: DocumentOperationType.CREATE_DOCUMENT,
+        title: "Server Doc",
+        content: "Content",
+      });
+      await repository.save(serverOp);
+
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const operation = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "New Title",
+      }, { id: "op-new" });
+      const payload = createPayload([operation], [clientSnapshot]);
+
+      const result = await syncService.synchronize(payload);
+
+      expect(result.acceptedOperations).toHaveLength(1);
+      expect(result.missingOperations).toHaveLength(1);
+      expect(result.snapshots).toHaveLength(1);
+      expect(result.snapshots[0].documentId).toBe("doc-1");
+    });
+
+    it("somente snapshots sem operações", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const payload = createPayload([], []);
+
+      const result = await syncService.synchronize(payload);
+
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations).toEqual([]);
+      expect(result.snapshots).toHaveLength(1);
+    });
+
+    it("snapshots duplicados no payload - cada documentId no máximo uma vez", async () => {
+      const snapshots = [
+        createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" }),
+        createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" }),
+      ];
+      const payload = createPayload([], snapshots);
+
+      const result = await syncService.synchronize(payload);
+
+      const stored = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+      expect(result.snapshots).toEqual([]);
+    });
+  });
+
+  describe("snapshots - erros", () => {
+    it("erro de getByDocumentId propagado", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1" });
+      const payload = createPayload([], [snapshot]);
+
+      vi.spyOn(snapshotRepository, "getByDocumentId").mockRejectedValueOnce(new Error("Database error"));
+
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Database error");
+    });
+
+    it("erro de save propagado", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1" });
+      const payload = createPayload([], [snapshot]);
+
+      vi.spyOn(snapshotRepository, "saveMany").mockRejectedValueOnce(new Error("Database error"));
+
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Database error");
+    });
+
+    it("erro original preservado", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1" });
+      const payload = createPayload([], [snapshot]);
+
+      const originalError = new Error("Original error");
+      vi.spyOn(snapshotRepository, "getByDocumentId").mockRejectedValueOnce(originalError);
+
+      try {
+        await syncService.synchronize(payload);
+      } catch (error) {
+        expect(error).toBe(originalError);
+      }
+    });
+
+    it("não retorna SyncResult parcial em erro", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1" });
+      const payload = createPayload([], [snapshot]);
+
+      vi.spyOn(snapshotRepository, "getByDocumentId").mockRejectedValueOnce(new Error("Database error"));
+
+      let result: any;
+      try {
+        result = await syncService.synchronize(payload);
+      } catch {
+        // expected
+      }
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("snapshots - imutabilidade", () => {
+    it("não deve mutar payload snapshots", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1" });
+      const payload = createPayload([], [snapshot]);
+      const originalSnapshots = JSON.parse(JSON.stringify(payload.snapshots));
+
+      await syncService.synchronize(payload);
+
+      expect(payload.snapshots).toEqual(originalSnapshots);
+    });
+
+    it("não deve mutar snapshots array original", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1" });
+      const payload = createPayload([], [snapshot]);
+      const originalSnapshots = [...payload.snapshots];
+
+      await syncService.synchronize(payload);
+
+      expect(payload.snapshots).toEqual(originalSnapshots);
+    });
+
+    it("não deve mutar objetos de snapshot individuais", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1" });
+      const payload = createPayload([], [snapshot]);
+      const originalSnapshot = { ...snapshot };
+
+      await syncService.synchronize(payload);
+
+      expect(payload.snapshots[0]).toEqual(originalSnapshot);
+    });
+  });
+
+  describe("snapshots - determinismo", () => {
+    it("mesma entrada duas vezes produz mesmo resultado", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      const result1 = await syncService.synchronize(payload);
+      const result2 = await syncService.synchronize(payload);
+
+      expect(result1.snapshots).toEqual(result2.snapshots);
+      expect(result1.acceptedOperations).toEqual(result2.acceptedOperations);
+      expect(result1.missingOperations).toEqual(result2.missingOperations);
+    });
+
+    it("snapshots de documentos diferentes", async () => {
+      const snapshots = [
+        createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" }),
+        createSnapshot({ documentId: "doc-2", updatedAt: "2024-01-15T11:00:00.000Z" }),
+      ];
+      const payload = createPayload([], snapshots);
+
+      const result1 = await syncService.synchronize(payload);
+      const result2 = await syncService.synchronize(payload);
+
+      expect(result1.snapshots).toEqual(result2.snapshots);
+    });
+
+    it("timestamps iguais", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      const result1 = await syncService.synchronize(payload);
+      const result2 = await syncService.synchronize(payload);
+
+      expect(result1.snapshots).toEqual(result2.snapshots);
+    });
+
+    it("timestamps diferentes", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      const result1 = await syncService.synchronize(payload);
+      const result2 = await syncService.synchronize(payload);
+
+      expect(result1.snapshots).toEqual(result2.snapshots);
+    });
+  });
+
+  describe("snapshots - idempotência", () => {
+    it("execução múltipla não cria duplicatas", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [snapshot]);
+
+      await syncService.synchronize(payload);
+      await syncService.synchronize(payload);
+
+      expect(await snapshotRepository.count()).toBe(1);
+    });
+
+    it("segunda execução não persiste snapshots idênticos", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [snapshot]);
+
+      await syncService.synchronize(payload);
+      const result2 = await syncService.synchronize(payload);
+
+      expect(result2.snapshots).toEqual([]);
+    });
+
+    it("não altera snapshots com timestamp igual", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      await syncService.synchronize(payload);
+      await syncService.synchronize(payload);
+
+      const stored = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored?.updatedAt).toBe("2024-01-15T10:30:00.000Z");
+    });
+
+    it("não substitui snapshot mais recente por mais antigo", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      await syncService.synchronize(payload);
+      await syncService.synchronize(payload);
+
+      const stored = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+    });
+  });
+
+  describe("snapshots - múltiplas sincronizações", () => {
+    it("múltiplas sincronizações com snapshots", async () => {
+      const snapshot1 = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const result1 = await syncService.synchronize(createPayload([], [snapshot1]));
+      expect(result1.snapshots).toEqual([]);
+
+      const snapshot2 = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      const result2 = await syncService.synchronize(createPayload([], [snapshot2]));
+      expect(result2.snapshots).toEqual([]);
+
+      const stored = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+    });
+
+    it("múltiplos documentos independentes", async () => {
+      const snapshots = [
+        createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" }),
+        createSnapshot({ documentId: "doc-2", updatedAt: "2024-01-15T11:00:00.000Z" }),
+      ];
+      const payload = createPayload([], snapshots);
+
+      await syncService.synchronize(payload);
+
+      const serverSnapshot1 = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T09:00:00.000Z" });
+      const serverSnapshot2 = createSnapshot({ documentId: "doc-2", updatedAt: "2024-01-15T12:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot1);
+      await snapshotRepository.save(serverSnapshot2);
+
+      const result = await syncService.synchronize(createPayload([]));
+
+      expect(result.snapshots).toHaveLength(2);
+      const doc1Snapshot = result.snapshots.find((s) => s.documentId === "doc-1");
+      const doc2Snapshot = result.snapshots.find((s) => s.documentId === "doc-2");
+      expect(doc1Snapshot?.updatedAt).toBe("2024-01-15T10:00:00.000Z");
+      expect(doc2Snapshot?.updatedAt).toBe("2024-01-15T12:00:00.000Z");
+    });
+
+    it("snapshot mais recente vence", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      await syncService.synchronize(payload);
+
+      const stored = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+    });
+
+    it("snapshot mais antigo nunca sobrescreve o novo", async () => {
+      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
+      await snapshotRepository.save(serverSnapshot);
+
+      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [clientSnapshot]);
+
+      await syncService.synchronize(payload);
+      await syncService.synchronize(payload);
+
+      const stored = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
     });
   });
 });
