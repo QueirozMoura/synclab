@@ -181,7 +181,7 @@ describe("SyncEngine", () => {
       const remote = [createOp("op-1"), createOp("op-1"), createOp("op-1"), createOp("op-2")];
       const result = engine.getSyncOperations(local, remote);
       expect(result.toRemote).toEqual([]);
-      expect(result.toLocal.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.toLocal.map((op) => op.id)).toEqual(["op-2"]);
     });
   });
 
@@ -248,7 +248,7 @@ describe("SyncEngine", () => {
       const local = [createOp("op-1"), createOp("op-1")];
       const incoming = [createOp("op-1"), createOp("op-1"), createOp("op-1"), createOp("op-2")];
       const result = engine.receiveOperations(local, incoming);
-      expect(result.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.map((op) => op.id)).toEqual(["op-2"]);
     });
 
     it("deve preservar a ordem de incomingOperations", () => {
@@ -377,7 +377,7 @@ describe("SyncEngine", () => {
       const local = [createOp("op-1"), createOp("op-1")];
       const incoming = [createOp("op-1"), createOp("op-1"), createOp("op-1"), createOp("op-2")];
       const result = engine.mergeOperations(local, incoming);
-      expect(result.map((op) => op.id)).toEqual(["op-1", "op-1", "op-1", "op-2"]);
+      expect(result.map((op) => op.id)).toEqual(["op-1", "op-1", "op-2"]);
     });
 
     it("deve manter ordem: operações locais primeiro, novas depois", () => {
@@ -1161,7 +1161,7 @@ describe("SyncEngine", () => {
 
       const result = engine.processSyncPayload(localOperations, [], remotePayload);
 
-      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-2"]);
       expect(result.missingOperations).toEqual([]);
     });
 
@@ -1579,7 +1579,7 @@ describe("SyncEngine", () => {
       const { operations, result } = engine.synchronize(localOperations, [], remotePayload);
 
       expect(operations.map((op) => op.id)).toEqual(["op-1", "op-1", "op-2"]);
-      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-2"]);
       expect(result.missingOperations).toEqual([]);
     });
 

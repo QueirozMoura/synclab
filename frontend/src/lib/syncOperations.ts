@@ -23,17 +23,14 @@ export function getMissingRemoteOperations(
   localOperations: Operation[],
   remoteOperations: Operation[]
 ): Operation[] {
-  const localCounts = new Map<string, number>();
-  for (const op of localOperations) {
-    localCounts.set(op.id, (localCounts.get(op.id) ?? 0) + 1);
-  }
+  const localIds = new Set(localOperations.map((op) => op.id));
+  const seenRemoteIds = new Set<string>();
 
   return remoteOperations.filter((op) => {
-    const count = localCounts.get(op.id) ?? 0;
-    if (count > 0) {
-      localCounts.set(op.id, count - 1);
+    if (seenRemoteIds.has(op.id)) {
       return false;
     }
-    return true;
+    seenRemoteIds.add(op.id);
+    return !localIds.has(op.id);
   });
 }

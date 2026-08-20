@@ -271,16 +271,16 @@ describe("getMissingRemoteOperations", () => {
     const local = [createOp("op-1")];
     const remote = [createOp("op-1"), createOp("op-1"), createOp("op-2")];
     const result = getMissingRemoteOperations(local, remote);
-    expect(result).toHaveLength(2);
-    expect(result.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+    expect(result).toHaveLength(1);
+    expect(result.map((op) => op.id)).toEqual(["op-2"]);
   });
 
   it("deve lidar com duplicatas em ambos os arrays (contagem determinística)", () => {
     const local = [createOp("op-1"), createOp("op-1")];
     const remote = [createOp("op-1"), createOp("op-1"), createOp("op-1"), createOp("op-2")];
     const result = getMissingRemoteOperations(local, remote);
-    expect(result).toHaveLength(2);
-    expect(result.map((op) => op.id)).toEqual(["op-1", "op-2"]);
+    expect(result).toHaveLength(1);
+    expect(result.map((op) => op.id)).toEqual(["op-2"]);
   });
 
   it("deve retornar apenas as operações originais (não criar novas)", () => {

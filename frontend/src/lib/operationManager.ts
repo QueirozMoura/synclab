@@ -122,6 +122,11 @@ export class OperationManager {
     return reconstructDocument(initialDocument ?? null, operations);
   }
 
+  reconstructSyncedDocument(documentId: string, initialDocument?: Document): Document | null {
+    const operations = this.getOperationsForDocument(documentId);
+    return reconstructDocument(initialDocument ?? null, operations);
+  }
+
   async reconstructDocumentFromSnapshot(documentId: string): Promise<Document | null> {
     let snapshot: DocumentSnapshot | undefined;
     try {
@@ -156,6 +161,11 @@ export class OperationManager {
       if (!localOperationIds.has(acceptedOp.id)) {
         await putOperation(acceptedOp);
       }
+    }
+
+    for (const acceptedOp of result.acceptedOperations) {
+      const opClock = VectorClock.from(acceptedOp.vectorClock.toMap());
+      this.vectorClock = this.vectorClock.merge(opClock);
     }
 
     const localSnapshotMap = new Map(localSnapshots.map((snap) => [snap.documentId, snap]));
