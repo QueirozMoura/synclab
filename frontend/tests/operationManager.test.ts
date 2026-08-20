@@ -24,6 +24,7 @@ import { putSnapshot, getAllSnapshots, putOperation } from "../src/lib/indexedDb
 import { compactPersistedOperations } from "../src/lib/compactPersistedOperations";
 import type { Document, Operation } from "../src/types/operation";
 import type { DocumentSnapshot, SyncPayload } from "../src/types/documentSnapshot";
+import type { SyncTransport } from "../src/types/syncTransport";
 
 describe("OperationManager", () => {
   beforeEach(() => {
@@ -3128,6 +3129,431 @@ it("deve lidar com duplicatas", async () => {
       expect(remotePayload.snapshots.length).toBe(originalSnapsLength);
       expect(remotePayload.operations.map((op) => op.id)).toEqual(["op-1", "op-2"]);
       expect(remotePayload.snapshots.map((s) => s.documentId)).toEqual(["doc-1", "doc-2"]);
+    });
+  });
+
+  describe("syncWithTransport", () => {
+    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
+      id,
+      documentId: "doc-1",
+      deviceId: "test-device-id",
+      type: "CREATE_DOCUMENT",
+      payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
+      timestamp: "2024-01-01T00:00:00.000Z",
+      vectorClock: VectorClock.from({ "test-device-id": 1 }),
+      ...overrides,
+    });
+
+    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
+      documentId: id,
+      id,
+      title: "Test",
+      content: "Content",
+      createdAt: "2024-01-01T00:00:00.000Z",
+      updatedAt: "2024-01-01T00:00:00.000Z",
+      operationCount: 10,
+      vectorClock: { "test-device-id": 1 },
+      ...overrides,
+    });
+
+    const createRemotePayload = (operations: Operation[] = [], snapshots: DocumentSnapshot[] = []): SyncPayload => ({
+      deviceId: "remote-device",
+      operations,
+      snapshots,
+    });
+
+    class MockSyncTransport implements SyncTransport {
+      private remotePayload: SyncPayload;
+      public callCount = 0;
+      public lastPayload: SyncPayload | null = null;
+      public shouldThrow = false;
+      public throwError: Error | null = null;
+
+      constructor(initialRemotePayload: SyncPayload) {
+        this.remotePayload = initialRemotePayload;
+      }
+
+      setRemotePayload(payload: SyncPayload): void {
+        this.remotePayload = payload;
+      }
+
+      async synchronize(payload: SyncPayload): Promise<SyncPayload> {
+        this.callCount++;
+        this.lastPayload = {
+          deviceId: payload.deviceId,
+          operations: [...payload.operations],
+          snapshots: [...payload.snapshots],
+        };
+
+        if (this.shouldThrow && this.throwError) {
+          throw this.throwError;
+        }
+
+        return {
+          deviceId: this.remotePayload.deviceId,
+          operations: [...this.remotePayload.operations],
+          snapshots: [...this.remotePayload.snapshots],
+        };
+      }
+    }
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it("deve rejeitar quando transporte não configurado", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      await expect(manager.syncWithTransport()).rejects.toThrow("SyncTransport not configured");
+    });
+
+    it("não deve alterar operações quando transporte não configurado", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      try {
+        await manager.syncWithTransport();
+      } catch {
+        // expected
+      }
+
+      expect(manager.getOperations()).toHaveLength(1);
+      expect(manager.getOperations()[0].id).toBe(localOp.id);
+    });
+
+    it("não deve alterar VectorClock quando transporte não configurado", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const clockBefore = manager.getVectorClock().toMap();
+
+      try {
+        await manager.syncWithTransport();
+      } catch {
+        // expected
+      }
+
+      const clockAfter = manager.getVectorClock().toMap();
+      expect(clockAfter).toEqual(clockBefore);
+    });
+
+    it("deve sincronizar com transporte configurado", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const transport = new MockSyncTransport(createRemotePayload([], []));
+      manager.setSyncTransport(transport);
+
+      const result = await manager.syncWithTransport();
+
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual([localOp.id]);
+    });
+
+    it("deve enviar payload local com deviceId correto", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const transport = new MockSyncTransport(createRemotePayload([], []));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+
+      expect(transport.lastPayload?.deviceId).toBe("test-device-id");
+    });
+
+    it("deve enviar operações locais no payload", async () => {
+      const manager = new OperationManager();
+      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const localOp2 = manager.createOperation("doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Updated" });
+
+      const transport = new MockSyncTransport(createRemotePayload([], []));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+
+      expect(transport.lastPayload?.operations).toHaveLength(2);
+      expect(transport.lastPayload?.operations.map((op) => op.id)).toEqual([localOp1.id, localOp2.id]);
+    });
+
+    it("deve enviar snapshots locais no payload", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const localSnapshot = createSnapshot("doc-1", { documentId: "doc-1", updatedAt: "2024-01-01T00:00:00.000Z" });
+      vi.mocked(getAllSnapshots).mockResolvedValue([localSnapshot]);
+
+      const transport = new MockSyncTransport(createRemotePayload([], []));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+
+      expect(transport.lastPayload?.snapshots).toHaveLength(1);
+      expect(transport.lastPayload?.snapshots[0].documentId).toBe("doc-1");
+    });
+
+    it("deve enviar payload completo ao transporte", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const localSnapshot = createSnapshot("doc-1", { documentId: "doc-1", updatedAt: "2024-01-01T00:00:00.000Z" });
+      vi.mocked(getAllSnapshots).mockResolvedValue([localSnapshot]);
+
+      const transport = new MockSyncTransport(createRemotePayload([], []));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+
+      expect(transport.lastPayload).toEqual({
+        deviceId: "test-device-id",
+        operations: expect.arrayContaining([expect.objectContaining({ id: localOp.id })]),
+        snapshots: expect.arrayContaining([expect.objectContaining({ documentId: "doc-1" })]),
+      });
+    });
+
+    it("deve sincronizar com payload remoto vazio", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const transport = new MockSyncTransport(createRemotePayload([], []));
+      manager.setSyncTransport(transport);
+
+      const result = await manager.syncWithTransport();
+
+      expect(result.acceptedOperations).toEqual([]);
+      expect(result.missingOperations.map((op) => op.id)).toEqual([localOp.id]);
+    });
+
+    it("deve receber operações remotas", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const transport = new MockSyncTransport(createRemotePayload([remoteOp], []));
+      manager.setSyncTransport(transport);
+
+      const result = await manager.syncWithTransport();
+
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-remote"]);
+      expect(manager.getOperationLog().size()).toBe(2);
+    });
+
+    it("deve receber snapshots remotos", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteSnapshot = createSnapshot("doc-2", { documentId: "doc-2", updatedAt: "2024-01-02T00:00:00.000Z" });
+      const transport = new MockSyncTransport(createRemotePayload([], [remoteSnapshot]));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+
+      const calls = vi.mocked(putSnapshot).mock.calls;
+      expect(calls.some((call) => call[0].documentId === "doc-2")).toBe(true);
+    });
+
+    it("deve sincronizar operações e snapshots", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remoteSnapshot = createSnapshot("doc-2", { documentId: "doc-2", updatedAt: "2024-01-02T00:00:00.000Z" });
+      const transport = new MockSyncTransport(createRemotePayload([remoteOp], [remoteSnapshot]));
+      manager.setSyncTransport(transport);
+
+      const result = await manager.syncWithTransport();
+
+      expect(result.acceptedOperations.map((op) => op.id)).toEqual(["op-remote"]);
+      const snapshotCalls = vi.mocked(putSnapshot).mock.calls;
+      expect(snapshotCalls.some((call) => call[0].documentId === "doc-2")).toBe(true);
+    });
+
+    it("deve deduplicar operações remotas já existentes", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp(localOp.id, { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const transport = new MockSyncTransport(createRemotePayload([remoteOp], []));
+      manager.setSyncTransport(transport);
+
+      const result = await manager.syncWithTransport();
+
+      expect(result.acceptedOperations).toEqual([]);
+      expect(manager.getOperationLog().size()).toBe(1);
+    });
+
+    it("deve atualizar VectorClock com operações remotas aceitas", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const originalClock = manager.getVectorClock().toMap();
+
+      const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 3 }) });
+      const transport = new MockSyncTransport(createRemotePayload([remoteOp], []));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+
+      const newClock = manager.getVectorClock().toMap();
+      expect(newClock["test-device-id"]).toBe(originalClock["test-device-id"]);
+      expect(newClock["remote-device"]).toBe(3);
+    });
+
+    it("deve atualizar OperationLog com operações aceitas", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const transport = new MockSyncTransport(createRemotePayload([remoteOp], []));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+
+      const allOps = manager.getOperations();
+      expect(allOps.map((op) => op.id)).toContain(localOp.id);
+      expect(allOps.map((op) => op.id)).toContain("op-remote");
+    });
+
+    it("deve persistir operações recebidas", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const transport = new MockSyncTransport(createRemotePayload([remoteOp], []));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+
+      const remoteCalls = vi.mocked(putOperation).mock.calls.filter((call) => call[0].id === "op-remote");
+      expect(remoteCalls).toHaveLength(1);
+    });
+
+    it("deve persistir snapshots recebidos quando mais recentes", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const localSnapshot = createSnapshot("doc-1", { updatedAt: "2024-01-01T00:00:00.000Z" });
+      vi.mocked(getAllSnapshots).mockResolvedValue([localSnapshot]);
+
+      const remoteSnapshot = createSnapshot("doc-1", { updatedAt: "2024-01-02T00:00:00.000Z" });
+      const transport = new MockSyncTransport(createRemotePayload([], [remoteSnapshot]));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+
+      const calls = vi.mocked(putSnapshot).mock.calls.filter((call) => call[0].documentId === "doc-1");
+      expect(calls).toHaveLength(1);
+      expect(calls[0][0].updatedAt).toBe("2024-01-02T00:00:00.000Z");
+    });
+
+    it("deve chamar transporte exatamente uma vez", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const transport = new MockSyncTransport(createRemotePayload([], []));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+
+      expect(transport.callCount).toBe(1);
+    });
+
+    it("deve reutilizar synchronize() existente", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const transport = new MockSyncTransport(createRemotePayload([remoteOp], []));
+      manager.setSyncTransport(transport);
+
+      const result = await manager.syncWithTransport();
+
+      expect(result).toHaveProperty("acceptedOperations");
+      expect(result).toHaveProperty("missingOperations");
+      expect(result).toHaveProperty("snapshots");
+    });
+
+    it("deve propagar erro do transporte", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const transport = new MockSyncTransport(createRemotePayload([], []));
+      transport.shouldThrow = true;
+      transport.throwError = new Error("Transport error");
+      manager.setSyncTransport(transport);
+
+      await expect(manager.syncWithTransport()).rejects.toThrow("Transport error");
+    });
+
+    it("não deve alterar estado local em caso de erro do transporte", async () => {
+      const manager = new OperationManager();
+      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const clockBefore = manager.getVectorClock().toMap();
+
+      const transport = new MockSyncTransport(createRemotePayload([], []));
+      transport.shouldThrow = true;
+      transport.throwError = new Error("Transport error");
+      manager.setSyncTransport(transport);
+
+      try {
+        await manager.syncWithTransport();
+      } catch {
+        // expected
+      }
+
+      expect(manager.getOperations()).toHaveLength(1);
+      expect(manager.getOperations()[0].id).toBe(localOp.id);
+      expect(manager.getVectorClock().toMap()).toEqual(clockBefore);
+    });
+
+    it("deve ser determinístico", async () => {
+      const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const remotePayload = createRemotePayload([remoteOp], []);
+
+      const manager1 = new OperationManager();
+      manager1.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const transport1 = new MockSyncTransport(remotePayload);
+      manager1.setSyncTransport(transport1);
+      const result1 = await manager1.syncWithTransport();
+
+      const manager2 = new OperationManager();
+      manager2.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const transport2 = new MockSyncTransport(remotePayload);
+      manager2.setSyncTransport(transport2);
+      const result2 = await manager2.syncWithTransport();
+
+      expect(result1.acceptedOperations).toHaveLength(result2.acceptedOperations.length);
+      expect(result1.missingOperations).toHaveLength(result2.missingOperations.length);
+    });
+
+    it("deve suportar múltiplas sincronizações", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp1 = createOp("op-1", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const transport = new MockSyncTransport(createRemotePayload([remoteOp1], []));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+      expect(manager.getOperationLog().size()).toBe(2);
+
+      const remoteOp2 = createOp("op-2", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 2 }) });
+      transport.setRemotePayload(createRemotePayload([remoteOp2], []));
+      await manager.syncWithTransport();
+      expect(manager.getOperationLog().size()).toBe(3);
+    });
+
+    it("deve ser idempotente - sincronização repetida", async () => {
+      const manager = new OperationManager();
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+
+      const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
+      const transport = new MockSyncTransport(createRemotePayload([remoteOp], []));
+      manager.setSyncTransport(transport);
+
+      await manager.syncWithTransport();
+      const result2 = await manager.syncWithTransport();
+
+      expect(result2.acceptedOperations).toHaveLength(0);
+      expect(manager.getOperationLog().size()).toBe(2);
     });
   });
 });

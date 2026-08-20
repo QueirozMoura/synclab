@@ -13,6 +13,7 @@ import type { Document } from "../types/document";
 import type { Operation, OperationType, OperationPayload } from "../types/operation";
 import type { DocumentSnapshot } from "../types/documentSnapshot";
 import type { SyncPayload, SyncResult } from "../types/sync";
+import type { SyncTransport } from "../types/syncTransport";
 
 const SNAPSHOT_INTERVAL = 10;
 
@@ -21,11 +22,16 @@ export class OperationManager {
   private vectorClock: VectorClock;
   private readonly operationLog: OperationLog;
   private initialized = false;
+  private syncTransport: SyncTransport | null = null;
 
   constructor() {
     this.deviceId = getDeviceId();
     this.vectorClock = VectorClock.create();
     this.operationLog = new OperationLog();
+  }
+
+  setSyncTransport(transport: SyncTransport): void {
+    this.syncTransport = transport;
   }
 
   async initialize(): Promise<void> {
@@ -185,6 +191,25 @@ export class OperationManager {
 
     this.operationLog.loadInitial(operations);
     return result;
+  }
+
+  async syncWithTransport(): Promise<SyncResult> {
+    if (!this.syncTransport) {
+      throw new Error("SyncTransport not configured. Call setSyncTransport() before syncWithTransport().");
+    }
+
+    const localOperations = this.getOperations();
+    const localSnapshots = await getAllSnapshots();
+
+    const localPayload: SyncPayload = {
+      deviceId: this.deviceId,
+      operations: localOperations,
+      snapshots: localSnapshots,
+    };
+
+    const remotePayload = await this.syncTransport.synchronize(localPayload);
+
+    return this.synchronize(remotePayload);
   }
 
   async synchronizeDocument(
