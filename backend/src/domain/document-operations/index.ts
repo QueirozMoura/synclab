@@ -24,3 +24,4 @@ export {
 } from "./DocumentOperation.js";
 
 export type { DocumentOperationRepository } from "./DocumentOperationRepository.js";
+export type { DocumentSnapshotRepository } from "./DocumentSnapshotRepository.js";

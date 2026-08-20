@@ -19,4 +19,10 @@ export { PostgresDocumentOperationRepository } from "./persistence/document-oper
 export { DocumentOperationSerializer } from "./persistence/document-operations/DocumentOperationSerializer.js";
 export { DOCUMENT_OPERATIONS_SCHEMA, DOCUMENT_OPERATIONS_QUERIES } from "./persistence/document-operations/schema.js";
 
+export { InMemoryDocumentSnapshotRepository } from "./persistence/document-operations/InMemoryDocumentSnapshotRepository.js";
+export { SqliteDocumentSnapshotRepository } from "./persistence/document-operations/SqliteDocumentSnapshotRepository.js";
+export { PostgresDocumentSnapshotRepository } from "./persistence/document-operations/PostgresDocumentSnapshotRepository.js";
+export { DocumentSnapshotSerializer, DocumentSnapshotDeserializationError } from "./persistence/document-operations/DocumentSnapshotSerializer.js";
+export { DOCUMENT_SNAPSHOTS_SCHEMA, DOCUMENT_SNAPSHOTS_QUERIES } from "./persistence/document-operations/snapshot-schema.js";
+
 export * from "./auth/index.js";

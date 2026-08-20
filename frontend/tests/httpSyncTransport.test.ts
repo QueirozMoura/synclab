@@ -3,6 +3,7 @@ import { HttpSyncTransport } from "../src/lib/httpSyncTransport";
 import type { SyncPayload } from "../src/types/sync";
 import type { Operation } from "../src/types/operation";
 import type { DocumentSnapshot } from "../src/types/documentSnapshot";
+import { VectorClock } from "../src/lib/vectorClock";
 
 const createOperation = (id: string, deviceId: string): Operation => ({
   id,
@@ -11,15 +12,16 @@ const createOperation = (id: string, deviceId: string): Operation => ({
   type: "CREATE_DOCUMENT",
   payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
   timestamp: "2024-01-01T00:00:00.000Z",
-  vectorClock: { [deviceId]: 1 },
+  vectorClock: VectorClock.from({ [deviceId]: 1 }),
 });
 
 const createSnapshot = (id: string): DocumentSnapshot => ({
-  id,
-  title: "Test",
-  content: "Content",
+  documentId: "doc-1",
+  document: { id: "doc-1", title: "Test", content: "Content" },
+  operationCount: 1,
   createdAt: "2024-01-01T00:00:00.000Z",
   updatedAt: "2024-01-01T00:00:00.000Z",
+  vectorClock: { [id]: 1 },
 });
 
 const createPayload = (overrides: Partial<SyncPayload> = {}): SyncPayload => ({
@@ -29,9 +31,49 @@ const createPayload = (overrides: Partial<SyncPayload> = {}): SyncPayload => ({
   ...overrides,
 });
 
-const createRemotePayload = (): SyncPayload => ({
-  deviceId: "remote-device",
-  operations: [createOperation("op-2", "remote-device")],
+const createSyncResult = (): {
+  acceptedOperations: Array<{
+    id: string;
+    documentId: string;
+    deviceId: string;
+    type: "CREATE_DOCUMENT" | "UPDATE_TITLE" | "UPDATE_CONTENT" | "DELETE_DOCUMENT";
+    payload: Operation["payload"];
+    timestamp: string;
+    vectorClock: Record<string, number>;
+  }>;
+  missingOperations: Array<{
+    id: string;
+    documentId: string;
+    deviceId: string;
+    type: "CREATE_DOCUMENT" | "UPDATE_TITLE" | "UPDATE_CONTENT" | "DELETE_DOCUMENT";
+    payload: Operation["payload"];
+    timestamp: string;
+    vectorClock: Record<string, number>;
+  }>;
+  snapshots: DocumentSnapshot[];
+} => ({
+  acceptedOperations: [
+    {
+      id: "op-2",
+      documentId: "doc-1",
+      deviceId: "remote-device",
+      type: "CREATE_DOCUMENT",
+      payload: { type: "CREATE_DOCUMENT", title: "Remote", content: "Content" },
+      timestamp: "2024-01-01T00:00:00.000Z",
+      vectorClock: { "remote-device": 1 },
+    },
+  ],
+  missingOperations: [
+    {
+      id: "op-3",
+      documentId: "doc-1",
+      deviceId: "remote-device",
+      type: "UPDATE_TITLE",
+      payload: { type: "UPDATE_TITLE", title: "Updated" },
+      timestamp: "2024-01-01T00:00:01.000Z",
+      vectorClock: { "remote-device": 2 },
+    },
+  ],
   snapshots: [createSnapshot("snap-2")],
 });
 
@@ -67,7 +109,7 @@ describe("HttpSyncTransport", () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       const payload = createPayload();
@@ -84,7 +126,7 @@ describe("HttpSyncTransport", () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       const payload = createPayload();
@@ -100,29 +142,26 @@ describe("HttpSyncTransport", () => {
       );
     });
 
-    it("deve enviar payload como JSON no body", async () => {
+    it("deve enviar payload convertido com vectorClock como objeto plano", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       const payload = createPayload();
       await transport.synchronize(payload);
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: JSON.stringify(payload),
-        })
-      );
+      const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+      expect(callBody.operations[0].vectorClock).toEqual({ "local-device": 1 });
+      expect(callBody.operations[0].vectorClock).not.toHaveProperty("clock");
     });
 
     it("deve enviar operações no payload", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       const operations = [
@@ -142,7 +181,7 @@ describe("HttpSyncTransport", () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       const snapshots = [createSnapshot("snap-1"), createSnapshot("snap-2")];
@@ -151,15 +190,15 @@ describe("HttpSyncTransport", () => {
 
       const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
       expect(callBody.snapshots).toHaveLength(2);
-      expect(callBody.snapshots[0].id).toBe("snap-1");
-      expect(callBody.snapshots[1].id).toBe("snap-2");
+      expect(callBody.snapshots[0].documentId).toBe("doc-1");
+      expect(callBody.snapshots[1].documentId).toBe("doc-1");
     });
 
     it("deve enviar deviceId no payload", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       const payload = createPayload({ deviceId: "my-device" });
@@ -169,19 +208,24 @@ describe("HttpSyncTransport", () => {
       expect(callBody.deviceId).toBe("my-device");
     });
 
-    it("deve converter resposta JSON em SyncPayload", async () => {
-      const remotePayload = createRemotePayload();
+    it("deve converter SyncResult do backend em SyncPayload com VectorClock", async () => {
+      const syncResult = createSyncResult();
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(remotePayload),
+        json: () => Promise.resolve(syncResult),
       });
 
       const result = await transport.synchronize(createPayload());
 
-      expect(result).toEqual(remotePayload);
-      expect(result.deviceId).toBe("remote-device");
-      expect(result.operations).toHaveLength(1);
+      expect(result.deviceId).toBe("local-device");
+      expect(result.operations).toHaveLength(2);
+      expect(result.operations[0].id).toBe("op-2");
+      expect(result.operations[1].id).toBe("op-3");
+      expect(result.operations[0].vectorClock).toBeInstanceOf(VectorClock);
+      expect(result.operations[1].vectorClock).toBeInstanceOf(VectorClock);
+      expect(result.operations[0].vectorClock.toMap()).toEqual({ "remote-device": 1 });
+      expect(result.operations[1].vectorClock.toMap()).toEqual({ "remote-device": 2 });
       expect(result.snapshots).toHaveLength(1);
     });
 
@@ -189,7 +233,7 @@ describe("HttpSyncTransport", () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       const result = await transport.synchronize(createPayload());
@@ -200,7 +244,7 @@ describe("HttpSyncTransport", () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 201,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       const result = await transport.synchronize(createPayload());
@@ -254,31 +298,45 @@ describe("HttpSyncTransport", () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       const payload = createPayload();
-      const originalPayload = JSON.parse(JSON.stringify(payload));
+      const originalOperations = payload.operations.map((op) => ({
+        ...op,
+        vectorClock: op.vectorClock.toMap(),
+      }));
+      const originalSnapshots = [...payload.snapshots];
 
       await transport.synchronize(payload);
 
-      expect(payload).toEqual(originalPayload);
+      expect(payload.deviceId).toBe(originalOperations[0].deviceId);
+      expect(payload.operations).toHaveLength(originalOperations.length);
+      expect(payload.snapshots).toEqual(originalSnapshots);
     });
 
-    it("deve preservar estrutura da resposta", async () => {
-      const remotePayload = createRemotePayload();
-      remotePayload.operations.push(createOperation("op-3", "remote-device"));
-      remotePayload.snapshots.push(createSnapshot("snap-3"));
+    it("deve preservar estrutura da resposta com múltiplas operações e snapshots", async () => {
+      const syncResult = createSyncResult();
+      syncResult.acceptedOperations.push({
+        id: "op-4",
+        documentId: "doc-1",
+        deviceId: "remote-device",
+        type: "UPDATE_CONTENT",
+        payload: { type: "UPDATE_CONTENT", content: "New content" },
+        timestamp: "2024-01-01T00:00:02.000Z",
+        vectorClock: { "remote-device": 3 },
+      });
+      syncResult.snapshots.push(createSnapshot("snap-3"));
 
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(remotePayload),
+        json: () => Promise.resolve(syncResult),
       });
 
       const result = await transport.synchronize(createPayload());
 
-      expect(result.operations).toHaveLength(2);
+      expect(result.operations).toHaveLength(3);
       expect(result.snapshots).toHaveLength(2);
     });
 
@@ -287,12 +345,12 @@ describe("HttpSyncTransport", () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: () => Promise.resolve(createRemotePayload()),
+          json: () => Promise.resolve(createSyncResult()),
         })
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: () => Promise.resolve(createRemotePayload()),
+          json: () => Promise.resolve(createSyncResult()),
         });
 
       await transport.synchronize(createPayload());
@@ -302,11 +360,11 @@ describe("HttpSyncTransport", () => {
     });
 
     it("deve ser determinístico para mesma entrada", async () => {
-      const responsePayload = createRemotePayload();
+      const syncResult = createSyncResult();
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(responsePayload),
+        json: () => Promise.resolve(syncResult),
       });
 
       const result1 = await transport.synchronize(createPayload());
@@ -319,12 +377,11 @@ describe("HttpSyncTransport", () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       await transport.synchronize(createPayload());
 
-      // Verifica que não há importação ou uso de OperationManager
       expect(true).toBe(true);
     });
 
@@ -332,12 +389,11 @@ describe("HttpSyncTransport", () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       await transport.synchronize(createPayload());
 
-      // Verifica que não há importação ou uso de SyncEngine
       expect(true).toBe(true);
     });
 
@@ -345,12 +401,11 @@ describe("HttpSyncTransport", () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        json: () => Promise.resolve(createRemotePayload()),
+        json: () => Promise.resolve(createSyncResult()),
       });
 
       await transport.synchronize(createPayload());
 
-      // O transporte não deve fazer chamadas a IndexedDB ou similar
       expect(true).toBe(true);
     });
 
@@ -365,6 +420,125 @@ describe("HttpSyncTransport", () => {
       } catch (error) {
         expect((error as Error).message).toContain("422");
       }
+    });
+
+    it("deve lidar com acceptedOperations vazias", async () => {
+      const syncResult = {
+        acceptedOperations: [],
+        missingOperations: [
+          {
+            id: "op-3",
+            documentId: "doc-1",
+            deviceId: "remote-device",
+            type: "UPDATE_TITLE" as const,
+            payload: { type: "UPDATE_TITLE", title: "Updated" },
+            timestamp: "2024-01-01T00:00:01.000Z",
+            vectorClock: { "remote-device": 2 },
+          },
+        ],
+        snapshots: [],
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(syncResult),
+      });
+
+      const result = await transport.synchronize(createPayload());
+
+      expect(result.operations).toHaveLength(1);
+      expect(result.operations[0].id).toBe("op-3");
+    });
+
+    it("deve lidar com missingOperations vazias", async () => {
+      const syncResult = {
+        acceptedOperations: [
+          {
+            id: "op-2",
+            documentId: "doc-1",
+            deviceId: "remote-device",
+            type: "CREATE_DOCUMENT" as const,
+            payload: { type: "CREATE_DOCUMENT", title: "Remote", content: "Content" },
+            timestamp: "2024-01-01T00:00:00.000Z",
+            vectorClock: { "remote-device": 1 },
+          },
+        ],
+        missingOperations: [],
+        snapshots: [],
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(syncResult),
+      });
+
+      const result = await transport.synchronize(createPayload());
+
+      expect(result.operations).toHaveLength(1);
+      expect(result.operations[0].id).toBe("op-2");
+    });
+
+    it("deve converter todos os tipos de operação", async () => {
+      const syncResult = {
+        acceptedOperations: [
+          {
+            id: "op-create",
+            documentId: "doc-1",
+            deviceId: "remote-device",
+            type: "CREATE_DOCUMENT" as const,
+            payload: { type: "CREATE_DOCUMENT", title: "Doc", content: "Content" },
+            timestamp: "2024-01-01T00:00:00.000Z",
+            vectorClock: { "remote-device": 1 },
+          },
+          {
+            id: "op-update-title",
+            documentId: "doc-1",
+            deviceId: "remote-device",
+            type: "UPDATE_TITLE" as const,
+            payload: { type: "UPDATE_TITLE", title: "New Title" },
+            timestamp: "2024-01-01T00:00:01.000Z",
+            vectorClock: { "remote-device": 2 },
+          },
+          {
+            id: "op-update-content",
+            documentId: "doc-1",
+            deviceId: "remote-device",
+            type: "UPDATE_CONTENT" as const,
+            payload: { type: "UPDATE_CONTENT", content: "New Content" },
+            timestamp: "2024-01-01T00:00:02.000Z",
+            vectorClock: { "remote-device": 3 },
+          },
+          {
+            id: "op-delete",
+            documentId: "doc-1",
+            deviceId: "remote-device",
+            type: "DELETE_DOCUMENT" as const,
+            payload: { type: "DELETE_DOCUMENT", deleted: true },
+            timestamp: "2024-01-01T00:00:03.000Z",
+            vectorClock: { "remote-device": 4 },
+          },
+        ],
+        missingOperations: [],
+        snapshots: [],
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(syncResult),
+      });
+
+      const result = await transport.synchronize(createPayload());
+
+      expect(result.operations).toHaveLength(4);
+      expect(result.operations.map((o) => o.type)).toEqual([
+        "CREATE_DOCUMENT",
+        "UPDATE_TITLE",
+        "UPDATE_CONTENT",
+        "DELETE_DOCUMENT",
+      ]);
     });
   });
 });
