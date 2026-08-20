@@ -2,9 +2,12 @@ import fastify, { type FastifyInstance } from "fastify";
 import fastifyRateLimit from "@fastify/rate-limit";
 import { InMemoryOperationRepository } from "@infrastructure/persistence/server/InMemoryOperationRepository.js";
 import { PostgresOperationRepository } from "@infrastructure/persistence/postgres/PostgresOperationRepository.js";
+import { InMemoryDocumentOperationRepository } from "@infrastructure/persistence/document-operations/InMemoryDocumentOperationRepository.js";
+import { PostgresDocumentOperationRepository } from "@infrastructure/persistence/document-operations/PostgresDocumentOperationRepository.js";
 import { InMemoryDocumentAuthorizationRepository } from "@infrastructure/auth/InMemoryDocumentAuthorizationRepository.js";
 import { ApiKeyValidator, type ApiKeyEntry } from "@application/auth/ApiKeyValidator.js";
 import { registerSyncRoutes } from "./routes.js";
+import type { DocumentOperationRepository } from "@domain/document-operations/DocumentOperationRepository.js";
 
 /**
  * Cria o repositório de operações baseado na configuração.
@@ -21,6 +24,23 @@ async function createRepository(): Promise<InMemoryOperationRepository | Postgre
   }
 
   return new InMemoryOperationRepository();
+}
+
+/**
+ * Cria o repositório de operações de documento baseado na configuração.
+ *
+ * Prioridade:
+ * 1. Se DATABASE_URL estiver definido, usa PostgresDocumentOperationRepository
+ * 2. Caso contrário, usa InMemoryDocumentOperationRepository (desenvolvimento/testes)
+ */
+async function createDocumentRepository(): Promise<DocumentOperationRepository> {
+  const databaseUrl = process.env.DATABASE_URL;
+
+  if (databaseUrl) {
+    return await PostgresDocumentOperationRepository.create(databaseUrl);
+  }
+
+  return new InMemoryDocumentOperationRepository();
 }
 
 /**
@@ -97,10 +117,11 @@ export async function createServer(): Promise<FastifyInstance> {
   });
 
   const repository = await createRepository();
+  const documentRepository = await createDocumentRepository();
   const authzRepository = createAuthzRepository();
   const apiKeyValidator = createApiKeyValidator();
 
-  registerSyncRoutes(app, repository, authzRepository, apiKeyValidator);
+  registerSyncRoutes(app, repository, documentRepository, authzRepository, apiKeyValidator);
 
   app.get("/health", async () => {
     // Se usa PostgreSQL, verifica conexão
@@ -116,6 +137,9 @@ export async function createServer(): Promise<FastifyInstance> {
     app.log.info("Shutting down...");
     if (repository instanceof PostgresOperationRepository) {
       await repository.close();
+    }
+    if (documentRepository instanceof PostgresDocumentOperationRepository) {
+      await documentRepository.close();
     }
     await app.close();
   };

@@ -1,11 +1,13 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply, FastifyError } from "fastify";
-import { SyncService, DocumentAccessDeniedError } from "@application/sync/SyncService.js";
+import { SyncService, DocumentSyncService, DocumentAccessDeniedError } from "@application/sync/SyncService.js";
 import type { ServerOperationRepository } from "@domain/sync/ServerOperationRepository.js";
+import type { DocumentOperationRepository } from "@domain/document-operations/DocumentOperationRepository.js";
 import type { DocumentAuthorizationRepository } from "@domain/auth/DocumentAuthorizationRepository.js";
 import type { AuthContext } from "@domain/auth/AuthContext.js";
 import { ApiKeyValidator, InvalidApiKeyError } from "@application/auth/ApiKeyValidator.js";
 import type { Operation } from "@domain/operations/Operation.js";
 import { OperationSerializer } from "@domain/operations/OperationSerializer.js";
+import type { SyncPayload, SyncResult, SyncOperation } from "../../types/sync.js";
 
 const SYNC_RATE_LIMIT_MAX = parseInt(process.env.SYNC_RATE_LIMIT_MAX ?? "100", 10);
 const SYNC_RATE_LIMIT_WINDOW = process.env.SYNC_RATE_LIMIT_WINDOW ?? "1 minute";
@@ -65,10 +67,12 @@ declare module "fastify" {
 export function registerSyncRoutes(
   app: FastifyInstance,
   repository: ServerOperationRepository,
+  documentRepository: DocumentOperationRepository,
   authzRepository: DocumentAuthorizationRepository,
   apiKeyValidator: ApiKeyValidator,
 ): void {
   const syncService = new SyncService(repository, authzRepository);
+  const documentSyncService = new DocumentSyncService(documentRepository);
   const serializer = new OperationSerializer();
 
   // Request ID hook para correlação de logs
@@ -555,6 +559,223 @@ export function registerSyncRoutes(
         }, "Sync pull error");
         throw error;
       }
+    },
+  );
+
+  /**
+   * POST /sync
+   *
+   * Endpoint unificado de sincronização para operações de documento (DocumentOperation).
+   *
+   * Recebe um SyncPayload completo do cliente e retorna um SyncResult contendo:
+   * - acceptedOperations: operações novas aceitas pelo servidor
+   * - missingOperations: operações que o servidor possui e o cliente não tem
+   * - snapshots: sempre array vazio (implementação futura)
+   *
+   * Requer autenticação via header Authorization: Bearer <api-key>
+   *
+   * Request body (SyncPayload):
+   * {
+   *   "deviceId": "device-A",
+   *   "operations": [
+   *     {
+   *       "id": "uuid",
+   *       "documentId": "doc-1",
+   *       "deviceId": "device-A",
+   *       "type": "CREATE_DOCUMENT",
+   *       "payload": { "title": "Doc", "content": "Content" },
+   *       "timestamp": "2024-01-15T10:30:00.000Z",
+   *       "vectorClock": { "device-A": 1 }
+   *     }
+   *   ],
+   *   "snapshots": []
+   * }
+   *
+   * Response 200 (SyncResult):
+   * {
+   *   "acceptedOperations": [...],
+   *   "missingOperations": [...],
+   *   "snapshots": []
+   * }
+   *
+   * Erros:
+   * - 401: Não autenticado
+   * - 400: Payload inválido (estrutura ou campos obrigatórios ausentes)
+   * - 500: Erro interno do servidor
+   */
+  app.post<{ Body: SyncPayload }>(
+    "/sync",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["deviceId", "operations", "snapshots"],
+          properties: {
+            deviceId: { type: "string" },
+            operations: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["id", "documentId", "deviceId", "type", "payload", "timestamp", "vectorClock"],
+                properties: {
+                  id: { type: "string" },
+                  documentId: { type: "string" },
+                  deviceId: { type: "string" },
+                  type: { type: "string", enum: ["CREATE_DOCUMENT", "UPDATE_TITLE", "UPDATE_CONTENT", "DELETE_DOCUMENT"] },
+                  payload: { type: "object" },
+                  timestamp: { type: "string", format: "date-time" },
+                  vectorClock: { type: "object", additionalProperties: { type: "number" } },
+                },
+              },
+            },
+            snapshots: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  documentId: { type: "string" },
+                  document: {
+                    type: "object",
+                    properties: {
+                      id: { type: "string" },
+                      title: { type: "string" },
+                      content: { type: "string" },
+                    },
+                  },
+                  operationCount: { type: "number" },
+                  createdAt: { type: "string", format: "date-time" },
+                  updatedAt: { type: "string", format: "date-time" },
+                  vectorClock: { type: "object", additionalProperties: { type: "number" } },
+                },
+              },
+            },
+          },
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              acceptedOperations: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    documentId: { type: "string" },
+                    deviceId: { type: "string" },
+                    type: { type: "string", enum: ["CREATE_DOCUMENT", "UPDATE_TITLE", "UPDATE_CONTENT", "DELETE_DOCUMENT"] },
+                    payload: { type: "object" },
+                    timestamp: { type: "string", format: "date-time" },
+                    vectorClock: { type: "object", additionalProperties: { type: "number" } },
+                  },
+                },
+              },
+              missingOperations: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    documentId: { type: "string" },
+                    deviceId: { type: "string" },
+                    type: { type: "string", enum: ["CREATE_DOCUMENT", "UPDATE_TITLE", "UPDATE_CONTENT", "DELETE_DOCUMENT"] },
+                    payload: { type: "object" },
+                    timestamp: { type: "string", format: "date-time" },
+                    vectorClock: { type: "object", additionalProperties: { type: "number" } },
+                  },
+                },
+              },
+              snapshots: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    documentId: { type: "string" },
+                    document: {
+                      type: "object",
+                      properties: {
+                        id: { type: "string" },
+                        title: { type: "string" },
+                        content: { type: "string" },
+                      },
+                    },
+                    operationCount: { type: "number" },
+                    createdAt: { type: "string", format: "date-time" },
+                    updatedAt: { type: "string", format: "date-time" },
+                    vectorClock: { type: "object", additionalProperties: { type: "number" } },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+            },
+          },
+          401: {
+            type: "object",
+            properties: {
+              error: { type: "string" },
+              message: { type: "string" },
+            },
+          },
+        },
+      },
+      preHandler: authenticate,
+      config: {
+        rateLimit: rateLimitConfig,
+      },
+    },
+    async (request, reply) => {
+      const payload = request.body as SyncPayload;
+      const authContext = request.authContext!;
+      const startTime = Date.now();
+
+      // Log estruturado do sync recebido
+      const operationSummary = payload.operations.map((op: SyncOperation) => ({
+        id: op.id,
+        documentId: op.documentId,
+        deviceId: op.deviceId,
+        type: op.type,
+      }));
+
+      app.log.info({
+        requestId: request.requestId,
+        clientId: authContext.clientId,
+        deviceId: authContext.deviceId,
+        operationCount: payload.operations.length,
+        snapshotCount: payload.snapshots.length,
+        operations: operationSummary,
+      }, "Sync received");
+
+      let result: SyncResult;
+      try {
+        result = await documentSyncService.synchronize(payload);
+      } catch (error) {
+        app.log.error({
+          requestId: request.requestId,
+          clientId: authContext.clientId,
+          deviceId: authContext.deviceId,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        }, "Sync service error");
+        throw error;
+      }
+
+      app.log.info({
+        requestId: request.requestId,
+        clientId: authContext.clientId,
+        deviceId: authContext.deviceId,
+        acceptedCount: result.acceptedOperations.length,
+        missingCount: result.missingOperations.length,
+        snapshotCount: result.snapshots.length,
+        durationMs: Date.now() - startTime,
+      }, "Sync completed");
+
+      return reply.send(result);
     },
   );
 }

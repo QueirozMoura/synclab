@@ -64,13 +64,15 @@ export class DocumentAccessDeniedError extends Error {
 }
 
 /**
- * Serviço de sincronização do lado do servidor.
+ * Serviço de sincronização do lado do servidor (legado - baseado em Operation/CRDT).
  *
  * Coordena:
  * - Push: recebe operações do cliente, valida, deduplica, armazena
  * - Pull: retorna operações que o cliente ainda não possui
  *
  * A camada HTTP apenas transporta dados; regras de negócio ficam aqui.
+ *
+ * @deprecated Use DocumentSyncService para sincronização baseada em DocumentOperation
  */
 export class SyncService {
   private readonly repository: ServerOperationRepository;
@@ -301,5 +303,150 @@ export class SyncService {
    */
   deserializeOperations(data: ReturnType<OperationSerializer["serialize"]>[]): Operation[] {
     return data.map((d) => this.serializer.deserialize(d));
+  }
+}
+
+import type { DocumentOperationRepository } from "@domain/document-operations/DocumentOperationRepository.js";
+import type { DocumentOperation } from "@domain/document-operations/DocumentOperation.js";
+import { DocumentOperationAdapter } from "./DocumentOperationAdapter.js";
+import type { SyncPayload, SyncResult } from "../../types/sync.js";
+import type { SyncOperation } from "../../types/syncOperation.js";
+
+/**
+ * Serviço de sincronização para operações de documento (DocumentOperation).
+ *
+ * Fluxo:
+ * SyncPayload → SyncService → DocumentOperationAdapter → DocumentOperation → DocumentOperationRepository → SyncResult
+ *
+ * Este serviço NÃO usa HTTP - é destinado para transporte via WebRTC ou outros meios.
+ */
+export class DocumentSyncService {
+  private readonly repository: DocumentOperationRepository;
+
+  constructor(repository: DocumentOperationRepository) {
+    this.repository = repository;
+  }
+
+  async synchronize(payload: SyncPayload): Promise<SyncResult> {
+    this.validatePayload(payload);
+
+    const domainOperations = this.convertOperations(payload.operations);
+
+    const newOperations = await this.identifyNewOperations(domainOperations);
+
+    await this.persistNewOperations(newOperations);
+
+    const acceptedOperations = this.determineAcceptedOperations(payload.operations, newOperations);
+
+    const missingOperations = await this.findMissingOperations(payload.operations);
+
+    return {
+      acceptedOperations,
+      missingOperations,
+      snapshots: [],
+    };
+  }
+
+  private validatePayload(payload: SyncPayload): void {
+    if (!payload || typeof payload !== "object") {
+      throw new Error("SyncPayload is required and must be an object");
+    }
+
+    if (!payload.deviceId || typeof payload.deviceId !== "string") {
+      throw new Error("deviceId is required and must be a string");
+    }
+
+    if (!Array.isArray(payload.operations)) {
+      throw new Error("operations is required and must be an array");
+    }
+
+    if (!Array.isArray(payload.snapshots)) {
+      throw new Error("snapshots is required and must be an array");
+    }
+  }
+
+  private convertOperations(syncOperations: readonly SyncOperation[]): DocumentOperation[] {
+    const domainOperations: DocumentOperation[] = [];
+
+    for (const syncOp of syncOperations) {
+      const result = DocumentOperationAdapter.tryAdapt(syncOp);
+      if (!result.success) {
+        throw new Error(
+          `Failed to adapt operation ${syncOp.id}: ${result.error.message}`,
+        );
+      }
+      domainOperations.push(result.operation);
+    }
+
+    return domainOperations;
+  }
+
+  private async identifyNewOperations(
+    domainOperations: readonly DocumentOperation[],
+  ): Promise<DocumentOperation[]> {
+    const newOperations: DocumentOperation[] = [];
+    const seenIds = new Set<string>();
+
+    for (const operation of domainOperations) {
+      if (seenIds.has(operation.id)) {
+        continue;
+      }
+      const exists = await this.repository.has(operation.id);
+      if (!exists) {
+        seenIds.add(operation.id);
+        newOperations.push(operation);
+      }
+    }
+
+    return newOperations;
+  }
+
+  private async persistNewOperations(newOperations: readonly DocumentOperation[]): Promise<void> {
+    if (newOperations.length > 0) {
+      await this.repository.saveMany(newOperations);
+    }
+  }
+
+  private determineAcceptedOperations(
+    syncOperations: readonly SyncOperation[],
+    newOperations: readonly DocumentOperation[],
+  ): SyncOperation[] {
+    const newOperationIds = new Set(newOperations.map((op) => op.id));
+    const seenIds = new Set<string>();
+
+    return syncOperations.filter((op) => {
+      if (seenIds.has(op.id)) {
+        return false;
+      }
+      if (newOperationIds.has(op.id)) {
+        seenIds.add(op.id);
+        return true;
+      }
+      return false;
+    });
+  }
+
+  private async findMissingOperations(
+    syncOperations: readonly SyncOperation[],
+  ): Promise<SyncOperation[]> {
+    const knownIds = new Set(syncOperations.map((op) => op.id));
+    const allOperations = await this.repository.getAll();
+
+    const missingDomainOps = allOperations.filter((op) => !knownIds.has(op.id));
+
+    return missingDomainOps.map(this.domainToSyncOperation);
+  }
+
+  private domainToSyncOperation(domainOp: DocumentOperation): SyncOperation {
+    const syncOp: SyncOperation = {
+      id: domainOp.id,
+      documentId: domainOp.documentId,
+      deviceId: domainOp.deviceId,
+      type: domainOp.type as unknown as SyncOperation["type"],
+      payload: domainOp.payload as unknown as SyncOperation["payload"],
+      timestamp: domainOp.timestamp,
+      vectorClock: Object.freeze({ ...domainOp.vectorClock }),
+    };
+    return Object.freeze(syncOp);
   }
 }

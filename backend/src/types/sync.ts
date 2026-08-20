@@ -1,6 +1,8 @@
 import type { ClockMap } from "@domain/vector-clock/types.js";
 import type { SyncOperation } from "./syncOperation.js";
 
+export type { SyncOperation, SyncOperationType, SyncOperationPayload, CreateDocumentPayload, UpdateTitlePayload, UpdateContentPayload, DeleteDocumentPayload } from "./syncOperation.js";
+
 export interface DocumentSnapshot {
   documentId: string;
   document: Document;

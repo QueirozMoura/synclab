@@ -2,12 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fastify, { type FastifyInstance } from "fastify";
 import fastifyRateLimit from "@fastify/rate-limit";
 import { InMemoryOperationRepository } from "@infrastructure/persistence/server/InMemoryOperationRepository.js";
+import { InMemoryDocumentOperationRepository } from "@infrastructure/persistence/document-operations/InMemoryDocumentOperationRepository.js";
 import { InMemoryDocumentAuthorizationRepository } from "@infrastructure/auth/InMemoryDocumentAuthorizationRepository.js";
 import { ApiKeyValidator } from "@application/auth/ApiKeyValidator.js";
 import { registerSyncRoutes } from "@transport/http/routes.js";
 import { VectorClock } from "@domain/vector-clock/VectorClock.js";
 import { OperationType, createElementId } from "@domain/operations/types.js";
 import type { Operation } from "@domain/operations/Operation.js";
+import { SyncOperationType } from "../src/types/syncOperation.js";
 import { OperationSerializer } from "@domain/operations/OperationSerializer.js";
 
 const SYNC_RATE_LIMIT_MAX = parseInt(process.env.SYNC_RATE_LIMIT_MAX ?? "100", 10);
@@ -45,6 +47,23 @@ function remove(
   };
 }
 
+function createSyncOperation(
+  type: SyncOperationType,
+  payload: any,
+  overrides: Partial<any> = {},
+) {
+  return {
+    id: "op-1",
+    documentId: "doc-1",
+    deviceId: "device-A",
+    type,
+    payload,
+    timestamp: "2024-01-15T10:30:00.000Z",
+    vectorClock: { "device-A": 1 },
+    ...overrides,
+  };
+}
+
 // API Key padrão para testes: client-A / device-A
 const TEST_API_KEY = "dev-key-client-A-device-A";
 const AUTH_HEADER = { authorization: `Bearer ${TEST_API_KEY}` };
@@ -52,6 +71,7 @@ const AUTH_HEADER = { authorization: `Bearer ${TEST_API_KEY}` };
 describe("HTTP Sync Routes", () => {
   let app: FastifyInstance;
   let repository: InMemoryOperationRepository;
+  let documentRepository: InMemoryDocumentOperationRepository;
   let authzRepository: InMemoryDocumentAuthorizationRepository;
   let apiKeyValidator: ApiKeyValidator;
   let serializer: OperationSerializer;
@@ -70,6 +90,7 @@ describe("HTTP Sync Routes", () => {
       hook: "preHandler",
     });
     repository = new InMemoryOperationRepository();
+    documentRepository = new InMemoryDocumentOperationRepository();
     authzRepository = new InMemoryDocumentAuthorizationRepository();
     authzRepository.grantAccess("client-A", ["doc-1", "doc-2", "doc-inexistente"]);
     authzRepository.grantAccess("client-B", ["doc-3"]);
@@ -80,7 +101,7 @@ describe("HTTP Sync Routes", () => {
     ]);
     serializer = new OperationSerializer();
 
-    registerSyncRoutes(app, repository, authzRepository, apiKeyValidator);
+    registerSyncRoutes(app, repository, documentRepository, authzRepository, apiKeyValidator);
     await app.ready();
   });
 
@@ -96,6 +117,466 @@ describe("HTTP Sync Routes", () => {
       headers: { ...options.headers, ...AUTH_HEADER },
     });
   }
+
+  function injectSync(options: { method: string; url: string; payload?: any }) {
+    return app.inject({
+      ...options,
+      headers: { ...options.headers, ...AUTH_HEADER, "content-type": "application/json" },
+    });
+  }
+
+  describe("POST /sync", () => {
+    it("payload vazio válido retorna acceptedOperations e missingOperations vazios", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(body.acceptedOperations).toEqual([]);
+      expect(body.missingOperations).toEqual([]);
+      expect(body.snapshots).toEqual([]);
+    });
+
+    it("uma operação válida CREATE_DOCUMENT é aceita", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "New Doc",
+            content: "Content",
+          }, { id: "op-1" }),
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(body.acceptedOperations).toHaveLength(1);
+      expect(body.acceptedOperations[0].id).toBe("op-1");
+      expect(body.acceptedOperations[0].type).toBe(SyncOperationType.CREATE_DOCUMENT);
+      expect(body.missingOperations).toEqual([]);
+      expect(body.snapshots).toEqual([]);
+    });
+
+    it("múltiplas operações válidas são aceitas", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 1",
+            content: "Content 1",
+          }, { id: "op-1" }),
+          createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+            type: SyncOperationType.UPDATE_TITLE,
+            title: "Updated Title",
+          }, { id: "op-2" }),
+          createSyncOperation(SyncOperationType.UPDATE_CONTENT, {
+            type: SyncOperationType.UPDATE_CONTENT,
+            content: "Updated Content",
+          }, { id: "op-3" }),
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(body.acceptedOperations).toHaveLength(3);
+      expect(body.acceptedOperations.map((o) => o.id).sort()).toEqual(["op-1", "op-2", "op-3"]);
+    });
+
+    it("snapshots no payload são aceitos e retornados vazios", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc",
+            content: "Content",
+          }, { id: "op-1" }),
+        ],
+        snapshots: [
+          {
+            documentId: "doc-1",
+            document: { id: "doc-1", title: "Doc", content: "Content" },
+            operationCount: 1,
+            createdAt: "2024-01-15T10:30:00.000Z",
+            updatedAt: "2024-01-15T10:30:00.000Z",
+            vectorClock: { "device-A": 1 },
+          },
+        ],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[]; missingOperations: any[]; snapshots: any[] };
+      expect(body.acceptedOperations).toHaveLength(1);
+      expect(body.snapshots).toEqual([]);
+    });
+
+    it("resposta possui acceptedOperations, missingOperations e snapshots", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc",
+            content: "Content",
+          }, { id: "op-1" }),
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body).toHaveProperty("acceptedOperations");
+      expect(body).toHaveProperty("missingOperations");
+      expect(body).toHaveProperty("snapshots");
+      expect(Array.isArray(body.acceptedOperations)).toBe(true);
+      expect(Array.isArray(body.missingOperations)).toBe(true);
+      expect(Array.isArray(body.snapshots)).toBe(true);
+    });
+
+    it("operação duplicada não é aceita novamente", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc",
+            content: "Content",
+          }, { id: "op-1" }),
+        ],
+        snapshots: [],
+      };
+
+      // Primeira sincronização
+      const response1 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+      expect(response1.statusCode).toBe(200);
+      const body1 = response1.json() as { acceptedOperations: any[] };
+      expect(body1.acceptedOperations).toHaveLength(1);
+
+      // Segunda sincronização com mesmo payload
+      const response2 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+      expect(response2.statusCode).toBe(200);
+      const body2 = response2.json() as { acceptedOperations: any[]; missingOperations: any[] };
+      expect(body2.acceptedOperations).toHaveLength(0);
+      expect(body2.missingOperations).toEqual([]);
+    });
+
+    it("múltiplos documentos são sincronizados independentemente", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 1",
+            content: "Content 1",
+          }, { id: "op-1", documentId: "doc-1" }),
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 2",
+            content: "Content 2",
+          }, { id: "op-2", documentId: "doc-2" }),
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[]; missingOperations: any[] };
+      expect(body.acceptedOperations).toHaveLength(2);
+      expect(body.acceptedOperations.map((o) => o.documentId).sort()).toEqual(["doc-1", "doc-2"]);
+    });
+
+    it("múltiplos dispositivos são sincronizados", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "From A",
+            content: "Content",
+          }, { id: "op-1", deviceId: "device-A" }),
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "From B",
+            content: "Content",
+          }, { id: "op-2", deviceId: "device-B" }),
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[] };
+      expect(body.acceptedOperations).toHaveLength(2);
+    });
+
+    it("payload inválido retorna 400", async () => {
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: { deviceId: "device-A" }, // operations e snapshots ausentes
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json() as { error: string; message: string };
+      expect(body.error).toBe("Bad Request");
+    });
+
+    it("deviceId ausente retorna 400", async () => {
+      const payload = {
+        operations: [],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json() as { error: string; message: string };
+      expect(body.error).toBe("Bad Request");
+    });
+
+    it("operations ausente retorna 400", async () => {
+      const payload = {
+        deviceId: "device-A",
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("operations não sendo array retorna 400", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: "not-an-array",
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("snapshots não sendo array retorna 400", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [],
+        snapshots: "not-an-array",
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("erro do DocumentSyncService é propagado", async () => {
+      // Enviar operação com vectorClock inválido (passa schema mas falha no adapter)
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc",
+            content: "Content",
+          }, { id: "op-1", vectorClock: { "": 1 } }), // chave vazia no vectorClock
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(500);
+      const body = response.json() as { error: string; message: string };
+      expect(body.error).toBe("Internal Server Error");
+    });
+
+    it("serviço é chamado corretamente com payload do cliente", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc",
+            content: "Content",
+          }, { id: "op-1" }),
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[] };
+      expect(body.acceptedOperations[0].id).toBe("op-1");
+      expect(body.acceptedOperations[0].documentId).toBe("doc-1");
+      expect(body.acceptedOperations[0].deviceId).toBe("device-A");
+    });
+
+    it("rota não duplica lógica de sincronização - delega para DocumentSyncService", async () => {
+      // Verificar que a rota apenas delega para o serviço
+      // Enviando operações para criar estado no servidor
+      const initialPayload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Server Doc",
+            content: "Content",
+          }, { id: "server-op-1" }),
+        ],
+        snapshots: [],
+      };
+
+      await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: initialPayload,
+      });
+
+      // Agora cliente envia apenas uma nova operação (não conhece a operação do servidor)
+      const clientPayload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+            type: SyncOperationType.UPDATE_TITLE,
+            title: "New Title",
+          }, { id: "client-op-1" }),
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: clientPayload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[]; missingOperations: any[] };
+      // Apenas a nova operação deve ser aceita
+      expect(body.acceptedOperations).toHaveLength(1);
+      expect(body.acceptedOperations[0].id).toBe("client-op-1");
+      // A operação do servidor deve aparecer em missingOperations (cliente não a conhece)
+      expect(body.missingOperations).toHaveLength(1);
+      expect(body.missingOperations[0].id).toBe("server-op-1");
+    });
+
+    it("determinismo: mesmo payload produz mesmo resultado", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc",
+            content: "Content",
+          }, { id: "op-1" }),
+        ],
+        snapshots: [],
+      };
+
+      const response1 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      const response2 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response1.statusCode).toBe(200);
+      expect(response2.statusCode).toBe(200);
+
+      const body1 = response1.json();
+      const body2 = response2.json();
+
+      // Primeira chamada aceita, segunda não aceita (já existe)
+      // mas missingOperations deve ser igual
+      expect(body1.missingOperations).toEqual(body2.missingOperations);
+      expect(body1.snapshots).toEqual(body2.snapshots);
+    });
+  });
 
   describe("POST /sync/push", () => {
     it("aceita operação INSERT válida", async () => {
