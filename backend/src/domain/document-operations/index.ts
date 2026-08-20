@@ -22,3 +22,5 @@ export {
   isDeleteDocumentOperation,
   documentOperationToVectorClock,
 } from "./DocumentOperation.js";
+
+export type { DocumentOperationRepository } from "./DocumentOperationRepository.js";
