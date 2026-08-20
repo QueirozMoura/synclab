@@ -2,7 +2,7 @@ import { getDeviceId } from "./deviceIdentity";
 import { VectorClock } from "./vectorClock";
 import { OperationLog } from "./operationLog";
 import { createOperation } from "./operationFactory";
-import { getAllOperations, putOperation, getSnapshot, putSnapshot } from "./indexedDb";
+import { getAllOperations, putOperation, getSnapshot, putSnapshot, getAllSnapshots } from "./indexedDb";
 import { reconstructDocument } from "./documentStateEngine";
 import { orderOperations } from "./operationOrdering";
 import { reduceOperations } from "./documentReducer";
@@ -36,6 +36,14 @@ export class OperationManager {
       for (const op of storedOperations) {
         const opClock = VectorClock.from(op.vectorClock.toMap());
         this.vectorClock = this.vectorClock.merge(opClock);
+      }
+    } else {
+      const snapshots = await getAllSnapshots();
+      for (const snapshot of snapshots) {
+        if (snapshot.vectorClock) {
+          const snapshotClock = VectorClock.from(snapshot.vectorClock);
+          this.vectorClock = this.vectorClock.merge(snapshotClock);
+        }
       }
     }
     this.initialized = true;
@@ -76,7 +84,7 @@ export class OperationManager {
       if (operations.length % SNAPSHOT_INTERVAL === 0) {
         const document = this.reconstructDocument(documentId);
         if (document) {
-          const snapshot = createDocumentSnapshot(documentId, document, operations.length);
+          const snapshot = createDocumentSnapshot(documentId, document, operations.length, this.vectorClock);
           putSnapshot(snapshot)
             .then(() => {
               return compactPersistedOperations(operations, snapshot);
