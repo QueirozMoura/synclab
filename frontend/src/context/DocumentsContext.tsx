@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
 import type { Document } from "../types/document";
+import type { SyncPayload, SyncResult } from "../types/sync";
 import { DocumentsContext } from "./DocumentsContextType";
 import { getAllDocuments, putDocument, deleteDocument as deleteDocumentIdb } from "../lib/indexedDb";
 import { useOperationManager } from "../hooks/useOperationManager";
@@ -11,6 +12,8 @@ export interface DocumentsContextType {
   getDocument: (id: string) => Document | undefined;
   updateDocument: (id: string, data: Partial<Document>) => void;
   deleteDocument: (id: string) => void;
+  synchronizeDocument: (documentId: string, remotePayload: SyncPayload) => Promise<Document | null>;
+  synchronizeAll: (remotePayload: SyncPayload) => Promise<SyncResult>;
 }
 
 const initialDocuments: Document[] = [
@@ -201,7 +204,7 @@ open http://localhost:3000
 export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { createOperation } = useOperationManager();
+  const { createOperation, synchronizeDocument: syncDoc, synchronize, reconstructSyncedDocument } = useOperationManager();
 
   useEffect(() => {
     let mounted = true;
@@ -305,6 +308,75 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
   }, [createOperation]);
 
+  const synchronizeDocument = useCallback(
+    async (documentId: string, remotePayload: SyncPayload): Promise<Document | null> => {
+      const { document } = await syncDoc(documentId, remotePayload);
+
+      if (document) {
+        setDocuments((prev) =>
+          prev.map((doc) => (doc.id === documentId ? document : doc))
+        );
+        await putDocument(document);
+      } else {
+        setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+      }
+
+      return document;
+    },
+    [syncDoc]
+  );
+
+  const synchronizeAll = useCallback(
+    async (remotePayload: SyncPayload): Promise<SyncResult> => {
+      const syncResult = await synchronize(remotePayload);
+
+      const affectedDocIds = new Set<string>();
+
+      for (const op of syncResult.acceptedOperations) {
+        affectedDocIds.add(op.documentId);
+      }
+
+      for (const snapshot of syncResult.snapshots) {
+        affectedDocIds.add(snapshot.documentId);
+      }
+
+      const reconstructedDocs = new Map<string, Document | null>();
+
+      for (const docId of affectedDocIds) {
+        const reconstructed = reconstructSyncedDocument(docId);
+        reconstructedDocs.set(docId, reconstructed);
+      }
+
+      const updates: Array<{ docId: string; doc: Document | null }> = [];
+      for (const [docId, doc] of reconstructedDocs) {
+        updates.push({ docId, doc });
+      }
+
+      for (const { doc } of updates) {
+        if (doc) {
+          await putDocument(doc);
+        }
+      }
+
+      setDocuments((prev) => {
+        const docMap = new Map(prev.map((d) => [d.id, d]));
+
+        for (const { docId, doc } of updates) {
+          if (doc) {
+            docMap.set(docId, doc);
+          } else {
+            docMap.delete(docId);
+          }
+        }
+
+        return Array.from(docMap.values());
+      });
+
+      return syncResult;
+    },
+    [synchronize, reconstructSyncedDocument]
+  );
+
   const value = useMemo(
     () => ({
       documents,
@@ -313,8 +385,10 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       getDocument,
       updateDocument,
       deleteDocument,
+      synchronizeDocument,
+      synchronizeAll,
     }),
-    [documents, isLoading, createDocument, getDocument, updateDocument, deleteDocument]
+    [documents, isLoading, createDocument, getDocument, updateDocument, deleteDocument, synchronizeDocument, synchronizeAll]
   );
 
   return <DocumentsContext.Provider value={value}>{children}</DocumentsContext.Provider>;

@@ -49,6 +49,13 @@ export const OperationManagerProvider: React.FC<{ children: ReactNode }> = ({ ch
     [manager]
   );
 
+  const reconstructSyncedDocument = useCallback(
+    (documentId: string): Document | null => {
+      return manager.reconstructSyncedDocument(documentId);
+    },
+    [manager]
+  );
+
   const value = useMemo(
     () => ({
       createOperation,
@@ -56,8 +63,9 @@ export const OperationManagerProvider: React.FC<{ children: ReactNode }> = ({ ch
       getOperationsForDocument,
       synchronize,
       synchronizeDocument,
+      reconstructSyncedDocument,
     }),
-    [createOperation, getOperations, getOperationsForDocument, synchronize, synchronizeDocument]
+    [createOperation, getOperations, getOperationsForDocument, synchronize, synchronizeDocument, reconstructSyncedDocument]
   );
 
   return <OperationManagerContext.Provider value={value}>{children}</OperationManagerContext.Provider>;

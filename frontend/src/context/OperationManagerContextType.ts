@@ -12,6 +12,7 @@ export interface OperationManagerContextType {
     syncResult: SyncResult;
     document: Document | null;
   }>;
+  reconstructSyncedDocument: (documentId: string) => Document | null;
 }
 
 export const OperationManagerContext = createContext<OperationManagerContextType | undefined>(undefined);
