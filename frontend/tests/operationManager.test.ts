@@ -1486,17 +1486,6 @@ beforeEach(() => {
   });
 
   describe("synchronize", () => {
-    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
-      id,
-      documentId: "doc-1",
-      deviceId: "test-device-id",
-      type: "CREATE_DOCUMENT",
-      payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
-      timestamp: "2024-01-01T00:00:00.000Z",
-      vectorClock: VectorClock.from({ "test-device-id": 1 }),
-      ...overrides,
-    });
-
     const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
       id,
       title: "Test",
@@ -2737,29 +2726,8 @@ it("deve lidar com duplicatas", async () => {
   });
 
   describe("synchronizeDocument", () => {
-    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
-      id,
-      documentId: "doc-1",
-      deviceId: "test-device-id",
-      type: "CREATE_DOCUMENT",
-      payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
-      timestamp: "2024-01-01T00:00:00.000Z",
-      vectorClock: VectorClock.from({ "test-device-id": 1 }),
-      ...overrides,
-    });
-
-    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
-      documentId: id,
-      id,
-      title: "Test",
-      content: "Content",
-      createdAt: "2024-01-01T00:00:00.000Z",
-      updatedAt: "2024-01-01T00:00:00.000Z",
-      operationCount: 10,
-      vectorClock: { "test-device-id": 1 },
-      ...overrides,
-    });
-
+    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({ id, documentId: "doc-1", deviceId: "test-device-id", type: "CREATE_DOCUMENT", payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" }, timestamp: "2024-01-01T00:00:00.000Z", vectorClock: VectorClock.from({ "test-device-id": 1 }), ...overrides });
+    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({ documentId: id, id, title: "Test", content: "Content", createdAt: "2024-01-01T00:00:00.000Z", updatedAt: "2024-01-01T00:00:00.000Z", operationCount: 10, vectorClock: { "test-device-id": 1 }, ...overrides });
     const createRemotePayload = (operations: Operation[] = [], snapshots: DocumentSnapshot[] = []): SyncPayload => ({
       deviceId: "remote-device",
       operations,
@@ -3150,7 +3118,6 @@ it("deve lidar com duplicatas", async () => {
       vectorClock: VectorClock.from({ "test-device-id": 1 }),
       ...overrides,
     });
-
     const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
       documentId: id,
       id,
@@ -3162,7 +3129,6 @@ it("deve lidar com duplicatas", async () => {
       vectorClock: { "test-device-id": 1 },
       ...overrides,
     });
-
     const createRemotePayload = (operations: Operation[] = [], snapshots: DocumentSnapshot[] = []): SyncPayload => ({
       deviceId: "remote-device",
       operations,
@@ -3185,6 +3151,7 @@ it("deve lidar com duplicatas", async () => {
       }
 
       async synchronize(payload: SyncPayload): Promise<SyncPayload> {
+        void payload;
         this.callCount++;
         this.lastPayload = {
           deviceId: payload.deviceId,
@@ -3287,7 +3254,16 @@ it("deve lidar com duplicatas", async () => {
       const manager = new OperationManager();
       manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
-      const localSnapshot = createSnapshot("doc-1", { documentId: "doc-1", updatedAt: "2024-01-01T00:00:00.000Z" });
+      const localSnapshot = {
+        documentId: "doc-1",
+        id: "doc-1",
+        title: "Test",
+        content: "Content",
+        createdAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+        operationCount: 10,
+        vectorClock: { "test-device-id": 1 },
+      } satisfies DocumentSnapshot;
       vi.mocked(getAllSnapshots).mockResolvedValue([localSnapshot]);
 
       const transport = new MockSyncTransport(createRemotePayload([], []));
@@ -3565,18 +3541,6 @@ it("deve lidar com duplicatas", async () => {
   });
 
   describe("resiliência - falha de transporte", () => {
-    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
-      documentId: id,
-      id,
-      title: "Test",
-      content: "Content",
-      createdAt: "2024-01-01T00:00:00.000Z",
-      updatedAt: "2024-01-01T00:00:00.000Z",
-      operationCount: 10,
-      vectorClock: { "test-device-id": 1 },
-      ...overrides,
-    });
-
     const createRemotePayload = (operations: Operation[] = [], snapshots: DocumentSnapshot[] = []): SyncPayload => ({
       deviceId: "remote-device",
       operations,
@@ -3594,6 +3558,7 @@ it("deve lidar com duplicatas", async () => {
       }
 
       async synchronize(_payload: SyncPayload): Promise<SyncPayload> {
+        void _payload;
         this.callCount++;
         if (this.shouldFail) {
           throw this.failError;
@@ -3742,7 +3707,6 @@ it("deve lidar com duplicatas", async () => {
       vectorClock: VectorClock.from({ "test-device-id": 1 }),
       ...overrides,
     });
-
     const createRemotePayload = (operations: Operation[] = [], snapshots: DocumentSnapshot[] = []): SyncPayload => ({
       deviceId: "remote-device",
       operations,
@@ -3773,6 +3737,7 @@ it("deve lidar com duplicatas", async () => {
       }
 
       async synchronize(_payload: SyncPayload): Promise<SyncPayload> {
+        void _payload;
         this.callCount++;
         if (this.failCount < this.maxFailures) {
           this.failCount++;
@@ -3792,7 +3757,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("operações são aceitas corretamente no retry", async () => {
       const manager = new OperationManager();
-      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new RetryMockTransport(createRemotePayload([remoteOp], []), 1);
@@ -3814,7 +3779,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("nenhuma operação duplicada no retry", async () => {
       const manager = new OperationManager();
-      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new RetryMockTransport(createRemotePayload([remoteOp], []), 2);
@@ -3896,7 +3861,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("segunda tentativa funciona sem recriar operações", async () => {
       const manager = new OperationManager();
-      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new RetryMockTransport(createRemotePayload([remoteOp], []), 1);
@@ -4007,7 +3972,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("operações já persistidas não são duplicadas", async () => {
       const manager = new OperationManager();
-      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       // Sincroniza primeiro com sucesso
       const remoteOp1 = createOp("op-remote-1", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
@@ -4143,29 +4108,8 @@ it("deve lidar com duplicatas", async () => {
   });
 
   describe("resiliência - falha após operações mas antes dos snapshots", () => {
-    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
-      id,
-      documentId: "doc-1",
-      deviceId: "test-device-id",
-      type: "CREATE_DOCUMENT",
-      payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
-      timestamp: "2024-01-01T00:00:00.000Z",
-      vectorClock: VectorClock.from({ "test-device-id": 1 }),
-      ...overrides,
-    });
-
-    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
-      documentId: id,
-      id,
-      title: "Test",
-      content: "Content",
-      createdAt: "2024-01-01T00:00:00.000Z",
-      updatedAt: "2024-01-01T00:00:00.000Z",
-      operationCount: 10,
-      vectorClock: { "test-device-id": 1 },
-      ...overrides,
-    });
-
+    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({ id, documentId: "doc-1", deviceId: "test-device-id", type: "CREATE_DOCUMENT", payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" }, timestamp: "2024-01-01T00:00:00.000Z", vectorClock: VectorClock.from({ "test-device-id": 1 }), ...overrides });
+    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({ documentId: id, id, title: "Test", content: "Content", createdAt: "2024-01-01T00:00:00.000Z", updatedAt: "2024-01-01T00:00:00.000Z", operationCount: 10, vectorClock: { "test-device-id": 1 }, ...overrides });
     const createRemotePayload = (operations: Operation[] = [], snapshots: DocumentSnapshot[] = []): SyncPayload => ({
       deviceId: "remote-device",
       operations,
@@ -4257,17 +4201,6 @@ it("deve lidar com duplicatas", async () => {
   });
 
   describe("resiliência - falha após snapshot mais recente", () => {
-    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
-      id,
-      documentId: "doc-1",
-      deviceId: "test-device-id",
-      type: "CREATE_DOCUMENT",
-      payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
-      timestamp: "2024-01-01T00:00:00.000Z",
-      vectorClock: VectorClock.from({ "test-device-id": 1 }),
-      ...overrides,
-    });
-
     const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
       documentId: id,
       id,
@@ -4358,29 +4291,8 @@ it("deve lidar com duplicatas", async () => {
   });
 
   describe("resiliência - retry múltiplo", () => {
-    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
-      id,
-      documentId: "doc-1",
-      deviceId: "test-device-id",
-      type: "CREATE_DOCUMENT",
-      payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
-      timestamp: "2024-01-01T00:00:00.000Z",
-      vectorClock: VectorClock.from({ "test-device-id": 1 }),
-      ...overrides,
-    });
-
-    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
-      documentId: id,
-      id,
-      title: "Test",
-      content: "Content",
-      createdAt: "2024-01-01T00:00:00.000Z",
-      updatedAt: "2024-01-01T00:00:00.000Z",
-      operationCount: 10,
-      vectorClock: { "test-device-id": 1 },
-      ...overrides,
-    });
-
+    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({ id, documentId: "doc-1", deviceId: "test-device-id", type: "CREATE_DOCUMENT", payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" }, timestamp: "2024-01-01T00:00:00.000Z", vectorClock: VectorClock.from({ "test-device-id": 1 }), ...overrides });
+    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({ documentId: id, id, title: "Test", content: "Content", createdAt: "2024-01-01T00:00:00.000Z", updatedAt: "2024-01-01T00:00:00.000Z", operationCount: 10, vectorClock: { "test-device-id": 1 }, ...overrides });
     const createRemotePayload = (operations: Operation[] = [], snapshots: DocumentSnapshot[] = []): SyncPayload => ({
       deviceId: "remote-device",
       operations,
@@ -4399,6 +4311,7 @@ it("deve lidar com duplicatas", async () => {
       }
 
       async synchronize(payload: SyncPayload): Promise<SyncPayload> {
+        void payload;
         this.callCount++;
         if (this.failCount < this.maxFailures) {
           this.failCount++;
@@ -4418,7 +4331,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("falha -> falha -> sucesso -> sucesso -> sucesso mantém estado final correto", async () => {
       const manager = new OperationManager();
-      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new MultiRetryTransport(createRemotePayload([remoteOp], []), 2);
@@ -4452,7 +4365,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("operações sem duplicatas", async () => {
       const manager = new OperationManager();
-      const localOp = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new MultiRetryTransport(createRemotePayload([remoteOp], []), 3);
@@ -4549,29 +4462,8 @@ it("deve lidar com duplicatas", async () => {
   });
 
   describe("resiliência - retry de payload idêntico", () => {
-    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
-      id,
-      documentId: "doc-1",
-      deviceId: "test-device-id",
-      type: "CREATE_DOCUMENT",
-      payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
-      timestamp: "2024-01-01T00:00:00.000Z",
-      vectorClock: VectorClock.from({ "test-device-id": 1 }),
-      ...overrides,
-    });
-
-    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
-      documentId: id,
-      id,
-      title: "Test",
-      content: "Content",
-      createdAt: "2024-01-01T00:00:00.000Z",
-      updatedAt: "2024-01-01T00:00:00.000Z",
-      operationCount: 10,
-      vectorClock: { "test-device-id": 1 },
-      ...overrides,
-    });
-
+    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({ id, documentId: "doc-1", deviceId: "test-device-id", type: "CREATE_DOCUMENT", payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" }, timestamp: "2024-01-01T00:00:00.000Z", vectorClock: VectorClock.from({ "test-device-id": 1 }), ...overrides });
+    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({ documentId: id, id, title: "Test", content: "Content", createdAt: "2024-01-01T00:00:00.000Z", updatedAt: "2024-01-01T00:00:00.000Z", operationCount: 10, vectorClock: { "test-device-id": 1 }, ...overrides });
     const createRemotePayload = (operations: Operation[] = [], snapshots: DocumentSnapshot[] = []): SyncPayload => ({
       deviceId: "remote-device",
       operations,
@@ -4808,7 +4700,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("operação antiga continua presente", async () => {
       const manager = new OperationManager();
-      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new RetryMockTransport(createRemotePayload([remoteOp], []), 1);
@@ -4831,7 +4723,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("operação nova também é enviada", async () => {
       const manager = new OperationManager();
-      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new RetryMockTransport(createRemotePayload([remoteOp], []), 1);
@@ -4852,7 +4744,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("nenhuma operação é perdida", async () => {
       const manager = new OperationManager();
-      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new RetryMockTransport(createRemotePayload([remoteOp], []), 1);
@@ -4862,8 +4754,8 @@ it("deve lidar com duplicatas", async () => {
         await manager.syncWithTransport();
       } catch { /* empty */ }
 
-      const localOp2 = manager.createOperation("doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "New Local" });
-      const localOp3 = manager.createOperation("doc-1", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "New Content" });
+      manager.createOperation("doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "New Local" });
+      manager.createOperation("doc-1", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "New Content" });
 
       await manager.syncWithTransport();
 
@@ -4873,7 +4765,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("VectorClock mantém causalidade", async () => {
       const manager = new OperationManager();
-      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
       const localClockAfterOp1 = manager.getVectorClock().toMap();
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
@@ -4894,7 +4786,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("nenhuma operação duplicada", async () => {
       const manager = new OperationManager();
-      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new RetryMockTransport(createRemotePayload([remoteOp], []), 1);
@@ -4904,7 +4796,7 @@ it("deve lidar com duplicatas", async () => {
         await manager.syncWithTransport();
       } catch { /* empty */ }
 
-      const localOp2 = manager.createOperation("doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "New Local" });
+      manager.createOperation("doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "New Local" });
 
       await manager.syncWithTransport();
 
@@ -4956,6 +4848,7 @@ it("deve lidar com duplicatas", async () => {
       }
 
       async synchronize(payload: SyncPayload): Promise<SyncPayload> {
+        void payload;
         this.callCount++;
         if (this.failCount < this.maxFailures) {
           this.failCount++;
@@ -5198,6 +5091,7 @@ it("deve lidar com duplicatas", async () => {
       }
 
       async synchronize(payload: SyncPayload): Promise<SyncPayload> {
+        void payload;
         this.callCount++;
         if (this.failCount < this.maxFailures) {
           this.failCount++;
