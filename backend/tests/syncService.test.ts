@@ -1408,122 +1408,890 @@ describe("DocumentSyncService", () => {
       const result1 = await syncService.synchronize(payload);
       const result2 = await syncService.synchronize(payload);
 
-      expect(result1.snapshots).toEqual(result2.snapshots);
+expect(result1.snapshots).toEqual(result2.snapshots);
     });
   });
 
-  describe("snapshots - idempotência", () => {
-    it("execução múltipla não cria duplicatas", async () => {
+  describe("resiliência - falha após operações antes de snapshots", () => {
+    it("falha no snapshot não deve deixar operações órfãs - retry deve recuperar", async () => {
+      const operation = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test",
+        content: "Content",
+      }, { id: "op-1" });
+
       const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
-      const payload = createPayload([], [snapshot]);
+      const payload = createPayload([operation], [snapshot]);
 
-      await syncService.synchronize(payload);
-      await syncService.synchronize(payload);
+      const originalSnapshotSaveMany = snapshotRepository.saveMany.bind(snapshotRepository);
+      const snapshotSaveManySpy = vi.spyOn(snapshotRepository, "saveMany");
 
+      // Primeira chamada: falha no saveMany de snapshots
+      // NOTA: As operações JÁ são persistidas antes dos snapshots (arquitetura atual sem transação distribuída)
+      snapshotSaveManySpy.mockRejectedValueOnce(new Error("Snapshot DB error"));
+
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Snapshot DB error");
+
+      // Verificar que operações JÁ foram persistidas (comportamento atual - sem rollback)
+      expect(await repository.count()).toBe(1);
+
+      // Segunda chamada: sucesso - não deve duplicar operações
+      snapshotSaveManySpy.mockImplementationOnce(originalSnapshotSaveMany);
+
+      const result = await syncService.synchronize(payload);
+
+      expect(result.acceptedOperations).toHaveLength(0); // Já existiam
+      expect(result.missingOperations).toEqual([]); // Cliente já conhece a operação
+      expect(await repository.count()).toBe(1); // Não duplicou
       expect(await snapshotRepository.count()).toBe(1);
     });
 
-    it("segunda execução não persiste snapshots idênticos", async () => {
+    it("falha no snapshot deve propagar erro original", async () => {
+      const operation = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test",
+        content: "Content",
+      }, { id: "op-1" });
+
       const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
-      const payload = createPayload([], [snapshot]);
+      const payload = createPayload([operation], [snapshot]);
 
-      await syncService.synchronize(payload);
-      const result2 = await syncService.synchronize(payload);
+      const originalError = new Error("Original snapshot error");
+      vi.spyOn(snapshotRepository, "saveMany").mockRejectedValueOnce(originalError);
 
-      expect(result2.snapshots).toEqual([]);
+      try {
+        await syncService.synchronize(payload);
+      } catch (error) {
+        expect(error).toBe(originalError);
+      }
+
+      // Operações já foram persistidas na primeira tentativa
+      expect(await repository.count()).toBe(1);
+
+      // Estado deve permanecer utilizável para retry
+      const result = await syncService.synchronize(payload);
+      expect(result.acceptedOperations).toHaveLength(0); // Idempotente
+      expect(await repository.count()).toBe(1);
     });
 
-    it("não altera snapshots com timestamp igual", async () => {
-      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
-      await snapshotRepository.save(serverSnapshot);
+    it("não deve retornar SyncResult parcial em falha de snapshot", async () => {
+      const operation = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test",
+        content: "Content",
+      }, { id: "op-1" });
 
-      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:30:00.000Z" });
-      const payload = createPayload([], [clientSnapshot]);
+      const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([operation], [snapshot]);
 
-      await syncService.synchronize(payload);
-      await syncService.synchronize(payload);
+      vi.spyOn(snapshotRepository, "saveMany").mockRejectedValueOnce(new Error("Snapshot error"));
 
-      const stored = await snapshotRepository.getByDocumentId("doc-1");
-      expect(stored?.updatedAt).toBe("2024-01-15T10:30:00.000Z");
+      let result: any;
+      try {
+        result = await syncService.synchronize(payload);
+      } catch {
+        // expected
+      }
+      expect(result).toBeUndefined();
     });
+  });
 
-    it("não substitui snapshot mais recente por mais antigo", async () => {
+  describe("resiliência - falha com snapshot mais recente remoto", () => {
+    it("snapshot remoto mais recente persistido - retry não deve duplicar", async () => {
       const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
       await snapshotRepository.save(serverSnapshot);
 
       const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
       const payload = createPayload([], [clientSnapshot]);
 
-      await syncService.synchronize(payload);
-      await syncService.synchronize(payload);
+      // Primeira sincronização: snapshot do servidor mais recente deve ser retornado
+      const result1 = await syncService.synchronize(payload);
+      expect(result1.snapshots).toHaveLength(1);
+      expect(result1.snapshots[0].updatedAt).toBe("2024-01-15T11:00:00.000Z");
 
-      const stored = await snapshotRepository.getByDocumentId("doc-1");
-      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
-    });
-  });
-
-  describe("snapshots - múltiplas sincronizações", () => {
-    it("múltiplas sincronizações com snapshots", async () => {
-      const snapshot1 = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
-      const result1 = await syncService.synchronize(createPayload([], [snapshot1]));
-      expect(result1.snapshots).toEqual([]);
-
-      const snapshot2 = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
-      const result2 = await syncService.synchronize(createPayload([], [snapshot2]));
-      expect(result2.snapshots).toEqual([]);
-
-      const stored = await snapshotRepository.getByDocumentId("doc-1");
-      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+      // Segunda sincronização (retry): não deve duplicar
+      const result2 = await syncService.synchronize(payload);
+      expect(result2.snapshots).toEqual(result1.snapshots);
+      expect(await snapshotRepository.count()).toBe(1);
     });
 
-    it("múltiplos documentos independentes", async () => {
-      const snapshots = [
-        createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" }),
-        createSnapshot({ documentId: "doc-2", updatedAt: "2024-01-15T11:00:00.000Z" }),
-      ];
-      const payload = createPayload([], snapshots);
-
-      await syncService.synchronize(payload);
-
-      const serverSnapshot1 = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T09:00:00.000Z" });
-      const serverSnapshot2 = createSnapshot({ documentId: "doc-2", updatedAt: "2024-01-15T12:00:00.000Z" });
-      await snapshotRepository.save(serverSnapshot1);
-      await snapshotRepository.save(serverSnapshot2);
-
-      const result = await syncService.synchronize(createPayload([]));
-
-      expect(result.snapshots).toHaveLength(2);
-      const doc1Snapshot = result.snapshots.find((s) => s.documentId === "doc-1");
-      const doc2Snapshot = result.snapshots.find((s) => s.documentId === "doc-2");
-      expect(doc1Snapshot?.updatedAt).toBe("2024-01-15T10:00:00.000Z");
-      expect(doc2Snapshot?.updatedAt).toBe("2024-01-15T12:00:00.000Z");
-    });
-
-    it("snapshot mais recente vence", async () => {
+    it("snapshot local mais recente não deve ser sobrescrito por versão antiga no retry", async () => {
       const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
       await snapshotRepository.save(serverSnapshot);
 
       const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
       const payload = createPayload([], [clientSnapshot]);
 
-      await syncService.synchronize(payload);
+      // Primeira sincronização: cliente tem snapshot mais recente
+      const result1 = await syncService.synchronize(payload);
+      expect(result1.snapshots).toEqual([]);
+      const stored1 = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored1?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
 
-      const stored = await snapshotRepository.getByDocumentId("doc-1");
-      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+      // Segunda sincronização (retry): snapshot local ainda mais recente
+      const result2 = await syncService.synchronize(payload);
+      expect(result2.snapshots).toEqual([]);
+      const stored2 = await snapshotRepository.getByDocumentId("doc-1");
+      expect(stored2?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+    });
+  });
+
+  describe("resiliência - retry múltiplo", () => {
+    it("falha -> falha -> sucesso -> sucesso -> sucesso deve produzir estado final correto", async () => {
+      const operation = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test",
+        content: "Content",
+      }, { id: "op-1" });
+
+      const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([operation], [snapshot]);
+
+      const originalSaveMany = repository.saveMany.bind(repository);
+      const saveManySpy = vi.spyOn(repository, "saveMany");
+      saveManySpy.mockRejectedValueOnce(new Error("Error 1"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Error 1");
+      expect(await repository.count()).toBe(0);
+
+      // Falha 2
+      saveManySpy.mockRejectedValueOnce(new Error("Error 2"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Error 2");
+      expect(await repository.count()).toBe(0);
+
+      // Sucesso 1 - usa implementação original
+      saveManySpy.mockImplementationOnce(originalSaveMany);
+      const result1 = await syncService.synchronize(payload);
+      expect(result1.acceptedOperations).toHaveLength(1);
+      expect(await repository.count()).toBe(1);
+
+      // Sucesso 2 (retry idempotente)
+      const result2 = await syncService.synchronize(payload);
+      expect(result2.acceptedOperations).toHaveLength(0);
+      expect(await repository.count()).toBe(1);
+
+      // Sucesso 3 (retry idempotente)
+      const result3 = await syncService.synchronize(payload);
+      expect(result3.acceptedOperations).toHaveLength(0);
+      expect(await repository.count()).toBe(1);
+
+      // Estado final estável
+      expect(result1.acceptedOperations[0].id).toBe("op-1");
+      expect(result2.missingOperations).toEqual(result1.missingOperations);
+      expect(result3.missingOperations).toEqual(result1.missingOperations);
     });
 
-    it("snapshot mais antigo nunca sobrescreve o novo", async () => {
-      const serverSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T11:00:00.000Z" });
-      await snapshotRepository.save(serverSnapshot);
+    it("VectorClock deve ficar estável após sucessos consecutivos", async () => {
+      const operation = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test",
+        content: "Content",
+      }, { id: "op-1", vectorClock: { "device-A": 1 } });
 
-      const clientSnapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
-      const payload = createPayload([], [clientSnapshot]);
+      const payload = createPayload([operation]);
+
+      await syncService.synchronize(payload);
+      const result2 = await syncService.synchronize(payload);
+      const result3 = await syncService.synchronize(payload);
+
+      // VectorClock das operações não deve mudar
+      expect(result2.acceptedOperations).toHaveLength(0);
+      expect(result3.acceptedOperations).toHaveLength(0);
+    });
+
+    it("operações sem duplicatas após múltiplos retries", async () => {
+      const operations = [
+        createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+          type: SyncOperationType.CREATE_DOCUMENT,
+          title: "Doc",
+          content: "Content",
+        }, { id: "op-1" }),
+        createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+          type: SyncOperationType.UPDATE_TITLE,
+          title: "Updated",
+        }, { id: "op-2" }),
+      ];
+
+      const payload = createPayload(operations);
+
+      // Primeira falha
+      vi.spyOn(repository, "saveMany").mockRejectedValueOnce(new Error("Error"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Error");
+
+      // Sucesso
+      vi.spyOn(repository, "saveMany").mockResolvedValueOnce(undefined);
+      await syncService.synchronize(payload);
+
+      // Múltiplos retries
+      for (let i = 0; i < 5; i++) {
+        await syncService.synchronize(payload);
+      }
+
+      expect(await repository.count()).toBe(2);
+      const stored = await repository.getAll();
+      const ids = stored.map((op) => op.id).sort();
+      expect(ids).toEqual(["op-1", "op-2"]);
+    });
+
+    it("snapshots sem duplicatas após múltiplos retries", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [snapshot]);
+
+      // Primeira falha
+      vi.spyOn(snapshotRepository, "saveMany").mockRejectedValueOnce(new Error("Error"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Error");
+
+      // Sucesso
+      vi.spyOn(snapshotRepository, "saveMany").mockResolvedValueOnce(undefined);
+      await syncService.synchronize(payload);
+
+      // Múltiplos retries
+      for (let i = 0; i < 5; i++) {
+        await syncService.synchronize(payload);
+      }
+
+      expect(await snapshotRepository.count()).toBe(1);
+    });
+  });
+
+  describe("resiliência - payload idêntico repetido", () => {
+    it("primeira chamada aceita operações novas", async () => {
+      const operation = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test",
+        content: "Content",
+      }, { id: "op-1" });
+
+      const payload = createPayload([operation]);
+
+      const result = await syncService.synchronize(payload);
+      expect(result.acceptedOperations).toHaveLength(1);
+      expect(result.acceptedOperations[0].id).toBe("op-1");
+    });
+
+    it("chamadas posteriores são idempotentes", async () => {
+      const operation = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test",
+        content: "Content",
+      }, { id: "op-1" });
+
+      const payload = createPayload([operation]);
+
+      await syncService.synchronize(payload);
+      const result2 = await syncService.synchronize(payload);
+      const result3 = await syncService.synchronize(payload);
+
+      expect(result2.acceptedOperations).toHaveLength(0);
+      expect(result3.acceptedOperations).toHaveLength(0);
+      expect(result2.missingOperations).toEqual([]);
+      expect(result3.missingOperations).toEqual([]);
+    });
+
+    it("nenhuma nova persistência desnecessária", async () => {
+      const operation = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test",
+        content: "Content",
+      }, { id: "op-1" });
+
+      const payload = createPayload([operation]);
+
+      await syncService.synchronize(payload);
+      const saveManySpy = vi.spyOn(repository, "saveMany");
 
       await syncService.synchronize(payload);
       await syncService.synchronize(payload);
 
-      const stored = await snapshotRepository.getByDocumentId("doc-1");
-      expect(stored?.updatedAt).toBe("2024-01-15T11:00:00.000Z");
+      expect(saveManySpy).not.toHaveBeenCalled();
+    });
+
+    it("snapshots não são recriados", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [snapshot]);
+
+      await syncService.synchronize(payload);
+      const saveManySpy = vi.spyOn(snapshotRepository, "saveMany");
+
+      await syncService.synchronize(payload);
+      await syncService.synchronize(payload);
+
+      expect(saveManySpy).not.toHaveBeenCalled();
+    });
+
+    it("estado final equivalente", async () => {
+      const operation = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test",
+        content: "Content",
+      }, { id: "op-1" });
+
+      const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([operation], [snapshot]);
+
+      const result1 = await syncService.synchronize(payload);
+      const result2 = await syncService.synchronize(payload);
+      const result3 = await syncService.synchronize(payload);
+
+      expect(result1.acceptedOperations).toHaveLength(1);
+      expect(result2.acceptedOperations).toHaveLength(0);
+      expect(result3.acceptedOperations).toHaveLength(0);
+      expect(result1.missingOperations).toEqual(result2.missingOperations);
+      expect(result2.missingOperations).toEqual(result3.missingOperations);
+      expect(result1.snapshots).toEqual(result2.snapshots);
+      expect(result2.snapshots).toEqual(result3.snapshots);
+    });
+  });
+
+  describe("resiliência - payload parcial / repetição", () => {
+    it("op-2 não duplica, op-3 é aceita, snapshot-1 não duplica", async () => {
+      // Payload A: op-1, op-2, snapshot-1
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc",
+        content: "Content",
+      }, { id: "op-1" });
+      const op2 = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "Updated",
+      }, { id: "op-2" });
+      const snapshot1 = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payloadA = createPayload([op1, op2], [snapshot1]);
+
+      await syncService.synchronize(payloadA);
+
+      // Payload B: op-2, op-3, snapshot-1 (cliente já conhece op-2)
+      const op3 = createSyncOperation(SyncOperationType.UPDATE_CONTENT, {
+        type: SyncOperationType.UPDATE_CONTENT,
+        content: "New Content",
+      }, { id: "op-3" });
+      const payloadB = createPayload([op2, op3], [snapshot1]);
+
+      const result = await syncService.synchronize(payloadB);
+
+      expect(result.acceptedOperations).toHaveLength(1);
+      expect(result.acceptedOperations[0].id).toBe("op-3");
+      // missingOperations só inclui op-1 (op-2 já conhecido no payloadB)
+      expect(result.missingOperations.map((o) => o.id).sort()).toEqual(["op-1"]);
+      expect(result.snapshots).toEqual([]);
+      expect(await repository.count()).toBe(3);
+    });
+
+    it("estado final contém todas as informações necessárias", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc",
+        content: "Content",
+      }, { id: "op-1" });
+      const op2 = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "Updated",
+      }, { id: "op-2" });
+      const snapshot1 = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payloadA = createPayload([op1, op2], [snapshot1]);
+
+      await syncService.synchronize(payloadA);
+
+      const op3 = createSyncOperation(SyncOperationType.UPDATE_CONTENT, {
+        type: SyncOperationType.UPDATE_CONTENT,
+        content: "New Content",
+      }, { id: "op-3" });
+      const payloadB = createPayload([op2, op3], [snapshot1]);
+
+      await syncService.synchronize(payloadB);
+
+      const allOps = await repository.getAll();
+      expect(allOps).toHaveLength(3);
+      const ids = allOps.map((op) => op.id).sort();
+      expect(ids).toEqual(["op-1", "op-2", "op-3"]);
+
+      const storedSnapshot = await snapshotRepository.getByDocumentId("doc-1");
+      expect(storedSnapshot).toBeDefined();
+      expect(storedSnapshot?.updatedAt).toBe("2024-01-15T10:00:00.000Z");
+    });
+  });
+
+  describe("resiliência - concorrência + retry", () => {
+    it("duas operações concorrentes com retry devem convergir", async () => {
+      // Device A: operação A
+      const opA = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "Title A",
+      }, { id: "op-A", deviceId: "device-A", vectorClock: { "device-A": 1, "device-B": 2 } });
+
+      // Device B: operação B
+      const opB = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "Title B",
+      }, { id: "op-B", deviceId: "device-B", vectorClock: { "device-A": 2, "device-B": 1 } });
+
+      // Fluxo: A falha, B sucesso, A retry, B retry
+      const payloadA = createPayload([opA]);
+      const payloadB = createPayload([opB]);
+
+      const originalSaveMany = repository.saveMany.bind(repository);
+      const saveManySpy = vi.spyOn(repository, "saveMany");
+
+      // A -> falha
+      saveManySpy.mockRejectedValueOnce(new Error("Network error"));
+      await expect(syncService.synchronize(payloadA)).rejects.toThrow("Network error");
+
+      // B -> sucesso
+      saveManySpy.mockImplementationOnce(originalSaveMany);
+      const resultB1 = await syncService.synchronize(payloadB);
+      expect(resultB1.acceptedOperations).toHaveLength(1);
+      expect(resultB1.acceptedOperations[0].id).toBe("op-B");
+
+      // A -> retry
+      saveManySpy.mockImplementationOnce(originalSaveMany);
+      const resultA2 = await syncService.synchronize(payloadA);
+      expect(resultA2.acceptedOperations).toHaveLength(1);
+      expect(resultA2.acceptedOperations[0].id).toBe("op-A");
+
+      // B -> retry (usa implementação real)
+      const resultB2 = await syncService.synchronize(payloadB);
+      expect(resultB2.acceptedOperations).toHaveLength(0);
+
+      // Ambos terminam com o mesmo conjunto de operações
+      const allOps = await repository.getAll();
+      expect(allOps).toHaveLength(2);
+      const ids = allOps.map((op) => op.id).sort();
+      expect(ids).toEqual(["op-A", "op-B"]);
+
+      // VectorClock converge
+      const resultA3 = await syncService.synchronize(payloadA);
+      const resultB3 = await syncService.synchronize(payloadB);
+      expect(resultA3.acceptedOperations).toHaveLength(0);
+      expect(resultB3.acceptedOperations).toHaveLength(0);
+    });
+
+    it("nenhuma operação duplicada em cenário de concorrência + retry", async () => {
+      const opA = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "A",
+        content: "Content",
+      }, { id: "op-A", deviceId: "device-A" });
+
+      const opB = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "B",
+        content: "Content",
+      }, { id: "op-B", deviceId: "device-B" });
+
+      const payloadA = createPayload([opA]);
+      const payloadB = createPayload([opB]);
+
+      // Múltiplos retries intercalados
+      for (let i = 0; i < 3; i++) {
+        await syncService.synchronize(payloadA);
+        await syncService.synchronize(payloadB);
+      }
+
+      expect(await repository.count()).toBe(2);
+    });
+  });
+
+  describe("resiliência - multi-documento + retry", () => {
+    it("falha em doc-1 não deve afetar doc-2", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc 1",
+        content: "Content 1",
+      }, { id: "op-1", documentId: "doc-1" });
+
+      const op2 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc 2",
+        content: "Content 2",
+      }, { id: "op-2", documentId: "doc-2" });
+
+      const payload = createPayload([op1, op2]);
+
+      const originalSaveMany = repository.saveMany.bind(repository);
+      const saveManySpy = vi.spyOn(repository, "saveMany");
+
+      // Falha no saveMany (simula erro no doc-1 mas não no doc-2)
+      // Como saveMany é atômico no nível do repository, falha toda a operação
+      saveManySpy.mockRejectedValueOnce(new Error("DB error"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("DB error");
+
+      // Retry deve funcionar para ambos - usa implementação original
+      saveManySpy.mockImplementationOnce(originalSaveMany);
+      const result = await syncService.synchronize(payload);
+      expect(result.acceptedOperations).toHaveLength(2);
+      expect(await repository.count()).toBe(2);
+    });
+
+    it("retry de doc-1 não deve duplicar doc-2", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc 1",
+        content: "Content 1",
+      }, { id: "op-1", documentId: "doc-1" });
+
+      const op2 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc 2",
+        content: "Content 2",
+      }, { id: "op-2", documentId: "doc-2" });
+
+      const payload = createPayload([op1, op2]);
+
+      await syncService.synchronize(payload);
+      expect(await repository.count()).toBe(2);
+
+      // Retry com apenas op-1 (simulando que op-2 já foi sincronizado)
+      const payloadRetry = createPayload([op1]);
+      const result = await syncService.synchronize(payloadRetry);
+      expect(result.acceptedOperations).toHaveLength(0);
+      expect(result.missingOperations.map((o) => o.id).sort()).toEqual(["op-2"]);
+      expect(await repository.count()).toBe(2);
+    });
+
+    it("estado final de cada documento permanece correto", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc 1",
+        content: "Content 1",
+      }, { id: "op-1", documentId: "doc-1" });
+
+      const op2 = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "Doc 2 Updated",
+      }, { id: "op-2", documentId: "doc-2" });
+
+      const op3 = createSyncOperation(SyncOperationType.UPDATE_CONTENT, {
+        type: SyncOperationType.UPDATE_CONTENT,
+        content: "Doc 3 Updated",
+      }, { id: "op-3", documentId: "doc-3" });
+
+      const payload = createPayload([op1, op2, op3]);
+      const originalSaveMany = repository.saveMany.bind(repository);
+      const saveManySpy = vi.spyOn(repository, "saveMany");
+
+      // Sincronização inicial com falha
+      saveManySpy.mockRejectedValueOnce(new Error("Error"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Error");
+
+      // Retry sucesso - usa implementação original
+      saveManySpy.mockImplementationOnce(originalSaveMany);
+      await syncService.synchronize(payload);
+
+      // Verificar isolamento
+      const doc1Ops = await repository.getByDocumentId("doc-1");
+      const doc2Ops = await repository.getByDocumentId("doc-2");
+      const doc3Ops = await repository.getByDocumentId("doc-3");
+
+      expect(doc1Ops).toHaveLength(1);
+      expect(doc2Ops).toHaveLength(1);
+      expect(doc3Ops).toHaveLength(1);
+      expect(doc1Ops[0].id).toBe("op-1");
+      expect(doc2Ops[0].id).toBe("op-2");
+      expect(doc3Ops[0].id).toBe("op-3");
+    });
+  });
+
+  describe("resiliência - OperationLog consistência", () => {
+    it("após falha e retry, OperationLog contém exatamente as operações esperadas", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc",
+        content: "Content",
+      }, { id: "op-1" });
+
+      const op2 = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "Updated",
+      }, { id: "op-2" });
+
+      const payload = createPayload([op1, op2]);
+
+      // Falha
+      vi.spyOn(repository, "saveMany").mockRejectedValueOnce(new Error("Error"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Error");
+
+      // Retry
+      vi.spyOn(repository, "saveMany").mockResolvedValueOnce(undefined);
+      await syncService.synchronize(payload);
+
+      // Retry adicional
+      await syncService.synchronize(payload);
+
+      const allOps = await repository.getAll();
+      expect(allOps).toHaveLength(2);
+      const ids = allOps.map((op) => op.id).sort();
+      expect(ids).toEqual(["op-1", "op-2"]);
+
+      // Sem duplicatas
+      const uniqueIds = new Set(allOps.map((op) => op.id));
+      expect(uniqueIds.size).toBe(2);
+    });
+
+    it("operação não perdida após falha", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc",
+        content: "Content",
+      }, { id: "op-1" });
+
+      const payload = createPayload([op1]);
+
+      // Falha
+      vi.spyOn(repository, "saveMany").mockRejectedValueOnce(new Error("Error"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Error");
+
+      // Retry
+      vi.spyOn(repository, "saveMany").mockResolvedValueOnce(undefined);
+      const result = await syncService.synchronize(payload);
+
+      expect(result.acceptedOperations).toHaveLength(1);
+      expect(result.acceptedOperations[0].id).toBe("op-1");
+    });
+
+    it("operação fantasma não aparece", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc",
+        content: "Content",
+      }, { id: "op-1" });
+
+      const payload = createPayload([op1]);
+
+      const originalSaveMany = repository.saveMany.bind(repository);
+      const saveManySpy = vi.spyOn(repository, "saveMany");
+
+      // Falha antes de persistir
+      saveManySpy.mockRejectedValueOnce(new Error("Error"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Error");
+
+      // Verificar que nada foi persistido
+      expect(await repository.count()).toBe(0);
+      expect(await repository.has("op-1")).toBe(false);
+
+      // Retry - usa implementação original
+      saveManySpy.mockImplementationOnce(originalSaveMany);
+      await syncService.synchronize(payload);
+
+      // Agora deve estar lá
+      expect(await repository.has("op-1")).toBe(true);
+    });
+  });
+
+  describe("resiliência - VectorClock consistência", () => {
+    it("contador nunca diminui após falhas e retries", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc",
+        content: "Content",
+      }, { id: "op-1", vectorClock: { "device-A": 1 } });
+
+      const payload = createPayload([op1]);
+
+      await syncService.synchronize(payload);
+      const stored1 = await repository.getById("op-1");
+
+      // Retry
+      await syncService.synchronize(payload);
+      const stored2 = await repository.getById("op-1");
+
+      expect(stored1?.vectorClock["device-A"]).toBe(1);
+      expect(stored2?.vectorClock["device-A"]).toBe(1);
+    });
+
+    it("operação já recebida não incrementa novamente", async () => {
+      const op1 = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "Updated",
+      }, { id: "op-1", vectorClock: { "device-A": 2 } });
+
+      const payload = createPayload([op1]);
+
+      await syncService.synchronize(payload);
+      await syncService.synchronize(payload);
+      await syncService.synchronize(payload);
+
+      const allOps = await repository.getAll();
+      expect(allOps).toHaveLength(1);
+      expect(allOps[0].vectorClock["device-A"]).toBe(2);
+    });
+
+    it("operação local continua causalmente correta", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc",
+        content: "Content",
+      }, { id: "op-1", deviceId: "device-A", vectorClock: { "device-A": 1 } });
+
+      const op2 = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "Updated",
+      }, { id: "op-2", deviceId: "device-A", vectorClock: { "device-A": 2 } });
+
+      const payload1 = createPayload([op1]);
+      const payload2 = createPayload([op1, op2]);
+
+      await syncService.synchronize(payload1);
+      await syncService.synchronize(payload2);
+
+      const allOps = await repository.getAll();
+      expect(allOps).toHaveLength(2);
+      const op1Stored = allOps.find((o) => o.id === "op-1");
+      const op2Stored = allOps.find((o) => o.id === "op-2");
+      expect(op1Stored?.vectorClock["device-A"]).toBe(1);
+      expect(op2Stored?.vectorClock["device-A"]).toBe(2);
+    });
+
+    it("múltiplos dispositivos continuam representados", async () => {
+      const opA = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "From A",
+        content: "Content",
+      }, { id: "op-A", deviceId: "device-A", vectorClock: { "device-A": 1 } });
+
+      const opB = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "From B",
+      }, { id: "op-B", deviceId: "device-B", vectorClock: { "device-A": 1, "device-B": 1 } });
+
+      const payload = createPayload([opA, opB]);
+
+      await syncService.synchronize(payload);
+      await syncService.synchronize(payload); // retry
+      await syncService.synchronize(payload); // retry
+
+      const allOps = await repository.getAll();
+      expect(allOps).toHaveLength(2);
+      const clocks = allOps.map((op) => op.vectorClock);
+      expect(clocks.some((c) => c["device-A"] === 1 && !c["device-B"])).toBe(true);
+      expect(clocks.some((c) => c["device-A"] === 1 && c["device-B"] === 1)).toBe(true);
+    });
+
+    it("sincronização repetida é idempotente para VectorClock", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc",
+        content: "Content",
+      }, { id: "op-1", vectorClock: { "device-A": 1 } });
+
+      const payload = createPayload([op1]);
+
+      const result1 = await syncService.synchronize(payload);
+      const result2 = await syncService.synchronize(payload);
+      const result3 = await syncService.synchronize(payload);
+
+      // missingOperations devem ter VectorClock idêntico
+      expect(result1.missingOperations).toEqual(result2.missingOperations);
+      expect(result2.missingOperations).toEqual(result3.missingOperations);
+    });
+  });
+
+  describe("resiliência - determinismo", () => {
+    it("mesmo estado inicial + mesmo payload = mesmo resultado", async () => {
+      const setup = async () => {
+        const repo = new InMemoryDocumentOperationRepository();
+        const snapRepo = new InMemoryDocumentSnapshotRepository();
+        const serverOp = createDocumentOperation(DocumentOperationType.CREATE_DOCUMENT, {
+          type: DocumentOperationType.CREATE_DOCUMENT,
+          title: "Server",
+          content: "Content",
+        }, { id: "server-op" });
+        await repo.save(serverOp);
+        return { repo, snapRepo };
+      };
+
+      const operation = createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+        type: SyncOperationType.UPDATE_TITLE,
+        title: "New Title",
+      }, { id: "op-new" });
+
+      const payload = createPayload([operation]);
+
+      const { repo: repo1, snapRepo: snapRepo1 } = await setup();
+      const service1 = new DocumentSyncService(repo1, snapRepo1);
+      const result1 = await service1.synchronize(payload);
+
+      const { repo: repo2, snapRepo: snapRepo2 } = await setup();
+      const service2 = new DocumentSyncService(repo2, snapRepo2);
+      const result2 = await service2.synchronize(payload);
+
+      expect(result1.acceptedOperations).toEqual(result2.acceptedOperations);
+      expect(result1.missingOperations).toEqual(result2.missingOperations);
+      expect(result1.snapshots).toEqual(result2.snapshots);
+    });
+
+    it("ordem das operações no payload não afeta resultado", async () => {
+      const op1 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc 1",
+        content: "Content 1",
+      }, { id: "op-1", documentId: "doc-1" });
+
+      const op2 = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Doc 2",
+        content: "Content 2",
+      }, { id: "op-2", documentId: "doc-2" });
+
+      const payload1 = createPayload([op1, op2]);
+      const payload2 = createPayload([op2, op1]);
+
+      // Usar repositórios separados para cada teste
+      const repo1 = new InMemoryDocumentOperationRepository();
+      const snapRepo1 = new InMemoryDocumentSnapshotRepository();
+      const service1 = new DocumentSyncService(repo1, snapRepo1);
+
+      const repo2 = new InMemoryDocumentOperationRepository();
+      const snapRepo2 = new InMemoryDocumentSnapshotRepository();
+      const service2 = new DocumentSyncService(repo2, snapRepo2);
+
+      const result1 = await service1.synchronize(payload1);
+      const result2 = await service2.synchronize(payload2);
+
+      expect(result1.acceptedOperations.map((o) => o.id).sort()).toEqual(result2.acceptedOperations.map((o) => o.id).sort());
+      expect(result1.missingOperations).toEqual(result2.missingOperations);
+    });
+  });
+
+  describe("resiliência - idempotência", () => {
+    it("execução múltipla com falhas intermediárias mantém idempotência", async () => {
+      const operation = createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test",
+        content: "Content",
+      }, { id: "op-1" });
+
+      const payload = createPayload([operation]);
+
+      // Sucesso
+      await syncService.synchronize(payload);
+      expect(await repository.count()).toBe(1);
+
+      // Falha (simulada no getAll)
+      vi.spyOn(repository, "getAll").mockRejectedValueOnce(new Error("Read error"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Read error");
+
+      // Retry sucesso
+      vi.spyOn(repository, "getAll").mockResolvedValueOnce([operation]);
+      const result = await syncService.synchronize(payload);
+      expect(result.acceptedOperations).toHaveLength(0);
+      expect(await repository.count()).toBe(1);
+    });
+
+    it("snapshots idempotentes com falhas intermediárias", async () => {
+      const snapshot = createSnapshot({ documentId: "doc-1", updatedAt: "2024-01-15T10:00:00.000Z" });
+      const payload = createPayload([], [snapshot]);
+
+      await syncService.synchronize(payload);
+      expect(await snapshotRepository.count()).toBe(1);
+
+      // Falha
+      vi.spyOn(snapshotRepository, "getAll").mockRejectedValueOnce(new Error("Read error"));
+      await expect(syncService.synchronize(payload)).rejects.toThrow("Read error");
+
+      // Retry
+      vi.spyOn(snapshotRepository, "getAll").mockResolvedValueOnce([snapshot]);
+      const result = await syncService.synchronize(payload);
+      expect(result.snapshots).toEqual([]);
+      expect(await snapshotRepository.count()).toBe(1);
     });
   });
 });

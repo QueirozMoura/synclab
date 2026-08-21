@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fastify, { type FastifyInstance } from "fastify";
 import fastifyRateLimit from "@fastify/rate-limit";
 import { InMemoryOperationRepository } from "@infrastructure/persistence/server/InMemoryOperationRepository.js";
@@ -1515,6 +1515,401 @@ describe("HTTP Sync Routes", () => {
       });
 
       expect(response.statusCode).toBe(401);
+    });
+  });
+});
+
+describe("HTTP Sync - Resiliência", () => {
+  let app: FastifyInstance;
+  let documentRepository: InMemoryDocumentOperationRepository;
+  let snapshotRepository: InMemoryDocumentSnapshotRepository;
+  let authzRepository: InMemoryDocumentAuthorizationRepository;
+  let apiKeyValidator: ApiKeyValidator;
+
+  beforeEach(async () => {
+    app = fastify({
+      ajv: {
+        customOptions: {
+          strict: true,
+          coerceTypes: false,
+        },
+      },
+    });
+    await app.register(fastifyRateLimit, {
+      global: false,
+      hook: "preHandler",
+    });
+    documentRepository = new InMemoryDocumentOperationRepository();
+    snapshotRepository = new InMemoryDocumentSnapshotRepository();
+    authzRepository = new InMemoryDocumentAuthorizationRepository();
+    authzRepository.grantAccess("client-A", ["doc-1", "doc-2"]);
+    apiKeyValidator = new ApiKeyValidator([
+      { apiKey: TEST_API_KEY, clientId: "client-A", deviceId: "device-A" },
+      { apiKey: "dev-key-client-A-device-B", clientId: "client-A", deviceId: "device-B" },
+    ]);
+
+    registerSyncRoutes(app, new InMemoryOperationRepository(), documentRepository, snapshotRepository, authzRepository, apiKeyValidator);
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  const createSyncOperation = (
+    type: SyncOperationType,
+    payload: any,
+    overrides: Partial<any> = {},
+  ) => ({
+    id: "op-1",
+    documentId: "doc-1",
+    deviceId: "device-A",
+    type,
+    payload,
+    timestamp: "2024-01-15T10:30:00.000Z",
+    vectorClock: { "device-A": 1 },
+    ...overrides,
+  });
+
+  const basePayload = {
+    deviceId: "device-A",
+    operations: [
+      createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+        type: SyncOperationType.CREATE_DOCUMENT,
+        title: "Test Doc",
+        content: "Content",
+      }, { id: "op-1" }),
+    ],
+    snapshots: [],
+  };
+
+  function injectSync(options: { method: string; url: string; payload?: any }) {
+    return app.inject({
+      ...options,
+      headers: { ...options.headers, ...AUTH_HEADER, "content-type": "application/json" },
+    });
+  }
+
+  describe("Erro 400 - Bad Request", () => {
+    it("payload inválido retorna 400", async () => {
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: { deviceId: "device-A" },
+      });
+
+      expect(response.statusCode).toBe(400);
+      const body = response.json() as { error: string; message: string };
+      expect(body.error).toBe("Bad Request");
+    });
+
+    it("operations não array retorna 400", async () => {
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: { deviceId: "device-A", operations: "not-array", snapshots: [] },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("snapshots não array retorna 400", async () => {
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: { deviceId: "device-A", operations: [], snapshots: "not-array" },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+  });
+
+  describe("Erro 500 - Internal Server Error", () => {
+    it("erro no DocumentSyncService retorna 500", async () => {
+      vi.spyOn(documentRepository, "saveMany").mockRejectedValueOnce(new Error("Database error"));
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: basePayload,
+      });
+
+      expect(response.statusCode).toBe(500);
+      const body = response.json() as { error: string; message: string };
+      expect(body.error).toBe("Internal Server Error");
+    });
+
+    it("erro no snapshotRepository retorna 500", async () => {
+      vi.spyOn(snapshotRepository, "saveMany").mockRejectedValueOnce(new Error("Snapshot error"));
+
+      const payload = {
+        ...basePayload,
+        snapshots: [
+          {
+            documentId: "doc-1",
+            document: { id: "doc-1", title: "Test", content: "Content" },
+            operationCount: 1,
+            createdAt: "2024-01-15T10:30:00.000Z",
+            updatedAt: "2024-01-15T10:30:00.000Z",
+            vectorClock: { "device-A": 1 },
+          },
+        ],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(500);
+    });
+  });
+
+  describe("Erro de rede - simulação via mock do repository", () => {
+    it("erro de rede simulado é propagado", async () => {
+      vi.spyOn(documentRepository, "saveMany").mockRejectedValueOnce(new Error("Network error"));
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: basePayload,
+      });
+
+      expect(response.statusCode).toBe(500);
+      const body = response.json() as { error: string; message: string };
+      expect(body.message).toContain("Network error");
+    });
+  });
+
+  describe("Resposta JSON inválida", () => {
+    it("erro de desserialização é propagado", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc",
+            content: "Content",
+          }, { id: "op-1", vectorClock: { "": 1 } }),
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload,
+      });
+
+      expect(response.statusCode).toBe(500);
+    });
+  });
+
+  describe("Retry manual após erro HTTP", () => {
+    it("falha 500 -> retry sucesso", async () => {
+      vi.spyOn(documentRepository, "saveMany").mockRejectedValueOnce(new Error("Temporary error"));
+
+      const response1 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: basePayload,
+      });
+      expect(response1.statusCode).toBe(500);
+
+      vi.spyOn(documentRepository, "saveMany").mockResolvedValueOnce(undefined);
+
+      const response2 = await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: basePayload,
+      });
+      expect(response2.statusCode).toBe(200);
+      const body2 = response2.json() as { acceptedOperations: any[] };
+      expect(body2.acceptedOperations).toHaveLength(1);
+    });
+
+    it("payload original não é alterado após erro", async () => {
+      const originalPayload = JSON.parse(JSON.stringify(basePayload));
+
+      vi.spyOn(documentRepository, "saveMany").mockRejectedValueOnce(new Error("Error"));
+
+      await injectSync({
+        method: "POST",
+        url: "/sync",
+        payload: basePayload,
+      });
+
+      expect(basePayload).toEqual(originalPayload);
+    });
+
+    it("múltiplos retries manuais são seguros", async () => {
+      const saveManySpy = vi.spyOn(documentRepository, "saveMany");
+      saveManySpy.mockRejectedValueOnce(new Error("Error 1"));
+      await injectSync({ method: "POST", url: "/sync", payload: basePayload });
+
+      saveManySpy.mockRejectedValueOnce(new Error("Error 2"));
+      await injectSync({ method: "POST", url: "/sync", payload: basePayload });
+
+      const originalSaveMany = documentRepository.saveMany.bind(documentRepository);
+      saveManySpy.mockImplementationOnce(originalSaveMany);
+      const response = await injectSync({ method: "POST", url: "/sync", payload: basePayload });
+      expect(response.statusCode).toBe(200);
+
+      const response2 = await injectSync({ method: "POST", url: "/sync", payload: basePayload });
+      expect(response2.statusCode).toBe(200);
+      const body2 = response2.json() as { acceptedOperations: any[]; missingOperations: any[] };
+      expect(body2.acceptedOperations).toHaveLength(0);
+      expect(body2.missingOperations).toEqual([]);
+    });
+  });
+
+  describe("Concorrência + Retry via HTTP", () => {
+    it("Device A falha -> Device B sucesso -> Device A retry -> ambos convergem", async () => {
+      const deviceBAuth = { authorization: "Bearer dev-key-client-A-device-B" };
+
+      const payloadA = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+            type: SyncOperationType.UPDATE_TITLE,
+            title: "Title A",
+          }, { id: "op-A", documentId: "doc-1", vectorClock: { "device-A": 1, "device-B": 2 } }),
+        ],
+        snapshots: [],
+      };
+
+      const payloadB = {
+        deviceId: "device-B",
+        operations: [
+          createSyncOperation(SyncOperationType.UPDATE_TITLE, {
+            type: SyncOperationType.UPDATE_TITLE,
+            title: "Title B",
+          }, { id: "op-B", documentId: "doc-1", vectorClock: { "device-A": 2, "device-B": 1 } }),
+        ],
+        snapshots: [],
+      };
+
+      const saveManySpy = vi.spyOn(documentRepository, "saveMany");
+
+      saveManySpy.mockRejectedValueOnce(new Error("Network error"));
+      await app.inject({
+        method: "POST",
+        url: "/sync",
+        headers: { ...AUTH_HEADER, "content-type": "application/json" },
+        payload: payloadA,
+      });
+
+      const originalSaveMany = documentRepository.saveMany.bind(documentRepository);
+      saveManySpy.mockImplementationOnce(originalSaveMany);
+      const responseB = await app.inject({
+        method: "POST",
+        url: "/sync",
+        headers: { ...deviceBAuth, "content-type": "application/json" },
+        payload: payloadB,
+      });
+      expect(responseB.statusCode).toBe(200);
+
+      saveManySpy.mockImplementationOnce(originalSaveMany);
+      const responseA2 = await app.inject({
+        method: "POST",
+        url: "/sync",
+        headers: { ...AUTH_HEADER, "content-type": "application/json" },
+        payload: payloadA,
+      });
+      expect(responseA2.statusCode).toBe(200);
+      const bodyA2 = responseA2.json() as { acceptedOperations: any[]; missingOperations: any[] };
+      expect(bodyA2.acceptedOperations).toHaveLength(1);
+      expect(bodyA2.acceptedOperations[0].id).toBe("op-A");
+
+      const responseB2 = await app.inject({
+        method: "POST",
+        url: "/sync",
+        headers: { ...deviceBAuth, "content-type": "application/json" },
+        payload: payloadB,
+      });
+      expect(responseB2.statusCode).toBe(200);
+      const bodyB2 = responseB2.json() as { acceptedOperations: any[] };
+      expect(bodyB2.acceptedOperations).toHaveLength(0);
+
+      const allOps = await documentRepository.getAll();
+      expect(allOps).toHaveLength(2);
+      const ids = allOps.map((op) => op.id).sort();
+      expect(ids).toEqual(["op-A", "op-B"]);
+    });
+  });
+
+  describe("Multi-documento + Retry via HTTP", () => {
+    it("falha em doc-1 não apaga doc-2", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 1",
+            content: "Content 1",
+          }, { id: "op-1", documentId: "doc-1" }),
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 2",
+            content: "Content 2",
+          }, { id: "op-2", documentId: "doc-2" }),
+        ],
+        snapshots: [],
+      };
+
+      const saveManySpy = vi.spyOn(documentRepository, "saveMany");
+      const originalSaveMany = documentRepository.saveMany.bind(documentRepository);
+
+      saveManySpy.mockRejectedValueOnce(new Error("DB error"));
+      const response1 = await injectSync({ method: "POST", url: "/sync", payload });
+      expect(response1.statusCode).toBe(500);
+      expect(await documentRepository.count()).toBe(0);
+
+      saveManySpy.mockImplementationOnce(originalSaveMany);
+      const response2 = await injectSync({ method: "POST", url: "/sync", payload });
+      expect(response2.statusCode).toBe(200);
+      expect(await documentRepository.count()).toBe(2);
+    });
+
+    it("retry de doc-1 não duplica doc-2", async () => {
+      const payload = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 1",
+            content: "Content 1",
+          }, { id: "op-1", documentId: "doc-1" }),
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 2",
+            content: "Content 2",
+          }, { id: "op-2", documentId: "doc-2" }),
+        ],
+        snapshots: [],
+      };
+
+      await injectSync({ method: "POST", url: "/sync", payload });
+
+      const payloadRetry = {
+        deviceId: "device-A",
+        operations: [
+          createSyncOperation(SyncOperationType.CREATE_DOCUMENT, {
+            type: SyncOperationType.CREATE_DOCUMENT,
+            title: "Doc 1",
+            content: "Content 1",
+          }, { id: "op-1", documentId: "doc-1" }),
+        ],
+        snapshots: [],
+      };
+
+      const response = await injectSync({ method: "POST", url: "/sync", payload: payloadRetry });
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { acceptedOperations: any[]; missingOperations: any[] };
+      expect(body.acceptedOperations).toHaveLength(0);
+      expect(body.missingOperations.map((o) => o.id)).toEqual(["op-2"]);
+      expect(await documentRepository.count()).toBe(2);
     });
   });
 });
