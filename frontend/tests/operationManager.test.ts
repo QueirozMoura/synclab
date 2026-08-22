@@ -28,6 +28,17 @@ import type { DocumentSnapshot, SyncPayload } from "../src/types/documentSnapsho
 import type { SyncTransport } from "../src/types/syncTransport";
 
 describe("OperationManager", () => {
+  const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
+    id,
+    documentId: "doc-1",
+    deviceId: "test-device-id",
+    type: "CREATE_DOCUMENT",
+    payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
+    timestamp: "2024-01-01T00:00:00.000Z",
+    vectorClock: VectorClock.from({ "test-device-id": 1 }),
+    ...overrides,
+  });
+
 beforeEach(() => {
       vi.clearAllMocks();
       // Reset putSnapshot mock implementation (pode ter sido alterado por mockRejectedValue em testes anteriores)
@@ -1572,7 +1583,7 @@ beforeEach(() => {
       const manager = new OperationManager();
       const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
       const localOp2 = manager.createOperation("doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Updated" });
-      const localOp3 = manager.createOperation("doc-1", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "Updated" });
+      const localOp3 = manager.createOperation("doc-1", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "Updated content" });
 
       const remotePayload = createRemotePayload([localOp1, localOp3], []);
 
@@ -3541,6 +3552,18 @@ it("deve lidar com duplicatas", async () => {
   });
 
   describe("resiliência - falha de transporte", () => {
+    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
+      documentId: id,
+      id,
+      title: "Test",
+      content: "Content",
+      createdAt: "2024-01-01T00:00:00.000Z",
+      updatedAt: "2024-01-01T00:00:00.000Z",
+      operationCount: 10,
+      vectorClock: { "test-device-id": 1 },
+      ...overrides,
+    });
+
     const createRemotePayload = (operations: Operation[] = [], snapshots: DocumentSnapshot[] = []): SyncPayload => ({
       deviceId: "remote-device",
       operations,
@@ -3757,7 +3780,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("operações são aceitas corretamente no retry", async () => {
       const manager = new OperationManager();
-      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new RetryMockTransport(createRemotePayload([remoteOp], []), 1);
@@ -4700,7 +4723,7 @@ it("deve lidar com duplicatas", async () => {
 
     it("operação antiga continua presente", async () => {
       const manager = new OperationManager();
-      manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
+      const localOp1 = manager.createOperation("doc-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Test", content: "Content" });
 
       const remoteOp = createOp("op-remote", { deviceId: "remote-device", vectorClock: VectorClock.from({ "remote-device": 1 }) });
       const transport = new RetryMockTransport(createRemotePayload([remoteOp], []), 1);
@@ -4807,17 +4830,6 @@ it("deve lidar com duplicatas", async () => {
   });
 
   describe("resiliência - snapshot local durante retry", () => {
-    const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
-      id,
-      documentId: "doc-1",
-      deviceId: "test-device-id",
-      type: "CREATE_DOCUMENT",
-      payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
-      timestamp: "2024-01-01T00:00:00.000Z",
-      vectorClock: VectorClock.from({ "test-device-id": 1 }),
-      ...overrides,
-    });
-
     const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
       documentId: id,
       id,
@@ -5058,18 +5070,6 @@ it("deve lidar com duplicatas", async () => {
       payload: { type: "CREATE_DOCUMENT", title: "Test", content: "Content" },
       timestamp: "2024-01-01T00:00:00.000Z",
       vectorClock: VectorClock.from({ "test-device-id": 1 }),
-      ...overrides,
-    });
-
-    const createSnapshot = (id: string, overrides: Partial<DocumentSnapshot> = {}): DocumentSnapshot => ({
-      documentId: id,
-      id,
-      title: "Test",
-      content: "Content",
-      createdAt: "2024-01-01T00:00:00.000Z",
-      updatedAt: "2024-01-01T00:00:00.000Z",
-      operationCount: 10,
-      vectorClock: { "test-device-id": 1 },
       ...overrides,
     });
 
