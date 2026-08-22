@@ -2,6 +2,8 @@ import { createContext } from "react";
 import type { Operation, OperationType, OperationPayload } from "../types/operation";
 import type { Document } from "../types/document";
 import type { SyncPayload, SyncResult } from "../types/sync";
+import type { SyncCoordinator, SyncStatus } from "../lib/syncCoordinator";
+import type { SyncTransport } from "../types/syncTransport";
 
 export interface OperationManagerContextType {
   createOperation: (documentId: string, type: OperationType, payload: OperationPayload) => Operation;
@@ -13,6 +15,13 @@ export interface OperationManagerContextType {
     document: Document | null;
   }>;
   reconstructSyncedDocument: (documentId: string) => Document | null;
+  sync: () => Promise<SyncResult>;
+  syncCoordinator: SyncCoordinator;
+  setSyncTransport: (transport: SyncTransport) => void;
+  getSyncStatus: () => SyncStatus;
+  isSyncing: () => boolean;
+  getLastSyncResult: () => SyncResult | null;
+  getLastSyncError: () => Error | null;
 }
 
 export const OperationManagerContext = createContext<OperationManagerContextType | undefined>(undefined);

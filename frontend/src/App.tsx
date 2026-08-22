@@ -6,11 +6,11 @@ import { OperationManagerProvider } from "./context/OperationManagerContext";
 
 function App() {
   return (
-    <DocumentsProvider>
-      <OperationManagerProvider>
+    <OperationManagerProvider>
+      <DocumentsProvider>
         <RouterProvider router={router} />
-      </OperationManagerProvider>
-    </DocumentsProvider>
+      </DocumentsProvider>
+    </OperationManagerProvider>
   );
 }
 

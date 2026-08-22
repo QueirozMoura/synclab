@@ -1,12 +1,26 @@
 import React, { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
 import { OperationManager } from "../lib/operationManager";
+import { SyncCoordinator } from "../lib/syncCoordinator";
+import type { SyncTransport } from "../types/syncTransport";
 import type { Operation, OperationType, OperationPayload } from "../types/operation";
 import type { Document } from "../types/document";
 import type { SyncPayload, SyncResult } from "../types/sync";
 import { OperationManagerContext } from "./OperationManagerContextType";
 
-export const OperationManagerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+interface OperationManagerProviderProps {
+  children: ReactNode;
+  transport?: SyncTransport;
+}
+
+export const OperationManagerProvider: React.FC<OperationManagerProviderProps> = ({ children, transport }) => {
   const [manager] = useState(() => new OperationManager());
+  const [syncCoordinator] = useState(() => new SyncCoordinator(manager, { transport }));
+
+  useEffect(() => {
+    if (transport) {
+      syncCoordinator.setTransport(transport);
+    }
+  }, [syncCoordinator, transport]);
 
   useEffect(() => {
     manager.initialize().catch((error) => {
@@ -56,6 +70,16 @@ export const OperationManagerProvider: React.FC<{ children: ReactNode }> = ({ ch
     [manager]
   );
 
+  const sync = useCallback(() => syncCoordinator.sync(), [syncCoordinator]);
+  const isSyncing = useCallback(() => syncCoordinator.isSyncing(), [syncCoordinator]);
+  const getLastSyncResult = useCallback(() => syncCoordinator.getLastSyncResult(), [syncCoordinator]);
+  const getLastSyncError = useCallback(() => syncCoordinator.getLastSyncError(), [syncCoordinator]);
+  const setSyncTransport = useCallback(
+    (transport: SyncTransport) => syncCoordinator.setTransport(transport),
+    [syncCoordinator]
+  );
+  const getSyncStatus = useCallback(() => syncCoordinator.getStatus(), [syncCoordinator]);
+
   const value = useMemo(
     () => ({
       createOperation,
@@ -64,8 +88,15 @@ export const OperationManagerProvider: React.FC<{ children: ReactNode }> = ({ ch
       synchronize,
       synchronizeDocument,
       reconstructSyncedDocument,
+      sync,
+      syncCoordinator,
+      setSyncTransport,
+      getSyncStatus,
+      isSyncing,
+      getLastSyncResult,
+      getLastSyncError,
     }),
-    [createOperation, getOperations, getOperationsForDocument, synchronize, synchronizeDocument, reconstructSyncedDocument]
+    [createOperation, getOperations, getOperationsForDocument, synchronize, synchronizeDocument, reconstructSyncedDocument, sync, syncCoordinator, setSyncTransport, getSyncStatus, isSyncing, getLastSyncResult, getLastSyncError]
   );
 
   return <OperationManagerContext.Provider value={value}>{children}</OperationManagerContext.Provider>;
