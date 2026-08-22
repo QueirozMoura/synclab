@@ -4,10 +4,15 @@ import React from "react";
 import { DocumentsProvider } from "../src/context/DocumentsContext";
 import { useDocuments } from "../src/hooks/useDocuments";
 import { OperationManagerProvider } from "../src/context/OperationManagerContext";
+import * as operationManagerHook from "../src/hooks/useOperationManager";
 import { SyncPayload, SyncResult } from "../src/types";
 import { VectorClock } from "../src/lib/vectorClock";
+import type { Document } from "../src/types/document";
 import type { Operation } from "../src/types/operation";
 import type { DocumentSnapshot } from "../src/types/documentSnapshot";
+import type { OperationManagerContextType } from "../src/context/OperationManagerContextType";
+import type { SyncCoordinator, SyncStatus } from "../src/lib/syncCoordinator";
+import type { SyncTransport } from "../src/types/syncTransport";
 
 const mockedIndexedDb = vi.hoisted(() => ({
   getAllDocuments: vi.fn().mockImplementation(() => Promise.resolve([])),
@@ -78,6 +83,38 @@ function createMockSnapshot(
     operationCount,
     vectorClock,
     updatedAt: new Date().toISOString(),
+  };
+}
+
+function createOperationManagerContextMock(
+  overrides: Partial<OperationManagerContextType> = {}
+): OperationManagerContextType {
+  const defaultSyncResult: SyncResult = {
+    acceptedOperations: [],
+    missingOperations: [],
+    snapshots: [],
+  };
+
+  return {
+    createOperation: vi.fn(),
+    getOperations: vi.fn(() => []),
+    getOperationsForDocument: vi.fn(() => []),
+    synchronize: vi.fn(() => Promise.resolve(defaultSyncResult)),
+    synchronizeDocument: vi.fn(() => Promise.resolve({
+      syncResult: defaultSyncResult,
+      document: null as Document | null,
+    })),
+    reconstructSyncedDocument: vi.fn(() => null),
+    sync: vi.fn(() => Promise.resolve(defaultSyncResult)),
+    syncCoordinator: {} as SyncCoordinator,
+    setSyncTransport: vi.fn((_transport: SyncTransport) => {
+      void _transport;
+    }),
+    getSyncStatus: vi.fn((): SyncStatus => "idle"),
+    isSyncing: vi.fn(() => false),
+    getLastSyncResult: vi.fn(() => null),
+    getLastSyncError: vi.fn(() => null),
+    ...overrides,
   };
 }
 
@@ -770,5 +807,128 @@ describe("DocumentsContext - synchronizeAll", () => {
 
     expect(doc1).toBeDefined();
     expect(doc2).toBeDefined();
+  });
+});
+
+describe("DocumentsContext - SyncCoordinator integration", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const DocumentsOnlyWrapper = ({ children }: { children: React.ReactNode }) =>
+    React.createElement(DocumentsProvider, null, children);
+
+  const useDocumentsFromProvider = () => useDocuments();
+
+  const useDocumentsWithMockedOperationManager = () => {
+    return renderHook(useDocumentsFromProvider, { wrapper: DocumentsOnlyWrapper });
+  };
+
+  it("should expose syncDocuments and delegate to OperationManagerContext.sync", async () => {
+    const syncResult: SyncResult = { acceptedOperations: [], missingOperations: [], snapshots: [] };
+    const syncMock = vi.fn(() => Promise.resolve(syncResult));
+    vi.spyOn(operationManagerHook, "useOperationManager").mockReturnValue(
+      createOperationManagerContextMock({ sync: syncMock })
+    );
+
+    const { result } = useDocumentsWithMockedOperationManager();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    let returned: SyncResult | undefined;
+    await act(async () => {
+      returned = await result.current.syncDocuments();
+    });
+
+    expect(syncMock).toHaveBeenCalledTimes(1);
+    expect(returned).toBe(syncResult);
+  });
+
+  it("should preserve the original Promise returned by sync", async () => {
+    const syncResult: SyncResult = { acceptedOperations: [], missingOperations: [], snapshots: [] };
+    const syncPromise = Promise.resolve(syncResult);
+    const syncMock = vi.fn(() => syncPromise);
+    vi.spyOn(operationManagerHook, "useOperationManager").mockReturnValue(
+      createOperationManagerContextMock({ sync: syncMock })
+    );
+
+    const { result } = useDocumentsWithMockedOperationManager();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    const returnedPromise = result.current.syncDocuments();
+    expect(returnedPromise).toBe(syncPromise);
+    await expect(returnedPromise).resolves.toBe(syncResult);
+  });
+
+  it("should propagate sync errors", async () => {
+    const syncError = new Error("sync failed");
+    const syncMock = vi.fn(() => Promise.reject(syncError));
+    vi.spyOn(operationManagerHook, "useOperationManager").mockReturnValue(
+      createOperationManagerContextMock({ sync: syncMock })
+    );
+
+    const { result } = useDocumentsWithMockedOperationManager();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    await expect(result.current.syncDocuments()).rejects.toBe(syncError);
+    expect(syncMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("should not trigger sync automatically on provider mount", async () => {
+    const syncMock = vi.fn(() => Promise.resolve({ acceptedOperations: [], missingOperations: [], snapshots: [] }));
+    const useOperationManagerSpy = vi.spyOn(operationManagerHook, "useOperationManager").mockReturnValue(
+      createOperationManagerContextMock({ sync: syncMock })
+    );
+
+    useDocumentsWithMockedOperationManager();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(useOperationManagerSpy).toHaveBeenCalled();
+    expect(syncMock).not.toHaveBeenCalled();
+  });
+
+  it("should delegate sync status selectors to OperationManagerContext", async () => {
+    const getSyncStatusMock = vi.fn((): SyncStatus => "success");
+    const isSyncingMock = vi.fn(() => true);
+    const lastSyncResult: SyncResult = { acceptedOperations: [], missingOperations: [], snapshots: [] };
+    const getLastSyncResultMock = vi.fn(() => lastSyncResult);
+    const lastSyncError = new Error("boom");
+    const getLastSyncErrorMock = vi.fn(() => lastSyncError);
+
+    vi.spyOn(operationManagerHook, "useOperationManager").mockReturnValue(
+      createOperationManagerContextMock({
+        getSyncStatus: getSyncStatusMock,
+        isSyncing: isSyncingMock,
+        getLastSyncResult: getLastSyncResultMock,
+        getLastSyncError: getLastSyncErrorMock,
+      })
+    );
+
+    const { result } = useDocumentsWithMockedOperationManager();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(result.current.getSyncStatus()).toBe("success");
+    expect(result.current.isSyncing()).toBe(true);
+    expect(result.current.getLastSyncResult()).toBe(lastSyncResult);
+    expect(result.current.getLastSyncError()).toBe(lastSyncError);
+
+    expect(getSyncStatusMock).toHaveBeenCalledTimes(1);
+    expect(isSyncingMock).toHaveBeenCalledTimes(1);
+    expect(getLastSyncResultMock).toHaveBeenCalledTimes(1);
+    expect(getLastSyncErrorMock).toHaveBeenCalledTimes(1);
   });
 });

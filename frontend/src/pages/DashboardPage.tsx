@@ -15,8 +15,11 @@ const getDocumentIcon = (id: string) => {
 };
 
 export const DashboardPage: React.FC = () => {
-  const { documents } = useDocuments();
+  const { documents, syncDocuments, getLastSyncError } = useDocuments();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [isSyncPending, setIsSyncPending] = React.useState(false);
+  const [syncFeedback, setSyncFeedback] = React.useState<"idle" | "success" | "error">("idle");
+  const [syncErrorMessage, setSyncErrorMessage] = React.useState<string | null>(null);
 
   const handleFilterClick = () => {
     console.log("Filter clicked");
@@ -25,6 +28,41 @@ export const DashboardPage: React.FC = () => {
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
+
+  const handleSyncClick = async () => {
+    if (isSyncPending) {
+      return;
+    }
+
+    setIsSyncPending(true);
+    setSyncFeedback("idle");
+    setSyncErrorMessage(null);
+
+    try {
+      await syncDocuments();
+      setSyncFeedback("success");
+    } catch {
+      const lastError = getLastSyncError();
+      setSyncFeedback("error");
+      setSyncErrorMessage(lastError?.message ?? "Erro ao sincronizar");
+    } finally {
+      setIsSyncPending(false);
+    }
+  };
+
+  const syncStatus = isSyncPending
+    ? "syncing"
+    : syncFeedback === "error"
+      ? "offline"
+      : "synced";
+
+  const syncText = isSyncPending
+    ? "Sincronizando..."
+    : syncFeedback === "success"
+      ? "Sincronização concluída"
+      : syncFeedback === "error"
+        ? syncErrorMessage ?? "Erro ao sincronizar"
+        : "All devices synced";
 
   const featuredDoc = documents[0];
   const compactDocs = documents.slice(1, 3);
@@ -52,6 +90,10 @@ export const DashboardPage: React.FC = () => {
             {/* Dashboard Header */}
             <DashboardHeader
               onFilterClick={handleFilterClick}
+              onSyncClick={handleSyncClick}
+              isSyncing={isSyncPending}
+              syncStatus={syncStatus}
+              syncText={syncText}
             />
 
             {/* Main Grid: Documents (8/12) + Activity (4/12) on desktop */}

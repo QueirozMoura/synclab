@@ -7,7 +7,7 @@ interface SyncStatusProps {
 
 export const SyncStatus: React.FC<SyncStatusProps> = ({
   status = "synced",
-  text = "All devices synced",
+  text,
 }) => {
   const getStatusStyles = () => {
     switch (status) {
@@ -49,7 +49,7 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({
           boxShadow: dotGlow,
         }}
       />
-      <span className="text-xs text-[#e4e1ed]">{statusText || text}</span>
+      <span className="text-xs text-[#e4e1ed]">{text ?? statusText}</span>
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
 import type { Document } from "../types/document";
 import type { SyncPayload, SyncResult } from "../types/sync";
+import type { SyncStatus } from "../lib/syncCoordinator";
 import { DocumentsContext } from "./DocumentsContextType";
 import { getAllDocuments, putDocument, deleteDocument as deleteDocumentIdb } from "../lib/indexedDb";
 import { useOperationManager } from "../hooks/useOperationManager";
@@ -12,6 +13,11 @@ export interface DocumentsContextType {
   getDocument: (id: string) => Document | undefined;
   updateDocument: (id: string, data: Partial<Document>) => void;
   deleteDocument: (id: string) => void;
+  syncDocuments: () => Promise<SyncResult>;
+  getSyncStatus: () => SyncStatus;
+  isSyncing: () => boolean;
+  getLastSyncResult: () => SyncResult | null;
+  getLastSyncError: () => Error | null;
   synchronizeDocument: (documentId: string, remotePayload: SyncPayload) => Promise<Document | null>;
   synchronizeAll: (remotePayload: SyncPayload) => Promise<SyncResult>;
 }
@@ -204,7 +210,17 @@ open http://localhost:3000
 export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { createOperation, synchronizeDocument: syncDoc, synchronize, reconstructSyncedDocument } = useOperationManager();
+  const {
+    createOperation,
+    synchronizeDocument: syncDoc,
+    synchronize,
+    reconstructSyncedDocument,
+    sync,
+    getSyncStatus: getCoordinatorSyncStatus,
+    isSyncing: isCoordinatorSyncing,
+    getLastSyncResult: getCoordinatorLastSyncResult,
+    getLastSyncError: getCoordinatorLastSyncError,
+  } = useOperationManager();
 
   useEffect(() => {
     let mounted = true;
@@ -377,6 +393,26 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     [synchronize, reconstructSyncedDocument]
   );
 
+  const syncDocuments = useCallback((): Promise<SyncResult> => {
+    return sync();
+  }, [sync]);
+
+  const getSyncStatus = useCallback((): SyncStatus => {
+    return getCoordinatorSyncStatus();
+  }, [getCoordinatorSyncStatus]);
+
+  const isSyncing = useCallback((): boolean => {
+    return isCoordinatorSyncing();
+  }, [isCoordinatorSyncing]);
+
+  const getLastSyncResult = useCallback((): SyncResult | null => {
+    return getCoordinatorLastSyncResult();
+  }, [getCoordinatorLastSyncResult]);
+
+  const getLastSyncError = useCallback((): Error | null => {
+    return getCoordinatorLastSyncError();
+  }, [getCoordinatorLastSyncError]);
+
   const value = useMemo(
     () => ({
       documents,
@@ -385,10 +421,29 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       getDocument,
       updateDocument,
       deleteDocument,
+      syncDocuments,
+      getSyncStatus,
+      isSyncing,
+      getLastSyncResult,
+      getLastSyncError,
       synchronizeDocument,
       synchronizeAll,
     }),
-    [documents, isLoading, createDocument, getDocument, updateDocument, deleteDocument, synchronizeDocument, synchronizeAll]
+    [
+      documents,
+      isLoading,
+      createDocument,
+      getDocument,
+      updateDocument,
+      deleteDocument,
+      syncDocuments,
+      getSyncStatus,
+      isSyncing,
+      getLastSyncResult,
+      getLastSyncError,
+      synchronizeDocument,
+      synchronizeAll,
+    ]
   );
 
   return <DocumentsContext.Provider value={value}>{children}</DocumentsContext.Provider>;

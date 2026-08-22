@@ -3,10 +3,18 @@ import { SyncStatus } from "./SyncStatus";
 
 interface DashboardHeaderProps {
   onFilterClick?: () => void;
+  onSyncClick?: () => void;
+  isSyncing?: boolean;
+  syncStatus?: "synced" | "syncing" | "offline";
+  syncText?: string;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onFilterClick,
+  onSyncClick,
+  isSyncing = false,
+  syncStatus = "synced",
+  syncText = "All devices synced",
 }) => {
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -21,9 +29,20 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         <h1 className="text-3xl md:text-4xl font-bold text-[#e4e1ed] tracking-tighter">
           {getGreeting()}, Gustavo.
         </h1>
-        <SyncStatus status="synced" text="All devices synced" />
+        <SyncStatus status={syncStatus} text={syncText} />
       </div>
       <div className="flex items-center gap-2">
+        <button
+          onClick={onSyncClick}
+          disabled={isSyncing}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm text-[#c7c4d7] border border-[#27272A] rounded-md hover:bg-[#1f1f27] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+          <span>{isSyncing ? "Sincronizando..." : "Sincronizar"}</span>
+        </button>
         <button
           onClick={onFilterClick}
           className="flex items-center gap-2 px-3 py-1.5 text-sm text-[#c7c4d7] border border-[#27272A] rounded-md hover:bg-[#1f1f27] transition-colors"
