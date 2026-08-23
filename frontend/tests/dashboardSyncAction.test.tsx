@@ -66,6 +66,7 @@ describe("Dashboard sync action", () => {
     ],
     isLoading: false,
     isOnline: true,
+    syncState: "synced",
     createDocument: vi.fn(),
     getDocument: vi.fn(),
     updateDocument: vi.fn(),

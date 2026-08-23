@@ -21,6 +21,7 @@ export class OperationManager {
   private readonly deviceId: string;
   private vectorClock: VectorClock;
   private readonly operationLog: OperationLog;
+  private readonly pendingOperationIds = new Set<string>();
   private initialized = false;
   private syncTransport: SyncTransport | null = null;
 
@@ -40,6 +41,9 @@ export class OperationManager {
     }
     const storedOperations = await getAllOperations();
     this.operationLog.loadInitial(storedOperations);
+    for (const operation of storedOperations) {
+      this.pendingOperationIds.add(operation.id);
+    }
     if (storedOperations.length > 0) {
       for (const op of storedOperations) {
         const opClock = VectorClock.from(op.vectorClock.toMap());
@@ -83,6 +87,7 @@ export class OperationManager {
     this.vectorClock = this.vectorClock.increment(this.deviceId);
     const operation = createOperation(documentId, type, payload, this.vectorClock);
     this.operationLog.append(operation);
+    this.pendingOperationIds.add(operation.id);
     putOperation(operation).catch((error) => {
       console.error("[OperationManager] Failed to persist operation:", error);
     });
@@ -121,6 +126,10 @@ export class OperationManager {
 
   getOperationsForDocument(documentId: string): Operation[] {
     return this.operationLog.getByDocument(documentId);
+  }
+
+  hasPendingOperations(): boolean {
+    return this.pendingOperationIds.size > 0;
   }
 
   reconstructDocument(documentId: string, initialDocument?: Document): Document | null {
@@ -167,6 +176,10 @@ export class OperationManager {
       if (!localOperationIds.has(acceptedOp.id)) {
         await putOperation(acceptedOp);
       }
+    }
+
+    for (const sentOp of result.missingOperations) {
+      this.pendingOperationIds.delete(sentOp.id);
     }
 
     for (const acceptedOp of result.acceptedOperations) {

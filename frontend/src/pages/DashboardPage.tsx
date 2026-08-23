@@ -22,6 +22,7 @@ export const DashboardPage: React.FC = () => {
     getLastSyncError,
     getLastSuccessfulSyncAt,
     isOnline,
+    syncState,
   } = useDocuments();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [isSyncPending, setIsSyncPending] = React.useState(false);
@@ -60,23 +61,15 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  const syncStatus = !isOnline
-    ? "offline"
-    : isSyncPending
-      ? "syncing"
-      : syncFeedback === "error"
-      ? "offline"
-      : "synced";
+  const syncStatus = isSyncPending ? "syncing" : syncState;
 
-  const syncText = !isOnline
-    ? "Offline"
-    : isSyncPending
-      ? "Sincronizando..."
+  const syncText = isSyncPending
+    ? "Sincronizando..."
     : syncFeedback === "success"
       ? "Sincronização concluída"
       : syncFeedback === "error"
         ? "Falha na sincronização"
-        : "Pronto para sincronizar";
+        : undefined;
 
   const syncDetails = isSyncPending
     ? []

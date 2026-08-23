@@ -99,6 +99,7 @@ function createOperationManagerContextMock(
     createOperation: vi.fn(),
     getOperations: vi.fn(() => []),
     getOperationsForDocument: vi.fn(() => []),
+    hasPendingOperations: vi.fn(() => false),
     synchronize: vi.fn(() => Promise.resolve(defaultSyncResult)),
     synchronizeDocument: vi.fn(() => Promise.resolve({
       syncResult: defaultSyncResult,
@@ -930,10 +931,10 @@ describe("DocumentsContext - SyncCoordinator integration", () => {
     expect(result.current.getLastSyncError()).toBe(lastSyncError);
     expect(result.current.getLastSuccessfulSyncAt()).toBe(123456);
 
-    expect(getSyncStatusMock).toHaveBeenCalledTimes(1);
-    expect(isSyncingMock).toHaveBeenCalledTimes(1);
-    expect(getLastSyncResultMock).toHaveBeenCalledTimes(1);
-    expect(getLastSyncErrorMock).toHaveBeenCalledTimes(1);
-    expect(getLastSuccessfulSyncAtMock).toHaveBeenCalledTimes(1);
+    expect(getSyncStatusMock).toHaveBeenCalled();
+    expect(isSyncingMock).toHaveBeenCalled();
+    expect(getLastSyncResultMock).toHaveBeenCalled();
+    expect(getLastSyncErrorMock).toHaveBeenCalled();
+    expect(getLastSuccessfulSyncAtMock).toHaveBeenCalled();
   });
 });

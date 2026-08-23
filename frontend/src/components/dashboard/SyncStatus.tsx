@@ -1,7 +1,7 @@
 import React from "react";
 
 interface SyncStatusProps {
-  status?: "synced" | "syncing" | "offline";
+  status?: "synced" | "syncing" | "pending" | "offline" | "error";
   text?: string;
   lastSuccessfulSyncAt?: number | null;
 }
@@ -40,6 +40,18 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({
           dotColor: "#d97721",
           dotGlow: "0 0 8px rgba(217,119,33,0.5)",
           text: "Syncing...",
+        };
+      case "pending":
+        return {
+          dotColor: "#f59e0b",
+          dotGlow: "0 0 8px rgba(245,158,11,0.5)",
+          text: "Alterações pendentes",
+        };
+      case "error":
+        return {
+          dotColor: "#ffb4ab",
+          dotGlow: "0 0 8px rgba(255,180,171,0.5)",
+          text: "Falha na sincronização",
         };
       case "offline":
         return {

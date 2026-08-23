@@ -9,6 +9,7 @@ export interface OperationManagerContextType {
   createOperation: (documentId: string, type: OperationType, payload: OperationPayload) => Operation;
   getOperations: () => Operation[];
   getOperationsForDocument: (documentId: string) => Operation[];
+  hasPendingOperations: () => boolean;
   synchronize: (remotePayload: SyncPayload) => Promise<SyncResult>;
   synchronizeDocument: (documentId: string, remotePayload: SyncPayload) => Promise<{
     syncResult: SyncResult;

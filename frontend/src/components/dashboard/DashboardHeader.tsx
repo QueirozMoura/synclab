@@ -5,7 +5,7 @@ interface DashboardHeaderProps {
   onFilterClick?: () => void;
   onSyncClick?: () => void;
   isSyncing?: boolean;
-  syncStatus?: "synced" | "syncing" | "offline";
+  syncStatus?: "synced" | "syncing" | "pending" | "offline" | "error";
   syncText?: string;
   syncDetails?: string[];
   lastSuccessfulSyncAt?: number | null;

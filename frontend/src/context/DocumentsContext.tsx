@@ -2,6 +2,8 @@ import React, { useState, useCallback, useMemo, useEffect, type ReactNode } from
 import type { Document } from "../types/document";
 import type { SyncPayload, SyncResult } from "../types/sync";
 import type { SyncStatus } from "../lib/syncCoordinator";
+import type { SyncState } from "../lib/syncState";
+import { deriveSyncState } from "../lib/syncState";
 import { DocumentsContext } from "./DocumentsContextType";
 import { getAllDocuments, putDocument, deleteDocument as deleteDocumentIdb } from "../lib/indexedDb";
 import { useOperationManager } from "../hooks/useOperationManager";
@@ -11,6 +13,7 @@ export interface DocumentsContextType {
   documents: Document[];
   isLoading: boolean;
   isOnline: boolean;
+  syncState: SyncState;
   createDocument: (title?: string) => Document;
   getDocument: (id: string) => Document | undefined;
   updateDocument: (id: string, data: Partial<Document>) => void;
@@ -225,6 +228,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     getLastSyncResult: getCoordinatorLastSyncResult,
     getLastSyncError: getCoordinatorLastSyncError,
     getLastSuccessfulSyncAt: getCoordinatorLastSuccessfulSyncAt,
+    hasPendingOperations,
   } = useOperationManager();
 
   useEffect(() => {
@@ -422,11 +426,18 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     return getCoordinatorLastSuccessfulSyncAt();
   }, [getCoordinatorLastSuccessfulSyncAt]);
 
+  const syncState = deriveSyncState({
+    isOnline,
+    syncStatus: getCoordinatorSyncStatus(),
+    hasPendingOperations: hasPendingOperations(),
+  });
+
   const value = useMemo(
     () => ({
       documents,
       isLoading,
       isOnline,
+      syncState,
       createDocument,
       getDocument,
       updateDocument,
@@ -444,6 +455,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       documents,
       isLoading,
       isOnline,
+      syncState,
       createDocument,
       getDocument,
       updateDocument,
