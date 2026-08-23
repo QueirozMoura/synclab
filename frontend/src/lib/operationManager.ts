@@ -41,9 +41,7 @@ export class OperationManager {
     }
     const storedOperations = await getAllOperations();
     this.operationLog.loadInitial(storedOperations);
-    for (const operation of storedOperations) {
-      this.pendingOperationIds.add(operation.id);
-    }
+    this.rebuildPendingOperationIds();
     if (storedOperations.length > 0) {
       for (const op of storedOperations) {
         const opClock = VectorClock.from(op.vectorClock.toMap());
@@ -132,6 +130,15 @@ export class OperationManager {
     return this.pendingOperationIds.size > 0;
   }
 
+  private rebuildPendingOperationIds(): void {
+    this.pendingOperationIds.clear();
+    for (const operation of this.operationLog.getAll()) {
+      if (operation.deviceId === this.deviceId && operation.confirmedAt === undefined) {
+        this.pendingOperationIds.add(operation.id);
+      }
+    }
+  }
+
   reconstructDocument(documentId: string, initialDocument?: Document): Document | null {
     const operations = this.getOperationsForDocument(documentId);
     return reconstructDocument(initialDocument ?? null, operations);
@@ -178,8 +185,15 @@ export class OperationManager {
       }
     }
 
+    const confirmationTimestamp = Date.now();
     for (const sentOp of result.missingOperations) {
-      this.pendingOperationIds.delete(sentOp.id);
+      const localOperation = this.operationLog.getById(sentOp.id);
+      if (localOperation?.deviceId === this.deviceId && localOperation.confirmedAt === undefined) {
+        const confirmedOperation = { ...localOperation, confirmedAt: confirmationTimestamp };
+        this.operationLog.replace(confirmedOperation);
+        await putOperation(confirmedOperation);
+        this.pendingOperationIds.delete(sentOp.id);
+      }
     }
 
     for (const acceptedOp of result.acceptedOperations) {
@@ -203,7 +217,14 @@ export class OperationManager {
     }
 
     this.operationLog.loadInitial(operations);
-    return result;
+    return {
+      ...result,
+      missingOperations: result.missingOperations.map((operation) => {
+        const { confirmedAt, ...withoutConfirmation } = operation;
+        void confirmedAt;
+        return withoutConfirmation;
+      }),
+    };
   }
 
   async syncWithTransport(): Promise<SyncResult> {

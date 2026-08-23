@@ -20,4 +20,5 @@ export interface Operation {
   payload: OperationPayload;
   timestamp: string;
   vectorClock: VectorClock;
+  confirmedAt?: number;
 }

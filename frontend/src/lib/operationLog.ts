@@ -36,6 +36,13 @@ export class OperationLog {
     return op ? Object.freeze({ ...op, payload: Object.freeze({ ...op.payload }) }) : undefined;
   }
 
+  replace(operation: Operation): boolean {
+    const index = this.operations.findIndex((current) => current.id === operation.id);
+    if (index === -1) return false;
+    this.operations[index] = this.cloneOperation(operation);
+    return true;
+  }
+
   has(id: string): boolean {
     return this.seenIds.has(id);
   }
