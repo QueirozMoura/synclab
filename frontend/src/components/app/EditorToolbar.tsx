@@ -30,9 +30,9 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
     {
       id: "formatting",
       actions: [
-        { id: "bold", label: "Bold", icon: "B", onClick: onBold },
-        { id: "italic", label: "Italic", icon: "I", onClick: onItalic },
-        { id: "code", label: "Code", icon: "</>", onClick: onCode },
+        { id: "bold", label: "Negrito", icon: "B", onClick: onBold },
+        { id: "italic", label: "Itálico", icon: "I", onClick: onItalic },
+        { id: "code", label: "Código", icon: "</>", onClick: onCode },
       ],
     },
     {

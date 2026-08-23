@@ -33,13 +33,13 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({
         return {
           dotColor: "#10b981",
           dotGlow: "0 0 8px rgba(16,185,129,0.5)",
-          text: "All devices synced",
+          text: "Todos os dispositivos sincronizados",
         };
       case "syncing":
         return {
           dotColor: "#d97721",
           dotGlow: "0 0 8px rgba(217,119,33,0.5)",
-          text: "Syncing...",
+          text: "Sincronizando...",
         };
       case "pending":
         return {
@@ -63,7 +63,7 @@ export const SyncStatus: React.FC<SyncStatusProps> = ({
         return {
           dotColor: "#10b981",
           dotGlow: "0 0 8px rgba(16,185,129,0.5)",
-          text: "All devices synced",
+          text: "Todos os dispositivos sincronizados",
         };
     }
   };

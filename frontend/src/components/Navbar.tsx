@@ -53,19 +53,19 @@ export const Navbar: React.FC<NavbarProps> = () => {
             href="#features"
             className="landing-nav-link text-sm"
           >
-            Features
+            Recursos
           </a>
           <a
             href="#architecture"
             className="landing-nav-link text-sm"
           >
-            Architecture
+            Arquitetura
           </a>
           <Link
             to="/app/documents"
             className="landing-nav-link text-sm"
           >
-            Docs
+            Documentação
           </Link>
         </div>
 
@@ -75,7 +75,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
             to="/app"
             className="landing-nav-cta text-sm"
           >
-            Open workspace
+            Abrir ambiente
           </Link>
         </div>
       </div>

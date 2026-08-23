@@ -15,7 +15,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = () => {
       {/* Header */}
       <div className="p-4 border-b border-[#464554] flex items-center justify-between sticky top-0 bg-[#13131b]">
         <p className="text-xs font-semibold text-[#908fa0] uppercase tracking-wider">
-          Engineering
+          Engenharia
         </p>
         <Link
           to="/app/documents/new"

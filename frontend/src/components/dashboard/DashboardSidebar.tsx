@@ -13,15 +13,15 @@ export const DashboardSidebar: React.FC = () => {
   };
 
   const navigationItems = [
-    { id: "search", label: "Search", icon: "search", path: "/app/documents" },
-    { id: "recent", label: "Recent", icon: "history", path: "/app" },
-    { id: "favorites", label: "Favorites", icon: "star", path: "/app/favorites" },
-    { id: "documents", label: "Documents", icon: "description", path: "/app/documents" },
+    { id: "search", label: "Pesquisar", icon: "search", path: "/app/documents" },
+    { id: "recent", label: "Recentes", icon: "history", path: "/app" },
+    { id: "favorites", label: "Favoritos", icon: "star", path: "/app/favorites" },
+    { id: "documents", label: "Documentos", icon: "description", path: "/app/documents" },
   ];
 
   const footerItems = [
-    { id: "settings", label: "Settings", icon: "settings", path: "/app/settings" },
-    { id: "help", label: "Help", icon: "help", path: "/app/help" },
+    { id: "settings", label: "Configurações", icon: "settings", path: "/app/settings" },
+    { id: "help", label: "Ajuda", icon: "help", path: "/app/help" },
   ];
 
   const getIcon = (name: string) => {
@@ -86,7 +86,7 @@ export const DashboardSidebar: React.FC = () => {
           </div>
           <div>
             <p className="text-sm font-semibold text-[#e4e1ed]">Synclab</p>
-            <p className="text-xs text-[#a9a5b7]">Offline-first workspace</p>
+            <p className="text-xs text-[#a9a5b7]">Ambiente offline-first</p>
           </div>
         </div>
         <button
@@ -94,7 +94,7 @@ export const DashboardSidebar: React.FC = () => {
           className="dashboard-button dashboard-button-primary w-full py-2.5 px-3 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
         >
           <span>+</span>
-          <span>New Document</span>
+          <span>Novo documento</span>
         </button>
       </div>
 
@@ -138,7 +138,7 @@ export const DashboardSidebar: React.FC = () => {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-[#e4e1ed] truncate">Gustavo</p>
-            <p className="text-xs text-[#908fa0] truncate">Pro Plan</p>
+            <p className="text-xs text-[#908fa0] truncate">Plano Pro</p>
           </div>
         </div>
       </div>

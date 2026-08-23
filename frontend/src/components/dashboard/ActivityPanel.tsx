@@ -3,9 +3,9 @@ import { ActivityItem } from "./ActivityItem";
 
 export const ActivityPanel: React.FC = () => {
   const activities = [
-    { title: "You edited Architecture Overview", timeAgo: "10 mins ago", dotColor: "#c0c1ff" },
-    { title: "Device 'MacBook Pro' synced", timeAgo: "2 hours ago", dotColor: "#34343d" },
-    { title: "Created CRDT Notes", timeAgo: "Yesterday", dotColor: "#34343d" },
+    { title: "Você editou Visão geral da arquitetura", timeAgo: "há 10 minutos", dotColor: "#c0c1ff" },
+    { title: "Dispositivo 'MacBook Pro' sincronizado", timeAgo: "há 2 horas", dotColor: "#34343d" },
+    { title: "Notas de CRDT criadas", timeAgo: "Ontem", dotColor: "#34343d" },
   ];
 
   return (
@@ -17,7 +17,7 @@ export const ActivityPanel: React.FC = () => {
             <circle cx="12" cy="12" r="9" />
             <path d="M12 7v5l4 2" />
           </svg>
-          <h3 className="text-base font-semibold text-[#f7f4fb]">Activity</h3>
+          <h3 className="text-base font-semibold text-[#f7f4fb]">Atividade</h3>
         </div>
         <svg className="w-5 h-5 text-[#908fa0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
           <circle cx="12" cy="12" r="10" />
@@ -41,7 +41,7 @@ export const ActivityPanel: React.FC = () => {
       {/* Load more */}
       <div className="dashboard-panel-footer p-5">
         <button className="dashboard-text-button w-full text-center text-sm py-2">
-          Load more
+          Carregar mais
         </button>
       </div>
     </div>

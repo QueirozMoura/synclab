@@ -14,7 +14,7 @@ export const MobileTopbar: React.FC<MobileTopbarProps> = ({ onMenuClick }) => {
             className="w-1.5 h-1.5 rounded-full bg-[#10b981]"
             style={{ boxShadow: "0 0 6px rgba(16,185,129,0.5)" }}
           />
-          <span className="text-xs text-[#e4e1ed]">Synced</span>
+          <span className="text-xs text-[#e4e1ed]">Sincronizado</span>
         </div>
         <button
           onClick={onMenuClick}

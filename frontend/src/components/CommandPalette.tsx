@@ -51,7 +51,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     () => [
       {
         id: "new-document",
-        label: "New document",
+        label: "Novo documento",
         icon: "note_add",
         shortcut: "↵",
         action: handleNewDocument,
@@ -59,21 +59,21 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       },
       {
         id: "search-documents",
-        label: "Search documents",
+        label: "Pesquisar documentos",
         icon: "manage_search",
         action: () => navigate("/app/documents"),
         section: "suggestions",
       },
       {
         id: "open-recent",
-        label: "Open recent",
+        label: "Abrir recentes",
         icon: "history",
         action: () => navigate("/app"),
         section: "suggestions",
       },
       {
         id: "sync-now",
-        label: "Sync now",
+        label: "Sincronizar agora",
         icon: "sync",
         action: () => {
           // Show syncing state visually
@@ -84,14 +84,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       },
       {
         id: "view-history",
-        label: "View history",
+        label: "Ver histórico",
         icon: "update",
         action: () => navigate("/app/documents/history"),
         section: "suggestions",
       },
       {
         id: "settings",
-        label: "Settings",
+        label: "Configurações",
         icon: "settings",
         action: () => navigate("/app/settings"),
         section: "settings",
@@ -198,7 +198,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       onClick={handleOverlayClick}
       role="dialog"
       aria-modal="true"
-      aria-label="Command Palette"
+      aria-label="Paleta de comandos"
     >
       <div className="flex items-start justify-center pt-16 px-4">
         <div
@@ -212,11 +212,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                 type="text"
                 value={query}
                 onChange={handleInputChange}
-                placeholder="Search commands..."
+                placeholder="Pesquisar comandos..."
                 className="flex-1 bg-transparent text-[#e4e1ed] placeholder:text-[#908fa0] text-base outline-none font-medium"
                 autoComplete="off"
                 spellCheck={false}
-                aria-label="Search commands"
+                aria-label="Pesquisar comandos"
               />
               <span
                 className="flex items-center gap-1 px-2 py-1 text-xs font-mono text-[#c7c4d7] bg-[#34343d] border border-[#464554] rounded"
@@ -230,7 +230,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
             {filteredCommands.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
                 <Icon name="search" className="w-10 h-10 text-[#464554] mb-3" />
-                <p className="text-sm text-[#908fa0]">No commands found</p>
+                <p className="text-sm text-[#908fa0]">Nenhum comando encontrado</p>
               </div>
             ) : (
               <>
@@ -240,7 +240,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                     style={{ opacity: query.trim() ? 0.5 : 1 }}
                   >
                     <span className="text-label text-[#908fa0]">
-                      {currentSection === "settings" ? "SETTINGS" : "SUGGESTIONS"}
+                      {currentSection === "settings" ? "CONFIGURAÇÕES" : "SUGESTÕES"}
                     </span>
                   </div>
                 )}
@@ -296,7 +296,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                   <>
                     <div className="h-px bg-[#27272A] my-1" />
                     <div className="px-4 py-2">
-                      <span className="text-label text-[#908fa0]">SETTINGS</span>
+                      <span className="text-label text-[#908fa0]">CONFIGURAÇÕES</span>
                     </div>
                   </>
                 )}
@@ -309,15 +309,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
               <kbd className="flex items-center gap-1 px-2 py-1 text-[#c7c4d7] bg-[#34343d] border border-[#464554] rounded shadow-sm font-mono">
                 <span>↑</span>
                 <span>↓</span>
-                <span className="text-[#908fa0] px-1">to navigate</span>
+                <span className="text-[#908fa0] px-1">para navegar</span>
               </kbd>
               <kbd className="flex items-center gap-1 px-2 py-1 text-[#c7c4d7] bg-[#34343d] border border-[#464554] rounded shadow-sm font-mono">
                 <span>↵</span>
-                <span className="text-[#908fa0] px-1">to select</span>
+                <span className="text-[#908fa0] px-1">para selecionar</span>
               </kbd>
               <kbd className="flex items-center gap-1 px-2 py-1 text-[#c7c4d7] bg-[#34343d] border border-[#464554] rounded shadow-sm font-mono">
                 <span>esc</span>
-                <span className="text-[#908fa0] px-1">to close</span>
+                <span className="text-[#908fa0] px-1">para fechar</span>
               </kbd>
             </div>
           </div>

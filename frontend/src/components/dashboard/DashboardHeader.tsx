@@ -16,21 +16,21 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   onSyncClick,
   isSyncing = false,
   syncStatus = "synced",
-  syncText = "All devices synced",
+  syncText = "Todos os dispositivos sincronizados",
   syncDetails = [],
   lastSuccessfulSyncAt = null,
 }) => {
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
+    if (hour < 12) return "Bom dia";
+    if (hour < 18) return "Boa tarde";
+    return "Boa noite";
   };
 
   return (
     <div className="dashboard-header flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 mb-8">
       <div className="min-w-0">
-        <p className="dashboard-kicker mb-3">Synclab workspace</p>
+        <p className="dashboard-kicker mb-3">Ambiente Synclab</p>
         <h1 className="text-3xl md:text-4xl font-bold text-[#f7f4fb] tracking-tight">
           {getGreeting()}, Gustavo.
         </h1>
@@ -66,7 +66,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
           </svg>
-          <span>Filter</span>
+          <span>Filtrar</span>
         </button>
       </div>
     </div>

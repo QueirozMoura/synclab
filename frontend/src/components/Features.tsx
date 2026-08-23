@@ -17,25 +17,25 @@ export const Features: React.FC = () => (
     <section id="features" className="landing-features landing-reveal">
       <div className="landing-container container-main">
         <div className="landing-section-heading-row">
-          <div><p className="landing-section-label">Built for the in-between</p><h2>Resilience is<br /><em>a feature.</em></h2></div>
-          <p>Quietly powerful infrastructure for the moments when connectivity is uncertain, shared, or simply not the point.</p>
+          <div><p className="landing-section-label">Feito para os intervalos</p><h2>Resiliência é<br /><em>um recurso.</em></h2></div>
+          <p>Infraestrutura discreta e poderosa para quando a conexão é incerta, compartilhada ou simplesmente não é o ponto principal.</p>
         </div>
         <div className="landing-feature-grid">
-          <FeatureCard title="Local-first by default" description="Write to local persistence first. The interface stays responsive, even when the network does not." icon={<Icon type="database" />} variant="feature-wide">
-            <div className="landing-terminal"><span>$</span> indexedDB.open(<b>"synclab_store"</b>)<i>✓ local state ready</i></div>
+          <FeatureCard title="Local-first por padrão" description="Escreva primeiro na persistência local. A interface continua responsiva, mesmo quando a rede não está." icon={<Icon type="database" />} variant="feature-wide">
+            <div className="landing-terminal"><span>$</span> indexedDB.open(<b>"synclab_store"</b>)<i>✓ estado local pronto</i></div>
           </FeatureCard>
-          <FeatureCard title="Deterministic merging" description="CRDTs and vector clocks make concurrent changes converge without a central lock." icon={<Icon type="merge" />} />
-          <FeatureCard title="Works offline" description="Keep making progress through unreliable networks. Pending changes remain visible and recoverable." icon={<Icon type="offline" />} />
-          <FeatureCard title="Clear sync state" description="Know what is saved, pending, syncing, offline, or in error at a glance." icon={<Icon type="history" />} variant="feature-accent">
-            <div className="landing-status-stack"><span><i className="is-green" /> All devices synced</span><span><i className="is-amber" /> 3 changes pending</span><span><i className="is-muted" /> Offline safe</span></div>
+          <FeatureCard title="Merge determinístico" description="CRDTs e relógios vetoriais fazem alterações concorrentes convergirem sem um bloqueio central." icon={<Icon type="merge" />} />
+          <FeatureCard title="Funciona offline" description="Continue avançando em redes instáveis. Alterações pendentes permanecem visíveis e recuperáveis." icon={<Icon type="offline" />} />
+          <FeatureCard title="Estado de sync claro" description="Saiba de relance o que está salvo, pendente, sincronizando, offline ou com erro." icon={<Icon type="history" />} variant="feature-accent">
+            <div className="landing-status-stack"><span><i className="is-green" /> Todos os dispositivos sincronizados</span><span><i className="is-amber" /> 3 alterações pendentes</span><span><i className="is-muted" /> Seguro offline</span></div>
           </FeatureCard>
         </div>
       </div>
     </section>
     <section id="docs" className="landing-stack landing-reveal">
       <div className="landing-container container-main landing-stack-grid">
-        <div><p className="landing-section-label">A focused workspace</p><h2>Documents that stay<br /><em>close to the work.</em></h2></div>
-        <div className="landing-stack-copy"><p>From a new document to a recovered edit, every state is explicit. Synclab gives you a focused place to write and a clear path to inspect what happened.</p><Link to="/app/documents" className="landing-inline-link">Explore documents <span>↗</span></Link></div>
+        <div><p className="landing-section-label">Um ambiente focado</p><h2>Documentos que ficam<br /><em>perto do trabalho.</em></h2></div>
+        <div className="landing-stack-copy"><p>De um documento novo a uma edição recuperada, cada estado é explícito. O Synclab oferece um lugar focado para escrever e um caminho claro para entender o que aconteceu.</p><Link to="/app/documents" className="landing-inline-link">Explorar documentos <span>↗</span></Link></div>
       </div>
     </section>
   </>

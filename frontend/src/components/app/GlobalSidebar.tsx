@@ -12,10 +12,10 @@ export const GlobalSidebar: React.FC = () => {
     navigate(`/app/documents/${document.id}`);
   };
   const navigationItems = [
-    { id: "search", label: "Search", icon: "search", path: "/app/documents" },
-    { id: "recent", label: "Recent", icon: "history", path: "/app" },
-    { id: "favorites", label: "Favorites", icon: "star", path: "/app/favorites" },
-    { id: "documents", label: "Documents", icon: "description", path: "/app/documents" },
+    { id: "search", label: "Pesquisar", icon: "search", path: "/app/documents" },
+    { id: "recent", label: "Recentes", icon: "history", path: "/app" },
+    { id: "favorites", label: "Favoritos", icon: "star", path: "/app/favorites" },
+    { id: "documents", label: "Documentos", icon: "description", path: "/app/documents" },
   ];
 
   const getIcon = (name: string) => {
@@ -89,7 +89,7 @@ export const GlobalSidebar: React.FC = () => {
           </div>
           <div>
             <p className="text-sm font-semibold text-[#e4e1ed]">Synclab</p>
-            <p className="text-xs text-[#c7c4d7]">Offline-first Editor</p>
+            <p className="text-xs text-[#c7c4d7]">Editor offline-first</p>
           </div>
         </div>
         <button
@@ -97,7 +97,7 @@ export const GlobalSidebar: React.FC = () => {
           className="w-full bg-[#c0c1ff] text-[#1000a9] py-2 px-3 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
         >
           <span>+</span>
-          <span>New Document</span>
+          <span>Novo documento</span>
         </button>
       </div>
 
@@ -140,7 +140,7 @@ export const GlobalSidebar: React.FC = () => {
             <circle cx="12" cy="5" r="1" />
             <circle cx="12" cy="19" r="1" />
           </svg>
-          <span>Settings</span>
+          <span>Configurações</span>
         </NavLink>
         <NavLink
           to="/app/help"
@@ -160,7 +160,7 @@ export const GlobalSidebar: React.FC = () => {
             <circle cx="12" cy="12" r="10" />
             <path d="M12 16v-4M12 8h.01" />
           </svg>
-          <span>Help</span>
+          <span>Ajuda</span>
         </NavLink>
       </div>
     </div>

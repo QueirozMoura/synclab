@@ -8,6 +8,16 @@ import { MobileTopbar } from "../components/dashboard/MobileTopbar";
 import { useDocuments } from "../hooks/useDocuments";
 import type { SyncResult } from "../types/sync";
 
+const localizeSyncError = (message: string): string => {
+  if (message === "Invalid sync response") return "Resposta de sincronização inválida";
+  if (message === "SyncTransport not configured. Call setTransport() before sync().") {
+    return "Transporte de sincronização não configurado.";
+  }
+  if (message.startsWith("HTTP error ")) return message.replace("HTTP error", "Erro HTTP");
+  if (message.toLowerCase().includes("network")) return "Não foi possível conectar à rede.";
+  return message;
+};
+
 const getDocumentIcon = (id: string) => {
   if (id === "readme") return { icon: "markdown", iconColor: "#908fa0" };
   if (id.includes("code") || id === "crdt-notes" || id === "architecture") return { icon: "code", iconColor: "#c0c1ff" };
@@ -80,7 +90,7 @@ export const DashboardPage: React.FC = () => {
         `Snapshots processados: ${syncSummary.snapshots.length}`,
       ]
       : syncFeedback === "error" && syncErrorMessage
-        ? [syncErrorMessage]
+        ? [localizeSyncError(syncErrorMessage)]
         : [];
 
   const featuredDoc = documents[0];
@@ -125,16 +135,16 @@ export const DashboardPage: React.FC = () => {
                 <div className="mb-8">
                   <div className="dashboard-section-heading flex items-end justify-between mb-5">
                     <div>
-                      <p className="dashboard-kicker">Workspace</p>
+                      <p className="dashboard-kicker">Ambiente</p>
                       <h2 className="text-xl font-semibold text-[#f4f1f8]">
-                        Continue where you left off
+                        Continue de onde você parou
                       </h2>
                     </div>
                     <Link
                       to="/app/documents"
                       className="dashboard-text-link text-sm"
                     >
-                      View all
+                      Ver todos
                     </Link>
                   </div>
 
@@ -147,7 +157,7 @@ export const DashboardPage: React.FC = () => {
                         title={featuredDoc.title}
                         badge={featuredDoc.id}
                         badgeColor="#c0c1ff"
-                        timeAgo="Just now"
+                            timeAgo="Agora mesmo"
                         href={`/app/documents/${featuredDoc.id}`}
                       />
                     )}
@@ -162,7 +172,7 @@ export const DashboardPage: React.FC = () => {
                             title={doc.title}
                             icon={icon}
                             iconColor={iconColor}
-                            timeAgo="Synced recently"
+                            timeAgo="Sincronizado recentemente"
                             href={`/app/documents/${doc.id}`}
                           />
                         );

@@ -274,7 +274,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     const now = new Date().toISOString();
     const newDoc: Document = {
       id: crypto.randomUUID(),
-      title: title || "Untitled Document",
+      title: title || "Documento sem título",
       content: "",
       createdAt: now,
       updatedAt: now,

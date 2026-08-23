@@ -26,13 +26,13 @@ export const DocumentsPage: React.FC = () => {
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-5xl mx-auto px-8 py-8">
             <div className="flex items-center justify-between mb-8">
-              <h1 className="text-3xl font-bold text-[#e4e1ed]">Documents</h1>
+              <h1 className="text-3xl font-bold text-[#e4e1ed]">Documentos</h1>
               <button
                 onClick={handleNewDocument}
                 className="bg-[#c0c1ff] text-[#1000a9] px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity flex items-center gap-2"
               >
                 <span>+</span>
-                <span>New Document</span>
+                <span>Novo documento</span>
               </button>
             </div>
 
@@ -43,7 +43,7 @@ export const DocumentsPage: React.FC = () => {
                   title={doc.title}
                   icon={doc.id === "readme" ? "markdown" : doc.id.includes("code") || doc.id === "crdt-notes" ? "code" : "architecture"}
                   iconColor={doc.id === "readme" ? "#908fa0" : "#c0c1ff"}
-                  timeAgo="Synced recently"
+                  timeAgo="Sincronizado recentemente"
                   href={`/app/documents/${doc.id}`}
                 />
               ))}
@@ -58,7 +58,7 @@ export const DocumentsPage: React.FC = () => {
                     <line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
                 </div>
-                <span className="text-sm font-medium text-[#c7c4d7]">Create new document</span>
+                <span className="text-sm font-medium text-[#c7c4d7]">Criar novo documento</span>
               </button>
             </div>
           </div>

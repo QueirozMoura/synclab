@@ -15,20 +15,20 @@ export const SyncDiagram: React.FC = () => (
   <section id="architecture" className="landing-architecture landing-reveal">
     <div className="landing-container container-main">
       <div className="landing-section-intro">
-        <p className="landing-section-label">A calmer kind of collaboration</p>
-        <h2>One document.<br /><em>Every state in sync.</em></h2>
-        <p>Synclab treats the network as a bridge, not a prerequisite. Your local state stays useful while each device keeps a deterministic history.</p>
+        <p className="landing-section-label">Uma colaboração mais tranquila</p>
+        <h2>Um documento.<br /><em>Cada estado sincronizado.</em></h2>
+        <p>O Synclab trata a rede como uma ponte, não como um requisito. Seu estado local continua útil enquanto cada dispositivo mantém um histórico determinístico.</p>
       </div>
       <div className="landing-sync-stage">
-        <div className="landing-sync-stage-top"><span>SYNC TOPOLOGY</span><span><i /> deterministic merge</span></div>
+        <div className="landing-sync-stage-top"><span>TOPOLOGIA DE SYNC</span><span><i /> merge determinístico</span></div>
         <div className="landing-sync-flow">
-          <SyncNode label="Device A" detail="2 pending changes" tone="lilac" />
+          <SyncNode label="Dispositivo A" detail="2 alterações pendentes" tone="lilac" />
           <FlowLine />
-          <SyncNode label="Sync engine" detail="causal ordering" tone="mint" />
+          <SyncNode label="Motor de sync" detail="ordenação causal" tone="mint" />
           <FlowLine reverse />
-          <SyncNode label="Device B" detail="state converged" tone="coral" />
+          <SyncNode label="Dispositivo B" detail="estado convergente" tone="coral" />
         </div>
-        <div className="landing-sync-foot"><span>Vector clock</span><b>device-A : 08</b><i /><span>Operation log</span><b>2 documents</b></div>
+        <div className="landing-sync-foot"><span>Relógio vetorial</span><b>device-A : 08</b><i /><span>Log de operações</span><b>2 documentos</b></div>
       </div>
     </div>
   </section>

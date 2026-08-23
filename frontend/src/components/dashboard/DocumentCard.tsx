@@ -152,7 +152,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
         <h3 className="text-sm font-medium text-[#e4e1ed] truncate">{title}</h3>
         <div className="flex items-center gap-2 mt-1">
           {getStatusDot()}
-          <span className="text-xs text-[#c7c4d7]">{timeAgo || "Synced"}</span>
+          <span className="text-xs text-[#c7c4d7]">{timeAgo || "Sincronizado"}</span>
         </div>
       </div>
     </div>

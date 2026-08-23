@@ -50,7 +50,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
         </div>
         <div>
           <h1 className="text-lg font-semibold text-[#e4e1ed]">{title}</h1>
-          <p className="text-xs text-[#908fa0] mt-1">Saved locally</p>
+          <p className="text-xs text-[#908fa0] mt-1">Salvo localmente</p>
         </div>
       </Link>
 
@@ -64,7 +64,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
               boxShadow: "0 0 8px rgba(16,185,129,0.5)",
             }}
           />
-          <span className="text-xs text-[#e4e1ed]">Saved locally</span>
+          <span className="text-xs text-[#e4e1ed]">Salvo localmente</span>
         </div>
 
         {/* Share Button */}
@@ -73,7 +73,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
             onClick={handleShare}
             className="bg-[#c0c1ff] text-[#1000a9] px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity hidden sm:block flex items-center gap-2"
           >
-            Share
+            Compartilhar
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M12 5v14M19 12H5" />
             </svg>
@@ -89,7 +89,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>
-                Copy link
+                Copiar link
               </button>
               <div className="border-t border-[#464554] my-2" />
               <button className="w-full px-4 py-2 text-left text-sm text-[#e4e1ed] hover:bg-[#292932] flex items-center gap-2">
@@ -98,7 +98,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
                   <circle cx="9" cy="7" r="4" />
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
-                Invite people
+                Convidar pessoas
               </button>
             </div>
           )}
@@ -128,14 +128,14 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
                 className="block px-4 py-2 text-left text-sm text-[#e4e1ed] hover:bg-[#292932]"
                 onClick={() => setMenuOpen(false)}
               >
-                Go to Dashboard
+                Ir para o painel
               </Link>
               <Link
                 to="/app/documents"
                 className="block px-4 py-2 text-left text-sm text-[#e4e1ed] hover:bg-[#292932]"
                 onClick={() => setMenuOpen(false)}
               >
-                All Documents
+                Todos os documentos
               </Link>
               <div className="border-t border-[#464554] my-2" />
               <Link
@@ -143,14 +143,14 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
                 className="block px-4 py-2 text-left text-sm text-[#e4e1ed] hover:bg-[#292932]"
                 onClick={() => setMenuOpen(false)}
               >
-                Settings
+                Configurações
               </Link>
               <Link
                 to="/app/help"
                 className="block px-4 py-2 text-left text-sm text-[#e4e1ed] hover:bg-[#292932]"
                 onClick={() => setMenuOpen(false)}
               >
-                Help
+                Ajuda
               </Link>
             </div>
           )}
