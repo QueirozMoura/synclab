@@ -105,6 +105,11 @@ describe("HttpSyncTransport", () => {
   });
 
   describe("synchronize", () => {
+    it("rejeita resposta incompatível com o contrato", async () => {
+      mockFetch.mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ invalid: true }) });
+      await expect(transport.synchronize(createPayload())).rejects.toThrow("Invalid sync response");
+    });
+
     it("deve fazer POST para /sync relativo à baseUrl", async () => {
       mockFetch.mockResolvedValue({
         ok: true,

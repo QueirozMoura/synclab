@@ -67,6 +67,14 @@ export class HttpSyncTransport implements SyncTransport {
     };
   }
 
+  #isSyncResult(value: unknown): value is SyncResult {
+    if (!value || typeof value !== "object") return false;
+    const result = value as Partial<SyncResult>;
+    return Array.isArray(result.acceptedOperations)
+      && Array.isArray(result.missingOperations)
+      && Array.isArray(result.snapshots);
+  }
+
   async synchronize(payload: SyncPayload): Promise<SyncPayload> {
     const outgoingPayload = {
       deviceId: payload.deviceId,
@@ -86,7 +94,10 @@ export class HttpSyncTransport implements SyncTransport {
       throw new Error(`HTTP error ${response.status}`);
     }
 
-    const syncResult = await response.json() as SyncResult;
+    const syncResult: unknown = await response.json();
+    if (!this.#isSyncResult(syncResult)) {
+      throw new Error("Invalid sync response");
+    }
     return this.#syncResultToSyncPayload(syncResult, payload.deviceId);
   }
 }

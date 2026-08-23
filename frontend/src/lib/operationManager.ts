@@ -242,8 +242,20 @@ export class OperationManager {
     };
 
     const remotePayload = await this.syncTransport.synchronize(localPayload);
+    const result = await this.synchronize(remotePayload);
+    await this.confirmLocalOperations(localOperations);
+    return result;
+  }
 
-    return this.synchronize(remotePayload);
+  private async confirmLocalOperations(operations: Operation[]): Promise<void> {
+    const confirmationTimestamp = Date.now();
+    for (const operation of operations) {
+      if (operation.confirmedAt !== undefined) continue;
+      const confirmedOperation = { ...operation, confirmedAt: confirmationTimestamp };
+      this.operationLog.replace(confirmedOperation);
+      this.pendingOperationIds.delete(operation.id);
+      await putOperation(confirmedOperation);
+    }
   }
 
   async synchronizeDocument(
