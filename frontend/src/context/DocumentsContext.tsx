@@ -5,10 +5,12 @@ import type { SyncStatus } from "../lib/syncCoordinator";
 import { DocumentsContext } from "./DocumentsContextType";
 import { getAllDocuments, putDocument, deleteDocument as deleteDocumentIdb } from "../lib/indexedDb";
 import { useOperationManager } from "../hooks/useOperationManager";
+import { useConnectivity } from "../hooks/useConnectivity";
 
 export interface DocumentsContextType {
   documents: Document[];
   isLoading: boolean;
+  isOnline: boolean;
   createDocument: (title?: string) => Document;
   getDocument: (id: string) => Document | undefined;
   updateDocument: (id: string, data: Partial<Document>) => void;
@@ -18,6 +20,7 @@ export interface DocumentsContextType {
   isSyncing: () => boolean;
   getLastSyncResult: () => SyncResult | null;
   getLastSyncError: () => Error | null;
+  getLastSuccessfulSyncAt: () => number | null;
   synchronizeDocument: (documentId: string, remotePayload: SyncPayload) => Promise<Document | null>;
   synchronizeAll: (remotePayload: SyncPayload) => Promise<SyncResult>;
 }
@@ -210,6 +213,7 @@ open http://localhost:3000
 export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const isOnline = useConnectivity();
   const {
     createOperation,
     synchronizeDocument: syncDoc,
@@ -220,6 +224,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     isSyncing: isCoordinatorSyncing,
     getLastSyncResult: getCoordinatorLastSyncResult,
     getLastSyncError: getCoordinatorLastSyncError,
+    getLastSuccessfulSyncAt: getCoordinatorLastSuccessfulSyncAt,
   } = useOperationManager();
 
   useEffect(() => {
@@ -413,10 +418,15 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     return getCoordinatorLastSyncError();
   }, [getCoordinatorLastSyncError]);
 
+  const getLastSuccessfulSyncAt = useCallback((): number | null => {
+    return getCoordinatorLastSuccessfulSyncAt();
+  }, [getCoordinatorLastSuccessfulSyncAt]);
+
   const value = useMemo(
     () => ({
       documents,
       isLoading,
+      isOnline,
       createDocument,
       getDocument,
       updateDocument,
@@ -426,12 +436,14 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       isSyncing,
       getLastSyncResult,
       getLastSyncError,
+      getLastSuccessfulSyncAt,
       synchronizeDocument,
       synchronizeAll,
     }),
     [
       documents,
       isLoading,
+      isOnline,
       createDocument,
       getDocument,
       updateDocument,
@@ -441,6 +453,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       isSyncing,
       getLastSyncResult,
       getLastSyncError,
+      getLastSuccessfulSyncAt,
       synchronizeDocument,
       synchronizeAll,
     ]

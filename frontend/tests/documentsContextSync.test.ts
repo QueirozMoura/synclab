@@ -114,6 +114,7 @@ function createOperationManagerContextMock(
     isSyncing: vi.fn(() => false),
     getLastSyncResult: vi.fn(() => null),
     getLastSyncError: vi.fn(() => null),
+    getLastSuccessfulSyncAt: vi.fn(() => null),
     ...overrides,
   };
 }
@@ -905,6 +906,7 @@ describe("DocumentsContext - SyncCoordinator integration", () => {
     const getLastSyncResultMock = vi.fn(() => lastSyncResult);
     const lastSyncError = new Error("boom");
     const getLastSyncErrorMock = vi.fn(() => lastSyncError);
+    const getLastSuccessfulSyncAtMock = vi.fn(() => 123456);
 
     vi.spyOn(operationManagerHook, "useOperationManager").mockReturnValue(
       createOperationManagerContextMock({
@@ -912,6 +914,7 @@ describe("DocumentsContext - SyncCoordinator integration", () => {
         isSyncing: isSyncingMock,
         getLastSyncResult: getLastSyncResultMock,
         getLastSyncError: getLastSyncErrorMock,
+        getLastSuccessfulSyncAt: getLastSuccessfulSyncAtMock,
       })
     );
 
@@ -925,10 +928,12 @@ describe("DocumentsContext - SyncCoordinator integration", () => {
     expect(result.current.isSyncing()).toBe(true);
     expect(result.current.getLastSyncResult()).toBe(lastSyncResult);
     expect(result.current.getLastSyncError()).toBe(lastSyncError);
+    expect(result.current.getLastSuccessfulSyncAt()).toBe(123456);
 
     expect(getSyncStatusMock).toHaveBeenCalledTimes(1);
     expect(isSyncingMock).toHaveBeenCalledTimes(1);
     expect(getLastSyncResultMock).toHaveBeenCalledTimes(1);
     expect(getLastSyncErrorMock).toHaveBeenCalledTimes(1);
+    expect(getLastSuccessfulSyncAtMock).toHaveBeenCalledTimes(1);
   });
 });

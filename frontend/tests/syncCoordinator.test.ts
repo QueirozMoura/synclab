@@ -29,6 +29,7 @@ describe("SyncCoordinator", () => {
     expect(coordinator.isSyncing()).toBe(false);
     expect(coordinator.getLastSyncResult()).toBeNull();
     expect(coordinator.getLastSyncError()).toBeNull();
+    expect(coordinator.getLastSuccessfulSyncAt()).toBeNull();
   });
 
   it("configures and replaces the injected transport", () => {
@@ -41,6 +42,7 @@ describe("SyncCoordinator", () => {
   });
 
   it("syncs successfully and exposes the result", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1700000);
     const { manager, transport } = dependencies();
     const coordinator = new SyncCoordinator(manager, { transport });
     await expect(coordinator.sync()).resolves.toBe(result);
@@ -48,6 +50,24 @@ describe("SyncCoordinator", () => {
     expect(coordinator.getStatus()).toBe("success");
     expect(coordinator.getLastSyncResult()).toBe(result);
     expect(coordinator.getLastSyncError()).toBeNull();
+    expect(coordinator.getLastSuccessfulSyncAt()).toBe(1700000);
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the previous successful timestamp after a failure", async () => {
+    const { manager, transport } = dependencies();
+    const failure = new Error("temporary failure");
+    manager.syncWithTransport = vi
+      .fn()
+      .mockResolvedValueOnce(result)
+      .mockRejectedValueOnce(failure);
+    vi.spyOn(Date, "now").mockReturnValueOnce(1000).mockReturnValueOnce(2000);
+    const coordinator = new SyncCoordinator(manager, { transport });
+
+    await coordinator.sync();
+    await expect(coordinator.sync()).rejects.toBe(failure);
+    expect(coordinator.getLastSuccessfulSyncAt()).toBe(1000);
+    vi.restoreAllMocks();
   });
 
   it("rejects clearly without a transport and can retry after failure", async () => {
@@ -63,6 +83,28 @@ describe("SyncCoordinator", () => {
     expect(manager.syncWithTransport).toHaveBeenCalledTimes(1);
     expect(coordinator.getStatus()).toBe("success");
     expect(coordinator.getLastSyncError()).toBeNull();
+  });
+
+  it("updates the timestamp once for concurrent callers", async () => {
+    const { manager, transport } = dependencies();
+    let resolveSync!: (value: SyncResult) => void;
+    manager.syncWithTransport = vi.fn(
+      () =>
+        new Promise<SyncResult>((resolve) => {
+          resolveSync = resolve;
+        }),
+    );
+    vi.spyOn(Date, "now").mockReturnValue(3000);
+    const coordinator = new SyncCoordinator(manager, { transport });
+    const first = coordinator.sync();
+    const second = coordinator.sync();
+
+    expect(first).toBe(second);
+    resolveSync(result);
+    await Promise.all([first, second]);
+    expect(manager.syncWithTransport).toHaveBeenCalledTimes(1);
+    expect(coordinator.getLastSuccessfulSyncAt()).toBe(3000);
+    vi.restoreAllMocks();
   });
 
   it("shares one asynchronous synchronization among concurrent callers", async () => {

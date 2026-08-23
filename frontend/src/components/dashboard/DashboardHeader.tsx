@@ -7,6 +7,8 @@ interface DashboardHeaderProps {
   isSyncing?: boolean;
   syncStatus?: "synced" | "syncing" | "offline";
   syncText?: string;
+  syncDetails?: string[];
+  lastSuccessfulSyncAt?: number | null;
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
@@ -15,6 +17,8 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   isSyncing = false,
   syncStatus = "synced",
   syncText = "All devices synced",
+  syncDetails = [],
+  lastSuccessfulSyncAt = null,
 }) => {
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -29,7 +33,18 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         <h1 className="text-3xl md:text-4xl font-bold text-[#e4e1ed] tracking-tighter">
           {getGreeting()}, Gustavo.
         </h1>
-        <SyncStatus status={syncStatus} text={syncText} />
+        <SyncStatus
+          status={syncStatus}
+          text={syncText}
+          lastSuccessfulSyncAt={lastSuccessfulSyncAt}
+        />
+        {syncDetails.length > 0 && (
+          <div className="mt-2 text-xs text-[#c7c4d7]" aria-label="sync-details">
+            {syncDetails.map((detail, index) => (
+              <div key={`${detail}-${index}`}>{detail}</div>
+            ))}
+          </div>
+        )}
       </div>
       <div className="flex items-center gap-2">
         <button

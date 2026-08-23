@@ -6,6 +6,7 @@ import { DocumentCard } from "../components/dashboard/DocumentCard";
 import { ActivityPanel } from "../components/dashboard/ActivityPanel";
 import { MobileTopbar } from "../components/dashboard/MobileTopbar";
 import { useDocuments } from "../hooks/useDocuments";
+import type { SyncResult } from "../types/sync";
 
 const getDocumentIcon = (id: string) => {
   if (id === "readme") return { icon: "markdown", iconColor: "#908fa0" };
@@ -15,11 +16,18 @@ const getDocumentIcon = (id: string) => {
 };
 
 export const DashboardPage: React.FC = () => {
-  const { documents, syncDocuments, getLastSyncError } = useDocuments();
+  const {
+    documents,
+    syncDocuments,
+    getLastSyncError,
+    getLastSuccessfulSyncAt,
+    isOnline,
+  } = useDocuments();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [isSyncPending, setIsSyncPending] = React.useState(false);
   const [syncFeedback, setSyncFeedback] = React.useState<"idle" | "success" | "error">("idle");
   const [syncErrorMessage, setSyncErrorMessage] = React.useState<string | null>(null);
+  const [syncSummary, setSyncSummary] = React.useState<SyncResult | null>(null);
 
   const handleFilterClick = () => {
     console.log("Filter clicked");
@@ -30,16 +38,18 @@ export const DashboardPage: React.FC = () => {
   };
 
   const handleSyncClick = async () => {
-    if (isSyncPending) {
+    if (isSyncPending || !isOnline) {
       return;
     }
 
     setIsSyncPending(true);
     setSyncFeedback("idle");
     setSyncErrorMessage(null);
+    setSyncSummary(null);
 
     try {
-      await syncDocuments();
+      const syncResult = await syncDocuments();
+      setSyncSummary(syncResult);
       setSyncFeedback("success");
     } catch {
       const lastError = getLastSyncError();
@@ -50,19 +60,35 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  const syncStatus = isSyncPending
-    ? "syncing"
-    : syncFeedback === "error"
+  const syncStatus = !isOnline
+    ? "offline"
+    : isSyncPending
+      ? "syncing"
+      : syncFeedback === "error"
       ? "offline"
       : "synced";
 
-  const syncText = isSyncPending
-    ? "Sincronizando..."
+  const syncText = !isOnline
+    ? "Offline"
+    : isSyncPending
+      ? "Sincronizando..."
     : syncFeedback === "success"
       ? "Sincronização concluída"
       : syncFeedback === "error"
-        ? syncErrorMessage ?? "Erro ao sincronizar"
-        : "All devices synced";
+        ? "Falha na sincronização"
+        : "Pronto para sincronizar";
+
+  const syncDetails = isSyncPending
+    ? []
+    : syncFeedback === "success" && syncSummary
+      ? [
+        `Operações enviadas: ${syncSummary.missingOperations.length}`,
+        `Operações recebidas: ${syncSummary.acceptedOperations.length}`,
+        `Snapshots processados: ${syncSummary.snapshots.length}`,
+      ]
+      : syncFeedback === "error" && syncErrorMessage
+        ? [syncErrorMessage]
+        : [];
 
   const featuredDoc = documents[0];
   const compactDocs = documents.slice(1, 3);
@@ -91,9 +117,11 @@ export const DashboardPage: React.FC = () => {
             <DashboardHeader
               onFilterClick={handleFilterClick}
               onSyncClick={handleSyncClick}
-              isSyncing={isSyncPending}
+              isSyncing={isSyncPending || !isOnline}
               syncStatus={syncStatus}
               syncText={syncText}
+              syncDetails={syncDetails}
+              lastSuccessfulSyncAt={getLastSuccessfulSyncAt()}
             />
 
             {/* Main Grid: Documents (8/12) + Activity (4/12) on desktop */}

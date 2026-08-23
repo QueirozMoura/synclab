@@ -74,6 +74,7 @@ export const OperationManagerProvider: React.FC<OperationManagerProviderProps> =
   const isSyncing = useCallback(() => syncCoordinator.isSyncing(), [syncCoordinator]);
   const getLastSyncResult = useCallback(() => syncCoordinator.getLastSyncResult(), [syncCoordinator]);
   const getLastSyncError = useCallback(() => syncCoordinator.getLastSyncError(), [syncCoordinator]);
+  const getLastSuccessfulSyncAt = useCallback(() => syncCoordinator.getLastSuccessfulSyncAt(), [syncCoordinator]);
   const setSyncTransport = useCallback(
     (transport: SyncTransport) => syncCoordinator.setTransport(transport),
     [syncCoordinator]
@@ -95,8 +96,9 @@ export const OperationManagerProvider: React.FC<OperationManagerProviderProps> =
       isSyncing,
       getLastSyncResult,
       getLastSyncError,
+      getLastSuccessfulSyncAt,
     }),
-    [createOperation, getOperations, getOperationsForDocument, synchronize, synchronizeDocument, reconstructSyncedDocument, sync, syncCoordinator, setSyncTransport, getSyncStatus, isSyncing, getLastSyncResult, getLastSyncError]
+    [createOperation, getOperations, getOperationsForDocument, synchronize, synchronizeDocument, reconstructSyncedDocument, sync, syncCoordinator, setSyncTransport, getSyncStatus, isSyncing, getLastSyncResult, getLastSyncError, getLastSuccessfulSyncAt]
   );
 
   return <OperationManagerContext.Provider value={value}>{children}</OperationManagerContext.Provider>;

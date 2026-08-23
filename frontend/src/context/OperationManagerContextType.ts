@@ -22,6 +22,7 @@ export interface OperationManagerContextType {
   isSyncing: () => boolean;
   getLastSyncResult: () => SyncResult | null;
   getLastSyncError: () => Error | null;
+  getLastSuccessfulSyncAt: () => number | null;
 }
 
 export const OperationManagerContext = createContext<OperationManagerContextType | undefined>(undefined);

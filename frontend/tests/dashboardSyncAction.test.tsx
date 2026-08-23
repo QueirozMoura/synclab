@@ -65,6 +65,7 @@ describe("Dashboard sync action", () => {
       },
     ],
     isLoading: false,
+    isOnline: true,
     createDocument: vi.fn(),
     getDocument: vi.fn(),
     updateDocument: vi.fn(),
@@ -76,6 +77,7 @@ describe("Dashboard sync action", () => {
     isSyncing: vi.fn(() => false),
     getLastSyncResult: vi.fn(() => null),
     getLastSyncError: vi.fn(() => null),
+    getLastSuccessfulSyncAt: vi.fn(() => null),
     synchronizeDocument: vi.fn(),
     synchronizeAll: vi.fn(),
     ...overrides,
@@ -93,6 +95,26 @@ describe("Dashboard sync action", () => {
   it("renders explicit sync action", () => {
     render(<DashboardPage />);
     expect(screen.getByRole("button", { name: "Sincronizar" })).toBeTruthy();
+    expect(screen.getByText("Última sincronização: Nunca sincronizado")).toBeTruthy();
+    expect(screen.queryByText("Sincronização concluída")).toBeNull();
+    expect(screen.queryByText(/Operações enviadas:/)).toBeNull();
+    expect(screen.queryByText(/Operações recebidas:/)).toBeNull();
+    expect(screen.queryByText(/Snapshots processados:/)).toBeNull();
+  });
+
+  it("keeps the previous timestamp while syncing and after an error", async () => {
+    const deferred = createDeferred<{ acceptedOperations: []; missingOperations: []; snapshots: [] }>();
+    vi.spyOn(Date, "now").mockReturnValue(1000000);
+    const syncDocuments = vi.fn(() => deferred.promise);
+    const getLastSuccessfulSyncAt = vi.fn(() => 40000);
+    useDocumentsMock.mockReturnValue(baseContextValue({ syncDocuments, getLastSuccessfulSyncAt }));
+
+    render(<DashboardPage />);
+    expect(screen.getByText("Última sincronização: há 16 minutos")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Sincronizar" }));
+    expect(screen.getByText("Última sincronização: há 16 minutos")).toBeTruthy();
+    deferred.reject(new Error("Falha remota"));
+    await waitFor(() => expect(screen.getByText("Última sincronização: há 16 minutos")).toBeTruthy());
   });
 
   it("calls syncDocuments exactly once on click", async () => {
@@ -141,7 +163,20 @@ describe("Dashboard sync action", () => {
   });
 
   it("shows success feedback and re-enables the sync action", async () => {
-    const syncDocuments = vi.fn().mockResolvedValue({ acceptedOperations: [], missingOperations: [], snapshots: [] });
+    const syncDocuments = vi.fn().mockResolvedValue({
+      acceptedOperations: [
+        { id: "accepted-1" },
+        { id: "accepted-2" },
+      ],
+      missingOperations: [
+        { id: "missing-1" },
+      ],
+      snapshots: [
+        { documentId: "doc-1" },
+        { documentId: "doc-2" },
+        { documentId: "doc-3" },
+      ],
+    });
     useDocumentsMock.mockReturnValue(baseContextValue({ syncDocuments }));
 
     render(<DashboardPage />);
@@ -150,7 +185,49 @@ describe("Dashboard sync action", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Sincronização concluída")).toBeTruthy();
+      expect(screen.getByText("Operações enviadas: 1")).toBeTruthy();
+      expect(screen.getByText("Operações recebidas: 2")).toBeTruthy();
+      expect(screen.getByText("Snapshots processados: 3")).toBeTruthy();
       expect(screen.getByRole("button", { name: "Sincronizar" }).getAttribute("disabled")).toBeNull();
+    });
+  });
+
+  it("shows zero counters when sync result has no operations and no snapshots", async () => {
+    const syncDocuments = vi.fn().mockResolvedValue({
+      acceptedOperations: [],
+      missingOperations: [],
+      snapshots: [],
+    });
+    useDocumentsMock.mockReturnValue(baseContextValue({ syncDocuments }));
+
+    render(<DashboardPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sincronizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Sincronização concluída")).toBeTruthy();
+      expect(screen.getByText("Operações enviadas: 0")).toBeTruthy();
+      expect(screen.getByText("Operações recebidas: 0")).toBeTruthy();
+      expect(screen.getByText("Snapshots processados: 0")).toBeTruthy();
+    });
+  });
+
+  it("shows counters for multiple operations and snapshots from real sync result", async () => {
+    const syncDocuments = vi.fn().mockResolvedValue({
+      acceptedOperations: [{ id: "a1" }, { id: "a2" }, { id: "a3" }, { id: "a4" }],
+      missingOperations: [{ id: "m1" }, { id: "m2" }],
+      snapshots: [{ documentId: "doc-1" }],
+    });
+    useDocumentsMock.mockReturnValue(baseContextValue({ syncDocuments }));
+
+    render(<DashboardPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sincronizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Operações enviadas: 2")).toBeTruthy();
+      expect(screen.getByText("Operações recebidas: 4")).toBeTruthy();
+      expect(screen.getByText("Snapshots processados: 1")).toBeTruthy();
     });
   });
 
@@ -173,7 +250,11 @@ describe("Dashboard sync action", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sincronizar" }));
 
     await waitFor(() => {
+      expect(screen.getByText("Falha na sincronização")).toBeTruthy();
       expect(screen.getByText("Falha remota")).toBeTruthy();
+      expect(screen.queryByText(/Operações enviadas:/)).toBeNull();
+      expect(screen.queryByText(/Operações recebidas:/)).toBeNull();
+      expect(screen.queryByText(/Snapshots processados:/)).toBeNull();
       expect(screen.getByRole("button", { name: "Sincronizar" }).getAttribute("disabled")).toBeNull();
     });
 
@@ -182,6 +263,7 @@ describe("Dashboard sync action", () => {
     await waitFor(() => {
       expect(syncDocuments).toHaveBeenCalledTimes(2);
       expect(screen.getByText("Sincronização concluída")).toBeTruthy();
+      expect(screen.queryByText("Falha remota")).toBeNull();
     });
   });
 

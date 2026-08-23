@@ -14,6 +14,7 @@ export class SyncCoordinator {
   private status: SyncStatus = "idle";
   private lastSyncResult: SyncResult | null = null;
   private lastSyncError: Error | null = null;
+  private lastSuccessfulSyncAt: number | null = null;
 
   private readonly operationManager: OperationManager;
 
@@ -58,6 +59,7 @@ export class SyncCoordinator {
           this.status = "success";
           this.lastSyncResult = result;
           this.lastSyncError = null;
+          this.lastSuccessfulSyncAt = Date.now();
           this.releaseSync(syncPromise);
         },
         (error: unknown) => {
@@ -91,5 +93,9 @@ export class SyncCoordinator {
 
   getLastSyncError(): Error | null {
     return this.lastSyncError;
+  }
+
+  getLastSuccessfulSyncAt(): number | null {
+    return this.lastSuccessfulSyncAt;
   }
 }
