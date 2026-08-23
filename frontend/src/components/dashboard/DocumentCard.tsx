@@ -104,14 +104,14 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
     const content = (
       <div
         onClick={handleClick}
-        className="relative h-48 md:h-[192px] bg-[#151517] border border-[#27272A] rounded-xl cursor-pointer hover:bg-[#1a1a1f] transition-colors overflow-hidden"
+        className="dashboard-document-card dashboard-document-card-featured relative h-48 md:h-[192px] rounded-2xl cursor-pointer overflow-hidden"
       >
         <div className="p-6 h-full flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
               {badge && (
                 <span
-                  className="px-2 py-1 text-xs font-medium rounded"
+                  className="dashboard-card-badge px-2.5 py-1 text-xs font-medium rounded-md"
                   style={{ backgroundColor: `${badgeColor}20`, color: badgeColor }}
                 >
                   {badge}
@@ -119,15 +119,15 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
               )}
             </div>
             {timeAgo && (
-              <span className="px-2 py-0.5 text-xs text-[#908fa0] bg-[#1b1b23] rounded">
+                <span className="dashboard-card-meta px-2 py-1 text-xs rounded-md">
                 {timeAgo}
               </span>
             )}
           </div>
           <div className="space-y-2">
-            <h3 className="text-xl font-semibold text-[#e4e1ed] leading-tight">{title}</h3>
+            <h3 className="text-xl font-semibold text-[#f7f4fb] leading-tight">{title}</h3>
             {description && (
-              <p className="text-sm text-[#c7c4d7] leading-relaxed line-clamp-2">
+              <p className="text-sm text-[#b7b3c2] leading-relaxed line-clamp-2">
                 {description}
               </p>
             )}
@@ -145,7 +145,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
   const content = (
     <div
       onClick={handleClick}
-      className="flex items-center gap-4 p-4 bg-[#151517] border border-[#27272A] rounded-xl cursor-pointer hover:bg-[#1a1a1f] transition-colors"
+      className="dashboard-document-card flex items-center gap-4 p-4 rounded-2xl cursor-pointer"
     >
       <div className="flex-shrink-0">{icon && getIcon(icon, iconColor)}</div>
       <div className="flex-1 min-w-0">

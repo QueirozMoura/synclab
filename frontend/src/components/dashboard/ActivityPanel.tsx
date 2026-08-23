@@ -9,15 +9,15 @@ export const ActivityPanel: React.FC = () => {
   ];
 
   return (
-    <div className="h-full bg-[#151517] border border-[#27272A] rounded-xl flex flex-col">
+    <div className="dashboard-activity-panel h-full rounded-2xl flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-[#27272A] flex items-center justify-between">
+      <div className="dashboard-panel-header p-5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <svg className="w-5 h-5 text-[#c7c4d7]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <circle cx="12" cy="12" r="9" />
             <path d="M12 7v5l4 2" />
           </svg>
-          <h3 className="text-lg font-semibold text-[#e4e1ed]">Activity</h3>
+          <h3 className="text-base font-semibold text-[#f7f4fb]">Activity</h3>
         </div>
         <svg className="w-5 h-5 text-[#908fa0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
           <circle cx="12" cy="12" r="10" />
@@ -26,7 +26,7 @@ export const ActivityPanel: React.FC = () => {
       </div>
 
       {/* Timeline */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-0">
+      <div className="flex-1 overflow-y-auto p-5 space-y-0">
         {activities.map((activity, index) => (
           <ActivityItem
             key={index}
@@ -39,8 +39,8 @@ export const ActivityPanel: React.FC = () => {
       </div>
 
       {/* Load more */}
-      <div className="p-4 border-t border-[#27272A]">
-        <button className="w-full text-center text-sm text-[#c7c4d7] hover:text-[#e4e1ed] transition-colors py-2">
+      <div className="dashboard-panel-footer p-5">
+        <button className="dashboard-text-button w-full text-center text-sm py-2">
           Load more
         </button>
       </div>

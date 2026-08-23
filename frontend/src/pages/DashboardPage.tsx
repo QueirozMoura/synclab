@@ -87,7 +87,7 @@ export const DashboardPage: React.FC = () => {
   const compactDocs = documents.slice(1, 3);
 
   return (
-    <div className="flex h-screen bg-[#09090B] overflow-hidden">
+    <div className="dashboard-page flex h-screen overflow-hidden">
       {/* Mobile Topbar */}
       <MobileTopbar onMenuClick={toggleSidebar} />
 
@@ -103,9 +103,9 @@ export const DashboardPage: React.FC = () => {
       <DashboardSidebar />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden lg:pl-0">
+      <div className="dashboard-main flex-1 flex flex-col overflow-hidden lg:pl-0">
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-6 py-8 md:py-12">
+          <div className="dashboard-content max-w-7xl mx-auto px-5 sm:px-8 py-8 md:py-12">
             {/* Dashboard Header */}
             <DashboardHeader
               onFilterClick={handleFilterClick}
@@ -118,25 +118,28 @@ export const DashboardPage: React.FC = () => {
             />
 
             {/* Main Grid: Documents (8/12) + Activity (4/12) on desktop */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mt-8">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 lg:gap-8 mt-9">
               {/* Documents Section - 8/12 columns on desktop */}
               <div className="lg:col-span-8">
                 {/* Continue where you left off section */}
                 <div className="mb-8">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-lg font-semibold text-[#e4e1ed]">
-                      Continue where you left off
-                    </h2>
+                  <div className="dashboard-section-heading flex items-end justify-between mb-5">
+                    <div>
+                      <p className="dashboard-kicker">Workspace</p>
+                      <h2 className="text-xl font-semibold text-[#f4f1f8]">
+                        Continue where you left off
+                      </h2>
+                    </div>
                     <Link
                       to="/app/documents"
-                      className="text-sm text-[#c0c1ff] hover:underline transition-colors"
+                      className="dashboard-text-link text-sm"
                     >
                       View all
                     </Link>
                   </div>
 
                   {/* Document Grid - 2 columns on desktop, 1 on mobile */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                     {/* Featured Card */}
                     {featuredDoc && (
                       <DocumentCard
@@ -150,7 +153,7 @@ export const DashboardPage: React.FC = () => {
                     )}
 
                     {/* Right column - compact cards */}
-                    <div className="space-y-4">
+                    <div className="space-y-5">
                       {compactDocs.map((doc) => {
                         const { icon, iconColor } = getDocumentIcon(doc.id);
                         return (
@@ -170,7 +173,7 @@ export const DashboardPage: React.FC = () => {
               </div>
 
               {/* Activity Panel - 4/12 columns on desktop, full width on mobile */}
-              <div className="lg:col-span-4 lg:self-start">
+              <div className="hidden lg:block lg:col-span-4 lg:self-start">
                 <ActivityPanel />
               </div>
             </div>

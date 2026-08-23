@@ -77,21 +77,21 @@ export const DashboardSidebar: React.FC = () => {
   };
 
   return (
-    <div className="hidden lg:flex lg:w-64 flex-col bg-[#1b1b23] border-r border-[#464554] h-screen">
+    <div className="dashboard-sidebar hidden lg:flex lg:w-64 flex-col h-screen">
       {/* Header */}
-      <div className="p-6 border-b border-[#464554]">
+      <div className="dashboard-sidebar-brand p-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-[6px] bg-[#c0c1ff] flex items-center justify-center text-[#1000a9] text-xs font-bold">
+          <div className="dashboard-brand-mark w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold">
             S
           </div>
           <div>
             <p className="text-sm font-semibold text-[#e4e1ed]">Synclab</p>
-            <p className="text-xs text-[#c7c4d7]">Offline-first Editor</p>
+            <p className="text-xs text-[#a9a5b7]">Offline-first workspace</p>
           </div>
         </div>
         <button
           onClick={handleNewDocument}
-          className="w-full bg-[#c0c1ff] text-[#1000a9] py-2 px-3 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+          className="dashboard-button dashboard-button-primary w-full py-2.5 px-3 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"
         >
           <span>+</span>
           <span>New Document</span>
@@ -99,15 +99,15 @@ export const DashboardSidebar: React.FC = () => {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4 space-y-1.5">
         {navigationItems.map((item) => (
           <NavLink
             key={item.id}
             to={item.path}
-            className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
+            className={({ isActive }) => `dashboard-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
               isActive
-                ? "bg-[#34343d]/50 text-[#c0c1ff]"
-                : "text-[#c7c4d7] hover:bg-[#292932]"
+                ? "dashboard-nav-active text-[#e4e1ed]"
+                : "text-[#a9a5b7]"
             }`}
           >
             {getIcon(item.icon)}
@@ -117,22 +117,22 @@ export const DashboardSidebar: React.FC = () => {
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-[#464554] p-4 space-y-2">
+      <div className="dashboard-sidebar-footer p-4 space-y-1.5">
         {footerItems.map((item) => (
           <NavLink
             key={item.id}
             to={item.path}
-            className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
+            className={({ isActive }) => `dashboard-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
               isActive
-                ? "bg-[#34343d]/50 text-[#c0c1ff]"
-                : "text-[#c7c4d7] hover:bg-[#292932]"
+                ? "dashboard-nav-active text-[#e4e1ed]"
+                : "text-[#a9a5b7]"
             }`}
           >
             {getIcon(item.icon)}
             <span>{item.label}</span>
           </NavLink>
         ))}
-        <div className="pt-4 border-t border-[#464554] flex items-center gap-3 px-3 py-2">
+        <div className="dashboard-profile mt-3 pt-4 border-t flex items-center gap-3 px-3 py-2">
           <div className="w-8 h-8 rounded-full border border-[#464554] bg-gradient-to-br from-[#c0c1ff] to-[#8083ff] flex items-center justify-center text-white text-xs font-bold">
             G
           </div>
