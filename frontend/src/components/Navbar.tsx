@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 interface NavbarProps {
   onOpenApp?: () => void;
@@ -7,12 +7,21 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = () => {
+  const [scrolled, setScrolled] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 24);
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
-    <nav className="fixed top-0 w-full z-50 border-line glass-effect">
-      <div className="container-main h-16 flex items-center justify-between">
+    <nav className={`landing-nav fixed top-0 w-full z-50 ${scrolled ? "is-scrolled" : ""}`}>
+      <div className="landing-nav-inner container-main h-16 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-6 h-6 relative">
+          <div className="landing-logo-mark w-7 h-7 relative">
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -33,54 +42,40 @@ export const Navbar: React.FC<NavbarProps> = () => {
               />
             </svg>
           </div>
-          <span className="text-base font-semibold text-[#E4E1ED]">
+          <span className="text-base font-semibold text-[#F4F1F8] tracking-tight">
             Synclab
           </span>
         </Link>
 
         {/* Center Navigation - Desktop only */}
-        <div className="hidden md:flex items-center gap-8">
-          <NavLink
-            to="#features"
-            className="text-[#C7C4D7] text-sm hover:text-[#E4E1ED] transition-colors"
+        <div className="hidden md:flex items-center gap-7">
+          <a
+            href="#features"
+            className="landing-nav-link text-sm"
           >
             Features
-          </NavLink>
-          <NavLink
-            to="#architecture"
-            className="text-[#C7C4D7] text-sm hover:text-[#E4E1ED] transition-colors"
+          </a>
+          <a
+            href="#architecture"
+            className="landing-nav-link text-sm"
           >
             Architecture
-          </NavLink>
-          <NavLink
-            to="#docs"
-            className="text-[#C7C4D7] text-sm hover:text-[#E4E1ED] transition-colors"
+          </a>
+          <Link
+            to="/app/documents"
+            className="landing-nav-link text-sm"
           >
             Docs
-          </NavLink>
+          </Link>
         </div>
 
         {/* Right Actions */}
         <div className="flex items-center gap-3">
           <Link
-            to="/login"
-            className="text-[#C7C4D7] text-sm hover:text-[#E4E1ED] transition-colors hidden sm:block"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Log in
-          </Link>
-          <Link
             to="/app"
-            className="btn-secondary text-sm hidden sm:block"
+            className="landing-nav-cta text-sm"
           >
-            Dashboard
-          </Link>
-          <Link
-            to="/app"
-            className="btn-primary text-sm"
-          >
-            Open App
+            Open workspace
           </Link>
         </div>
       </div>
