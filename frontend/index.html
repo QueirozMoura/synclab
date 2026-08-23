@@ -1,10 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>synclab</title>
+    <script>
+      (() => {
+        const key = "synclab_theme";
+        const saved = localStorage.getItem(key);
+        const preference = saved === "dark" || saved === "light" || saved === "system" ? saved : "system";
+        const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = preference === "system" ? (dark ? "dark" : "light") : preference;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

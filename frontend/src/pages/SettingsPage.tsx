@@ -1,7 +1,17 @@
 import React from "react";
 import { GlobalSidebar } from "../components/app/GlobalSidebar";
+import { type ThemePreference } from "../context/ThemeContext";
+import { useTheme } from "../context/useTheme";
 
 export const SettingsPage: React.FC = () => {
+  const { preference, setPreference } = useTheme();
+
+  const themeOptions: Array<{ value: ThemePreference; label: string }> = [
+    { value: "dark", label: "Escuro" },
+    { value: "light", label: "Claro" },
+    { value: "system", label: "Sistema" },
+  ];
+
   return (
     <div className="flex h-screen bg-[#09090B] overflow-hidden">
       <GlobalSidebar />
@@ -86,16 +96,22 @@ export const SettingsPage: React.FC = () => {
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm font-medium text-[#e4e1ed] mb-2">Tema</p>
-                    <div className="flex gap-2">
-                      <button className="flex-1 py-2 px-3 text-sm border border-[#c0c1ff] rounded-md text-[#c0c1ff] hover:bg-[#c0c1ff] hover:text-[#1000a9] transition-colors">
-                        Escuro
-                      </button>
-                      <button className="flex-1 py-2 px-3 text-sm border border-[#27272A] rounded-md text-[#c7c4d7] hover:bg-[#1f1f27] transition-colors">
-                        Claro
-                      </button>
-                      <button className="flex-1 py-2 px-3 text-sm border border-[#27272A] rounded-md text-[#c7c4d7] hover:bg-[#1f1f27] transition-colors">
-                        Sistema
-                      </button>
+                    <div className="flex flex-wrap gap-2" role="group" aria-label="Preferência de tema">
+                      {themeOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setPreference(option.value)}
+                          aria-pressed={preference === option.value}
+                          className={`flex-1 min-w-24 py-2 px-3 text-sm border rounded-md transition-colors ${
+                            preference === option.value
+                              ? "border-[#c0c1ff] bg-[#c0c1ff] text-[#1000a9]"
+                              : "border-[#27272A] text-[#c7c4d7] hover:bg-[#1f1f27]"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
