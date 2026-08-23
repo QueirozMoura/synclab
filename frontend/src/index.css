@@ -149,6 +149,143 @@ html[data-theme="light"] .btn-secondary:hover {
   background: var(--surface-lowest);
 }
 
+.document-list-item {
+  background: rgba(255, 255, 255, 0.018);
+  border-color: transparent;
+  min-height: 3.25rem;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+
+.document-list-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(192, 193, 255, 0.15);
+}
+
+.document-list-item.is-active {
+  background: rgba(192, 193, 255, 0.12);
+  border-color: rgba(192, 193, 255, 0.22);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.document-list-item.is-deleting {
+  opacity: 0.55;
+}
+
+.document-list-link {
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.document-list-link:hover,
+.document-list-item.is-active .document-list-link {
+  color: var(--text-primary);
+}
+
+.document-list-icon {
+  color: var(--primary);
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.document-delete-button {
+  color: var(--outline);
+  opacity: 0.35;
+  transition: background-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.document-list-item:hover .document-delete-button,
+.document-delete-button:focus-visible {
+  opacity: 1;
+}
+
+.document-delete-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--error) 16%, transparent);
+  color: var(--error);
+}
+
+.document-card-delete {
+  background: color-mix(in srgb, var(--surface-card) 88%, transparent);
+  color: var(--outline);
+  opacity: 0.72;
+  transition: background-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.document-card-delete:hover:not(:disabled),
+.document-card-delete:focus-visible {
+  background: color-mix(in srgb, var(--error) 16%, var(--surface-card));
+  color: var(--error);
+  opacity: 1;
+}
+
+.document-card-delete:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.document-delete-button:focus-visible,
+.document-modal-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.document-modal-backdrop {
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(4px);
+}
+
+.document-confirm-modal {
+  background: var(--surface-card);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.document-confirm-modal p {
+  color: var(--text-secondary);
+}
+
+.document-modal-icon {
+  background: color-mix(in srgb, var(--error) 14%, transparent);
+  color: var(--error);
+}
+
+.document-modal-button {
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.document-modal-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.document-modal-cancel {
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.document-modal-cancel:hover:not(:disabled) {
+  background: var(--surface-lowest);
+  color: var(--text-primary);
+}
+
+.document-modal-confirm {
+  background: var(--error);
+  color: #ffffff;
+}
+
+.document-modal-confirm:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.document-feedback.success {
+  background: color-mix(in srgb, var(--success) 13%, transparent);
+  color: var(--success);
+}
+
+.document-feedback.error {
+  background: color-mix(in srgb, var(--error) 13%, transparent);
+  color: var(--error);
+}
+
 @layer components {
   .glass-effect {
     background: rgba(21, 21, 23, 0.6);

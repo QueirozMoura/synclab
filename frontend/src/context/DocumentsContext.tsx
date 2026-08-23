@@ -17,7 +17,7 @@ export interface DocumentsContextType {
   createDocument: (title?: string) => Document;
   getDocument: (id: string) => Document | undefined;
   updateDocument: (id: string, data: Partial<Document>) => void;
-  deleteDocument: (id: string) => void;
+  deleteDocument: (id: string) => Promise<void>;
   syncDocuments: () => Promise<SyncResult>;
   getSyncStatus: () => SyncStatus;
   isSyncing: () => boolean;
@@ -319,19 +319,15 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
   }, []);
 
-  const deleteDocument = useCallback((id: string) => {
-    setDocuments((prev) => {
-      const doc = prev.find((d) => d.id === id);
-      if (doc) {
-        console.log("[Context] creating DELETE_DOCUMENT operation");
-        createOperation(id, "DELETE_DOCUMENT", { type: "DELETE_DOCUMENT", deleted: true });
-      }
-      return prev.filter((d) => d.id !== id);
-    });
-    deleteDocumentIdb(id).catch((error) => {
-      console.error("[DocumentsContext] Failed to delete document:", error);
-    });
-  }, [createOperation]);
+  const deleteDocument = useCallback(async (id: string): Promise<void> => {
+    const document = documents.find((item) => item.id === id);
+    if (!document) return;
+
+    await deleteDocumentIdb(id);
+    setDocuments((prev) => prev.filter((item) => item.id !== id));
+    console.log("[Context] creating DELETE_DOCUMENT operation");
+    createOperation(id, "DELETE_DOCUMENT", { type: "DELETE_DOCUMENT", deleted: true });
+  }, [createOperation, documents]);
 
   const synchronizeDocument = useCallback(
     async (documentId: string, remotePayload: SyncPayload): Promise<Document | null> => {
