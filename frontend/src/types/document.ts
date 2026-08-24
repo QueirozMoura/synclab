@@ -4,4 +4,5 @@ export interface Document {
   content: string;
   createdAt: string;
   updatedAt: string;
+  isFavorite?: boolean;
 }

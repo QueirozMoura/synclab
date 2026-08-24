@@ -17,6 +17,7 @@ export interface DocumentsContextType {
   createDocument: (title?: string) => Document;
   getDocument: (id: string) => Document | undefined;
   updateDocument: (id: string, data: Partial<Document>) => void;
+  toggleFavorite: (id: string) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
   syncDocuments: () => Promise<SyncResult>;
   getSyncStatus: () => SyncStatus;
@@ -319,6 +320,18 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
   }, []);
 
+  const toggleFavorite = useCallback(async (id: string): Promise<void> => {
+    const document = documents.find((item) => item.id === id);
+    if (!document) return;
+    const updatedDocument = {
+      ...document,
+      isFavorite: !document.isFavorite,
+      updatedAt: new Date().toISOString(),
+    };
+    await putDocument(updatedDocument);
+    setDocuments((prev) => prev.map((item) => item.id === id ? updatedDocument : item));
+  }, [documents]);
+
   const deleteDocument = useCallback(async (id: string): Promise<void> => {
     const document = documents.find((item) => item.id === id);
     if (!document) return;
@@ -437,6 +450,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       createDocument,
       getDocument,
       updateDocument,
+      toggleFavorite,
       deleteDocument,
       syncDocuments,
       getSyncStatus,
@@ -455,6 +469,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       createDocument,
       getDocument,
       updateDocument,
+      toggleFavorite,
       deleteDocument,
       syncDocuments,
       getSyncStatus,

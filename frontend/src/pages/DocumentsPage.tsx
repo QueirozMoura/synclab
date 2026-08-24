@@ -7,7 +7,7 @@ import { useDocuments } from "../hooks/useDocuments";
 import { DocumentDeleteDialog } from "../components/app/DocumentDeleteDialog";
 
 export const DocumentsPage: React.FC = () => {
-  const { documents, createDocument, deleteDocument } = useDocuments();
+  const { documents, createDocument, deleteDocument, toggleFavorite } = useDocuments();
   const navigate = useNavigate();
   const [documentToDelete, setDocumentToDelete] = React.useState<{ id: string; title: string } | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
@@ -63,29 +63,35 @@ export const DocumentsPage: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {documents.map((doc) => (
-                <div key={doc.id} className="relative">
+                <div key={doc.id} className="document-card-wrapper relative">
                   <DocumentCard
                     title={doc.title}
                     icon={doc.id === "readme" ? "markdown" : doc.id.includes("code") || doc.id === "crdt-notes" ? "code" : "architecture"}
                     iconColor={doc.id === "readme" ? "#908fa0" : "#c0c1ff"}
                     timeAgo="Sincronizado recentemente"
                     href={`/app/documents/${doc.id}`}
+                    isFavorite={doc.isFavorite === true}
+                    onToggleFavorite={() => void toggleFavorite(doc.id)}
                   />
-                  <button
-                    type="button"
-                    aria-label={`Excluir documento ${doc.title}`}
-                    title={`Excluir documento ${doc.title}`}
-                    disabled={Boolean(deletingId)}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setDocumentToDelete({ id: doc.id, title: doc.title });
-                    }}
-                    className="document-card-delete absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-lg"
-                  >
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-                      <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6" />
-                    </svg>
-                  </button>
+                  <div className="document-card-actions">
+                    <span className="document-card-action-hint">Ações do documento</span>
+                    <button
+                      type="button"
+                      aria-label={`Excluir documento ${doc.title}`}
+                      title={`Excluir documento ${doc.title}`}
+                      disabled={Boolean(deletingId)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDocumentToDelete({ id: doc.id, title: doc.title });
+                      }}
+                      className="document-card-delete flex min-h-10 items-center justify-center gap-2 rounded-lg px-3"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                        <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v6M14 11v6" />
+                      </svg>
+                      <span>Excluir</span>
+                    </button>
+                  </div>
                 </div>
               ))}
 
