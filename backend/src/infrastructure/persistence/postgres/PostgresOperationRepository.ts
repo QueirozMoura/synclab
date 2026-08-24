@@ -41,6 +41,10 @@ export class PostgresOperationRepository implements ServerOperationRepository {
     });
   }
 
+  getPool(): pg.Pool {
+    return this.pool;
+  }
+
   static async create(
     connectionString: string,
     poolConfig?: Partial<pg.PoolConfig>,

@@ -1,5 +1,10 @@
 import fastify, { type FastifyInstance } from "fastify";
 import fastifyRateLimit from "@fastify/rate-limit";
+import fastifyCookie from "@fastify/cookie";
+import { SessionService } from "@application/auth/SessionService.js";
+import { getSessionHttpConfig } from "@application/auth/sessionConfig.js";
+import { PostgresUserRepository } from "@infrastructure/persistence/postgres/PostgresUserRepository.js";
+import { PostgresSessionRepository } from "@infrastructure/persistence/postgres/PostgresSessionRepository.js";
 import { InMemoryOperationRepository } from "@infrastructure/persistence/server/InMemoryOperationRepository.js";
 import { PostgresOperationRepository } from "@infrastructure/persistence/postgres/PostgresOperationRepository.js";
 import { InMemoryDocumentOperationRepository } from "@infrastructure/persistence/document-operations/InMemoryDocumentOperationRepository.js";
@@ -9,6 +14,7 @@ import { PostgresDocumentSnapshotRepository } from "@infrastructure/persistence/
 import { InMemoryDocumentAuthorizationRepository } from "@infrastructure/auth/InMemoryDocumentAuthorizationRepository.js";
 import { ApiKeyValidator, type ApiKeyEntry } from "@application/auth/ApiKeyValidator.js";
 import { registerSyncRoutes } from "./routes.js";
+import { registerAuthRoutes } from "./authRoutes.js";
 import type { DocumentOperationRepository } from "@domain/document-operations/DocumentOperationRepository.js";
 import type { DocumentSnapshotRepository } from "@domain/document-operations/DocumentSnapshotRepository.js";
 
@@ -135,12 +141,22 @@ export async function createServer(): Promise<FastifyInstance> {
     global: false,
     hook: "preHandler",
   });
+  await app.register(fastifyCookie);
 
   const repository = await createRepository();
   const documentRepository = await createDocumentRepository();
   const snapshotRepository = await createSnapshotRepository();
   const authzRepository = createAuthzRepository();
   const apiKeyValidator = createApiKeyValidator();
+  const sessionPool = repository instanceof PostgresOperationRepository ? repository.getPool() : null;
+  const userRepository = sessionPool ? new PostgresUserRepository(sessionPool) : null;
+  const sessionRepository = sessionPool ? new PostgresSessionRepository(sessionPool) : null;
+  const sessionConfig = getSessionHttpConfig();
+  const sessionService = userRepository && sessionRepository
+    ? new SessionService(sessionRepository, userRepository, sessionConfig)
+    : null;
+
+  registerAuthRoutes(app, sessionService, sessionConfig);
 
   registerSyncRoutes(app, repository, documentRepository, snapshotRepository, authzRepository, apiKeyValidator);
 
@@ -165,6 +181,7 @@ export async function createServer(): Promise<FastifyInstance> {
     if (snapshotRepository instanceof PostgresDocumentSnapshotRepository) {
       await snapshotRepository.close();
     }
+
     await app.close();
   };
 
