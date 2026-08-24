@@ -80,56 +80,47 @@ export const GlobalSidebar: React.FC = () => {
   };
 
   return (
-    <div className="hidden lg:flex lg:w-64 flex-col bg-[#1b1b23] border-r border-[#464554]">
+    <aside className="global-sidebar hidden lg:flex lg:w-64 flex-col">
+      <div className="global-sidebar-glow" aria-hidden="true" />
       {/* Header */}
-      <div className="p-6 border-b border-[#464554]">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-full bg-[#c0c1ff] flex items-center justify-center text-[#1000a9] text-xs font-bold">
-            S
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[#e4e1ed]">Synclab</p>
-            <p className="text-xs text-[#c7c4d7]">Editor offline-first</p>
+      <div className="global-sidebar-header">
+        <div className="global-sidebar-brand">
+          <div className="global-sidebar-logo" aria-hidden="true">S</div>
+          <div className="min-w-0">
+            <p className="global-sidebar-title">Synclab</p>
+            <p className="global-sidebar-subtitle">Editor offline-first</p>
           </div>
         </div>
-        <button
-          onClick={handleNewDocument}
-          className="w-full bg-[#c0c1ff] text-[#1000a9] py-2 px-3 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-        >
-          <span>+</span>
+        <button onClick={handleNewDocument} className="global-sidebar-cta">
+          <span className="global-sidebar-cta-icon" aria-hidden="true">+</span>
           <span>Novo documento</span>
+          <span className="global-sidebar-cta-shortcut" aria-hidden="true">⌘N</span>
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="global-nav" aria-label="Navegação principal">
+        <p className="global-sidebar-section-label">Workspace</p>
         {navigationItems.map((item) => (
           <NavLink
             key={item.id}
             to={item.path}
-            className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
-              isActive
-                ? "bg-[#34343d] text-[#c0c1ff]"
-                : "text-[#c7c4d7] hover:bg-[#292932]"
-            }`}
+            className={({ isActive }) => `global-sidebar-link ${isActive ? "is-active" : ""}`}
           >
-            {getIcon(item.icon)}
+            <span className="global-sidebar-link-icon">{getIcon(item.icon)}</span>
             <span>{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-[#464554] p-4 space-y-2">
+      <div className="global-sidebar-footer">
+        <p className="global-sidebar-section-label">Sistema</p>
         <NavLink
           to="/app/settings"
-          className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
-            isActive
-              ? "bg-[#34343d] text-[#c0c1ff]"
-              : "text-[#c7c4d7] hover:bg-[#292932]"
-          }`}
+          className={({ isActive }) => `global-sidebar-link ${isActive ? "is-active" : ""}`}
         >
-          <svg
+          <span className="global-sidebar-link-icon"><svg
             className="w-5 h-5"
             viewBox="0 0 24 24"
             fill="none"
@@ -139,18 +130,14 @@ export const GlobalSidebar: React.FC = () => {
             <circle cx="12" cy="12" r="1" />
             <circle cx="12" cy="5" r="1" />
             <circle cx="12" cy="19" r="1" />
-          </svg>
+          </svg></span>
           <span>Configurações</span>
         </NavLink>
         <NavLink
           to="/app/help"
-          className={({ isActive }) => `w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors ${
-            isActive
-              ? "bg-[#34343d] text-[#c0c1ff]"
-              : "text-[#c7c4d7] hover:bg-[#292932]"
-          }`}
+          className={({ isActive }) => `global-sidebar-link ${isActive ? "is-active" : ""}`}
         >
-          <svg
+          <span className="global-sidebar-link-icon"><svg
             className="w-5 h-5"
             viewBox="0 0 24 24"
             fill="none"
@@ -159,10 +146,10 @@ export const GlobalSidebar: React.FC = () => {
           >
             <circle cx="12" cy="12" r="10" />
             <path d="M12 16v-4M12 8h.01" />
-          </svg>
+          </svg></span>
           <span>Ajuda</span>
         </NavLink>
       </div>
-    </div>
+    </aside>
   );
 };

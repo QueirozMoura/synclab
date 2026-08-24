@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "migrate": "tsx --env-file=.env src/infrastructure/persistence/migrations/run.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node dist/server.js",

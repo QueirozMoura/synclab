@@ -22,13 +22,15 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   const toolbarGroups = [
     {
       id: "headings",
+      label: "Hierarquia",
       actions: [
-        { id: "h1", label: "H1", icon: "H1", onClick: onH1 },
-        { id: "h2", label: "H2", icon: "H2", onClick: onH2 },
+        { id: "h1", label: "Título 1", icon: "H1", onClick: onH1 },
+        { id: "h2", label: "Título 2", icon: "H2", onClick: onH2 },
       ],
     },
     {
       id: "formatting",
+      label: "Formatação",
       actions: [
         { id: "bold", label: "Negrito", icon: "B", onClick: onBold },
         { id: "italic", label: "Itálico", icon: "I", onClick: onItalic },
@@ -37,39 +39,41 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
     },
     {
       id: "insert",
-      actions: [{ id: "link", label: "Link", icon: "🔗", onClick: onLink }],
+      label: "Inserir",
+      actions: [{ id: "link", label: "Inserir link", icon: "link", onClick: onLink }],
     },
   ];
 
   return (
-    <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-30">
+    <div className="editor-toolbar-shell fixed bottom-8 left-1/2 z-30 -translate-x-1/2">
       <div
-        className="bg-[#1f1f27] border border-[#464554] rounded-full px-2 py-2 flex items-center gap-1 backdrop-blur-md"
-        style={{
-          boxShadow: "0 16px 32px rgba(0,0,0,0.4)",
-        }}
+        className="editor-toolbar-surface "
+
+        role="toolbar"
+        aria-label="Ferramentas de formatação"
       >
         {toolbarGroups.map((group, groupIndex) => (
-          <div key={group.id} className="flex items-center gap-1">
+          <div key={group.id} className="editor-toolbar-group" aria-label={group.label}>
             {group.actions.map((action) => (
               <button
+                type="button"
                 key={action.id}
                 onClick={action.onClick}
                 onMouseEnter={() => setHoverAction(action.id)}
                 onMouseLeave={() => setHoverAction(null)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                  hoverAction === action.id
-                    ? "bg-[#292932] text-[#c0c1ff]"
-                    : "text-[#c7c4d7] hover:bg-[#292932]"
-                }`}
+                className={`editor-toolbar-button ${hoverAction === action.id ? "is-hovered" : ""}`}
+                aria-label={action.label}
                 title={action.label}
               >
-                {action.icon}
+                {action.icon === "link" ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path d="M10 13a5 5 0 0 0 7.07.07l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15" />
+                    <path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 7 20l1.15-1.15" />
+                  </svg>
+                ) : action.icon}
               </button>
             ))}
-            {groupIndex < toolbarGroups.length - 1 && (
-              <div className="w-px h-6 bg-[#464554] mx-1" />
-            )}
+            {groupIndex < toolbarGroups.length - 1 && <span className="editor-toolbar-divider" aria-hidden="true" />}
           </div>
         ))}
       </div>

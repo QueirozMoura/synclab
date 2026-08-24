@@ -71,14 +71,14 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
         <div className="relative">
           <button
             onClick={handleShare}
-            className="bg-[#c0c1ff] text-[#1000a9] px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity hidden sm:block flex items-center gap-2"
+            className="editor-share-button hidden sm:inline-flex"
+            aria-expanded={shareOpen}
+            aria-haspopup="menu"
           >
-            Compartilhar
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M19 12H5" />
-            </svg>
+            <span className="editor-share-icon" aria-hidden="true">+</span>
+            <span>Compartilhar</span>
           </button>
-          
+
           {shareOpen && (
             <div className="absolute right-0 top-full mt-2 w-56 bg-[#1b1b23] border border-[#464554] rounded-lg shadow-lg py-2 z-50 animate-fade-in">
               <button
@@ -120,7 +120,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
               <circle cx="12" cy="19" r="2" />
             </svg>
           </button>
-          
+
           {menuOpen && (
             <div className="absolute right-0 top-full mt-2 w-48 bg-[#1b1b23] border border-[#464554] rounded-lg shadow-lg py-2 z-50 animate-fade-in">
               <Link
