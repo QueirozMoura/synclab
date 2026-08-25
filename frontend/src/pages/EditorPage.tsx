@@ -60,7 +60,7 @@ export const EditorPage: React.FC = () => {
 
     // Create the operation first so the activity can reference its real id.
     console.log("[Editor] creating UPDATE_TITLE operation");
-    const operation = createOperation(document.id, "UPDATE_TITLE", { type: "UPDATE_TITLE", title: newTitle });
+    const operation = createOperation(document.id, "UPDATE_TITLE", { type: "UPDATE_TITLE", title: newTitle }, document);
     console.log("[Editor] calling updateDocument for title:", document.id);
     updateDocument(document.id, { title: newTitle }, operation.id);
   };
@@ -78,7 +78,7 @@ export const EditorPage: React.FC = () => {
         if (newContent !== lastPersistedContentRef.current) {
           // Create the operation first so the activity can reference its real id.
           console.log("[Editor] creating UPDATE_CONTENT operation");
-          const operation = createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          const operation = createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent }, document);
           console.log("[Editor] debounced updateDocument for content:", document.id);
           updateDocument(document.id, { content: newContent }, operation.id);
 
@@ -126,7 +126,7 @@ export const EditorPage: React.FC = () => {
         if (newContent !== lastPersistedContentRef.current) {
           // Create the operation first so the activity can reference its real id.
           console.log("[Editor] creating UPDATE_CONTENT operation");
-          const operation = createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          const operation = createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent }, document);
           updateDocument(document.id, { content: newContent }, operation.id);
 
           lastPersistedContentRef.current = newContent;
@@ -176,7 +176,7 @@ export const EditorPage: React.FC = () => {
         if (newContent !== lastPersistedContentRef.current) {
           // Create the operation first so the activity can reference its real id.
           console.log("[Editor] creating UPDATE_CONTENT operation");
-          const operation = createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          const operation = createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent }, document);
           updateDocument(document.id, { content: newContent }, operation.id);
 
           lastPersistedContentRef.current = newContent;

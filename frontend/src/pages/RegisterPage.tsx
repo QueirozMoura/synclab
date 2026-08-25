@@ -26,7 +26,7 @@ export const RegisterPage: React.FC = () => {
     }
     setBusy(true);
     try {
-      const response = await fetch("/auth/register", {
+      const response = await fetch(`${authApiBaseUrl.replace(/\/$/, "")}/auth/register`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

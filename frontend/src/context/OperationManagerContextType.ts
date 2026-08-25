@@ -6,7 +6,7 @@ import type { SyncCoordinator, SyncStatus } from "../lib/syncCoordinator";
 import type { SyncTransport } from "../types/syncTransport";
 
 export interface OperationManagerContextType {
-  createOperation: (documentId: string, type: OperationType, payload: OperationPayload) => Operation;
+  createOperation: (documentId: string, type: OperationType, payload: OperationPayload, beforeDocument?: Document) => Operation;
   getOperations: () => Operation[];
   getOperationsForDocument: (documentId: string) => Operation[];
   hasPendingOperations: () => boolean;

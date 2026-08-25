@@ -5218,7 +5218,29 @@ describe("HistoricalActivityRecord automático", () => {
     expect(record.operation.id).toBe(update.id);
   });
 
-  it("não persiste checkpoint para histórico insuficiente", async () => {
+  it("persiste checkpoint para UPDATE_TITLE de documento existente com estado anterior explícito", async () => {
+    const manager = new OperationManager();
+    const before = { id: "history-doc", title: "Before", content: "Content", createdAt: "2024-01-01T00:00:00.000Z", updatedAt: "2024-01-01T00:00:00.000Z" };
+    const operation = manager.createOperation("history-doc", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "After" }, before);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const record = vi.mocked(putHistoricalActivityRecord).mock.calls.at(-1)?.[0] as HistoricalActivityRecord;
+    expect(record.operationId).toBe(operation.id);
+    expect(record.before).toEqual(before);
+    expect(record.after).toMatchObject({ title: "After", content: "Content" });
+  });
+
+  it("persiste checkpoint para UPDATE_CONTENT de documento existente com estado anterior explícito", async () => {
+    const manager = new OperationManager();
+    const before = { id: "history-doc", title: "Title", content: "Before", createdAt: "2024-01-01T00:00:00.000Z", updatedAt: "2024-01-01T00:00:00.000Z" };
+    const operation = manager.createOperation("history-doc", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "After" }, before);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const record = vi.mocked(putHistoricalActivityRecord).mock.calls.at(-1)?.[0] as HistoricalActivityRecord;
+    expect(record.operationId).toBe(operation.id);
+    expect(record.before).toEqual(before);
+    expect(record.after).toMatchObject({ title: "Title", content: "After" });
+  });
+
+  it("não persiste checkpoint para histórico insuficiente sem estado anterior", async () => {
     const manager = new OperationManager();
     manager.createOperation("history-doc", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Unknown" });
     await new Promise((resolve) => setTimeout(resolve, 10));

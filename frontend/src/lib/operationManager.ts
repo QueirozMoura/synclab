@@ -101,13 +101,15 @@ export class OperationManager {
   createOperation<T extends OperationType>(
     documentId: string,
     type: T,
-    payload: Extract<OperationPayload, { type: T }>
+    payload: Extract<OperationPayload, { type: T }>,
+    beforeDocument?: Document,
   ): Operation;
 
   createOperation(
     documentId: string,
     type: OperationType,
-    payload: OperationPayload
+    payload: OperationPayload,
+    beforeDocument?: Document,
   ): Operation {
     this.vectorClock = this.vectorClock.increment(this.deviceId);
     const operation = createOperation(documentId, type, payload, this.vectorClock);
@@ -117,7 +119,7 @@ export class OperationManager {
     putOperation(operation).catch((error) => {
       console.error("[OperationManager] Failed to persist operation:", error);
     });
-    void this.persistHistoricalRecordAndContinue(operation, operations);
+    void this.persistHistoricalRecordAndContinue(operation, operations, beforeDocument);
 
 
     return operation;
@@ -126,15 +128,27 @@ export class OperationManager {
   private async persistHistoricalRecordAndContinue(
     operation: Operation,
     operations: Operation[],
+    beforeDocument?: Document,
   ): Promise<void> {
     const snapshot = this.createSnapshotIfNeeded(operation, operations);
     let historicalState: Awaited<ReturnType<typeof reconstructHistoricalState>>;
     try {
-      historicalState = await reconstructHistoricalState(
-        operation.documentId,
-        operation.id,
-        { getOperations: async () => this.getOperations() },
-      );
+      if (
+        beforeDocument &&
+        (operation.type === "UPDATE_TITLE" || operation.type === "UPDATE_CONTENT")
+      ) {
+        const before = { ...beforeDocument };
+        const after = reconstructDocument(before, [operation]);
+        historicalState = after
+          ? { status: "success", operation, before, after: { ...after } }
+          : { status: "insufficient_history" };
+      } else {
+        historicalState = await reconstructHistoricalState(
+          operation.documentId,
+          operation.id,
+          { getOperations: async () => this.getOperations() },
+        );
+      }
     } catch (error) {
       console.error("[OperationManager] Failed to reconstruct historical state:", error);
       historicalState = { status: "insufficient_history" };

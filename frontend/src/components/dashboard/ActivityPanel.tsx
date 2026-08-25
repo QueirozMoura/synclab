@@ -59,7 +59,7 @@ export const ActivityPanel: React.FC = () => {
             timeAgo={item.timeAgo}
             dotColor={item.dotColor}
             icon={item.icon}
-            action={item.event.type === "DOCUMENT_UPDATED" ? <Link to={`/app/activity/${item.event.id}`} state={{ operationIds: item.operationIds }} className="mt-2 inline-block text-xs font-medium text-[var(--primary)] transition-opacity hover:opacity-75">Ver alterações →</Link> : undefined}
+            action={item.event.type === "DOCUMENT_UPDATED" && typeof item.event.operationId === "string" && item.event.operationId.length > 0 ? <Link to={`/app/activity/${item.event.id}`} state={{ operationIds: item.operationIds }} className="mt-2 inline-block text-xs font-medium text-[var(--primary)] transition-opacity hover:opacity-75">Ver alterações →</Link> : undefined}
             isLast={index === visibleActivities.length - 1}
           />
         ))}

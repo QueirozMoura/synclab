@@ -2,7 +2,7 @@ export interface SessionHttpConfig {
   readonly cookieName: string;
   readonly ttlSeconds: number;
   readonly secure: boolean;
-  readonly sameSite: "lax";
+  readonly sameSite: "lax" | "none";
   readonly path: string;
 }
 
@@ -17,7 +17,7 @@ export function getSessionHttpConfig(
     cookieName: env.SESSION_COOKIE_NAME ?? "synclab_session",
     ttlSeconds,
     secure: production,
-    sameSite: "lax",
+    sameSite: production ? "none" : "lax",
     path: "/",
   };
 }

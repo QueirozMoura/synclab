@@ -22,6 +22,21 @@ import { registerSyncRoutes } from "./routes.js";
 import { registerAuthRoutes } from "./authRoutes.js";
 import type { DocumentOperationRepository } from "@domain/document-operations/DocumentOperationRepository.js";
 import type { DocumentSnapshotRepository } from "@domain/document-operations/DocumentSnapshotRepository.js";
+import { PostgresDocumentAuthorizationRepository } from "@infrastructure/auth/PostgresDocumentAuthorizationRepository.js";
+
+function validateProductionEnvironment(): void {
+  if (process.env.NODE_ENV !== "production") return;
+  const required = ["NODE_ENV", "DATABASE_URL", "APP_BASE_URL"];
+  const missing = required.filter((name) => !process.env[name]?.trim());
+  const oauth = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_CALLBACK_URL"];
+  const configuredOAuth = oauth.some((name) => Boolean(process.env[name]?.trim()));
+  if (configuredOAuth) {
+    missing.push(...oauth.filter((name) => !process.env[name]?.trim()));
+  }
+  if (missing.length > 0) {
+    throw new Error(`Missing required production environment variables: ${[...new Set(missing)].join(", ")}`);
+  }
+}
 
 /**
  * Cria o repositório de operações baseado na configuração.
@@ -32,6 +47,7 @@ import type { DocumentSnapshotRepository } from "@domain/document-operations/Doc
  */
 async function createRepository(): Promise<InMemoryOperationRepository | PostgresOperationRepository> {
   const databaseUrl = process.env.DATABASE_URL;
+  validateProductionEnvironment();
 
   if (databaseUrl) {
     return await PostgresOperationRepository.create(databaseUrl);
@@ -67,14 +83,13 @@ function createApiKeyValidator(): ApiKeyValidator {
 
   // Chaves padrão para desenvolvimento/testes
   // Formato: apiKey -> { clientId, deviceId }
-  const defaultKeys: ApiKeyEntry[] = [
-    { apiKey: "dev-key-client-A-device-A", clientId: "client-A", deviceId: "device-A" },
-    { apiKey: "dev-key-client-A-device-B", clientId: "client-A", deviceId: "device-B" },
-    { apiKey: "dev-key-client-B-device-C", clientId: "client-B", deviceId: "device-C" },
-  ];
-
-  for (const entry of defaultKeys) {
-    validator.addKey(entry);
+  if (process.env.NODE_ENV !== "production") {
+    const defaultKeys: ApiKeyEntry[] = [
+      { apiKey: "dev-key-client-A-device-A", clientId: "client-A", deviceId: "device-A" },
+      { apiKey: "dev-key-client-A-device-B", clientId: "client-A", deviceId: "device-B" },
+      { apiKey: "dev-key-client-B-device-C", clientId: "client-B", deviceId: "device-C" },
+    ];
+    for (const entry of defaultKeys) validator.addKey(entry);
   }
 
   // Permite chaves adicionais via variável de ambiente
@@ -97,7 +112,12 @@ function createApiKeyValidator(): ApiKeyValidator {
  *
  * Em produção, isso deve vir de banco de dados ou serviço de autorização.
  */
-function createAuthzRepository(): InMemoryDocumentAuthorizationRepository {
+function createAuthzRepository(
+  repository: InMemoryOperationRepository | PostgresOperationRepository,
+): InMemoryDocumentAuthorizationRepository | PostgresDocumentAuthorizationRepository {
+  if (repository instanceof PostgresOperationRepository) {
+    return new PostgresDocumentAuthorizationRepository(repository.getPool());
+  }
   const authz = new InMemoryDocumentAuthorizationRepository();
 
   // Permissões padrão para desenvolvimento/testes
@@ -142,16 +162,18 @@ export async function createServer(): Promise<FastifyInstance> {
     },
   });
 
+  const appBaseUrl = process.env.APP_BASE_URL ?? "http://localhost:5173";
+  const allowedOrigins = new Set([appBaseUrl, ...(process.env.NODE_ENV === "production" ? [] : ["http://localhost:5173"])].map((url) => new URL(url).origin));
   await app.register(fastifyCors, {
     origin: (origin, callback) => {
-      callback(null, origin === "http://localhost:5173");
+      callback(null, !origin || allowedOrigins.has(origin));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   });
   app.addHook("onSend", async (request, reply) => {
-    if (request.headers.origin === "http://localhost:5173") {
+    if (request.headers.origin && allowedOrigins.has(request.headers.origin)) {
       reply.header("Vary", "Origin");
     }
   });
@@ -165,7 +187,7 @@ export async function createServer(): Promise<FastifyInstance> {
   const repository = await createRepository();
   const documentRepository = await createDocumentRepository();
   const snapshotRepository = await createSnapshotRepository();
-  const authzRepository = createAuthzRepository();
+  const authzRepository = createAuthzRepository(repository);
   const apiKeyValidator = createApiKeyValidator();
   const sessionPool = repository instanceof PostgresOperationRepository ? repository.getPool() : null;
   const userRepository = sessionPool ? new PostgresUserRepository(sessionPool) : null;
@@ -187,11 +209,17 @@ export async function createServer(): Promise<FastifyInstance> {
 
   registerSyncRoutes(app, repository, documentRepository, snapshotRepository, authzRepository, apiKeyValidator, sessionService, sessionConfig);
 
-  app.get("/health", async () => {
-    // Se usa PostgreSQL, verifica conexão
+  app.get("/health", async (_request, reply) => {
     if (repository instanceof PostgresOperationRepository) {
-      const healthy = await repository.healthCheck();
-      return { status: healthy ? "ok" : "degraded", database: healthy ? "connected" : "disconnected" };
+      const checks = await Promise.all([
+        repository.healthCheck(),
+        documentRepository instanceof PostgresDocumentOperationRepository ? documentRepository.healthCheck() : Promise.resolve(true),
+        snapshotRepository instanceof PostgresDocumentSnapshotRepository ? snapshotRepository.healthCheck() : Promise.resolve(true),
+        authzRepository instanceof PostgresDocumentAuthorizationRepository ? authzRepository.healthCheck() : Promise.resolve(true),
+      ]);
+      const healthy = checks.every(Boolean);
+      if (!healthy) return reply.status(503).send({ status: "degraded", database: "disconnected" });
+      return { status: "ok", database: "connected" };
     }
     return { status: "ok", database: "in-memory" };
   });

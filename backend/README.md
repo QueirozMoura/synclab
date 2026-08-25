@@ -2,15 +2,17 @@
 
 Sistema Offline-First de sincronização de documentos com resolução de conflitos.
 
-## Estado atual
+## Deploy
+O frontend React/Vite é publicado na Vercel. Este backend Fastify usa `pg` para PostgreSQL e é publicado no Render; em produção, `DATABASE_URL` deve apontar para um banco Neon. Execute `npm run migrate` antes de `npm start`.
 
-Esta é a **fundação do domínio**. Apenas as primitivas core foram implementadas:
+## Estado atual
+Esta é a base do domínio e do serviço HTTP:
 
 - **VectorClock** — relógio vetorial para ordenação causal
 - **Operation** — modelo tipado de alteração em documento
 - **OperationLog** — log append-only em memória
 
-Nada de persistência, servidor HTTP, autenticação ou sincronização cliente-servidor ainda.
+O backend inclui persistência PostgreSQL, autenticação e sincronização cliente-servidor.
 
 ## Estrutura
 

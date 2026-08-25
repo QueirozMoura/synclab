@@ -14,21 +14,28 @@ export const ActivityDetailsPage: React.FC = () => {
   const operationId = event?.operationId;
   const isHistoryLoading = Boolean(operationId) && historicalState?.operationId !== operationId;
 
-
   useEffect(() => {
     let cancelled = false;
     if (!event || !operationId) {
       return () => { cancelled = true; };
     }
 
-    void reconstructHistoricalState(event.documentId ?? "", operationId)
-      .then((result) => {
-        if (!cancelled) setHistoricalState({ operationId, result });
-      })
-      .catch(() => {
-        if (!cancelled) setHistoricalState({ operationId, result: { status: "insufficient_history" } });
-      })
+    const loadHistoricalState = async () => {
+      const maxAttempts = 3;
+      let result: HistoricalStateResult = { status: "insufficient_history" };
+      for (let attempt = 0; attempt < maxAttempts && !cancelled; attempt += 1) {
+        try {
+          result = await reconstructHistoricalState(event.documentId ?? "", operationId);
+        } catch {
+          result = { status: "insufficient_history" };
+        }
+        if (result.status === "success" || attempt === maxAttempts - 1) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      if (!cancelled) setHistoricalState({ operationId, result });
+    };
 
+    void loadHistoricalState();
     return () => { cancelled = true; };
   }, [event, operationId]);
 

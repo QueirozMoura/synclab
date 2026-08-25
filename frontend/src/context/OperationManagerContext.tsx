@@ -30,8 +30,8 @@ export const OperationManagerProvider: React.FC<OperationManagerProviderProps> =
   }, [manager]);
 
   const createOperation = useCallback(
-    (documentId: string, type: OperationType, payload: OperationPayload): Operation => {
-      const operation = manager.createOperation(documentId, type, payload);
+    (documentId: string, type: OperationType, payload: OperationPayload, beforeDocument?: Document): Operation => {
+      const operation = manager.createOperation(documentId, type, payload, beforeDocument);
       setRevision((revision) => revision + 1);
       return operation;
     },

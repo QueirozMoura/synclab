@@ -166,7 +166,7 @@ describe("LoginPage", () => {
       ),
     );
     expect(fetch).toHaveBeenCalledWith(
-      "/auth/login",
+      "http://localhost:3000/auth/login",
       expect.objectContaining({
         credentials: "include",
         body: JSON.stringify({ email: "a@b.com", password: "password" }),
