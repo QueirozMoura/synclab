@@ -102,6 +102,26 @@ describe("HttpSyncTransport", () => {
       const t = new HttpSyncTransport("http://api.example.com");
       expect(t).toBeInstanceOf(HttpSyncTransport);
     });
+
+    it("deve invocar o fetch global com o contexto correto", async () => {
+      const originalFetch = globalThis.fetch;
+      const nativeFetch = vi.fn(function (this: typeof globalThis) {
+        expect(this).toBe(globalThis);
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve(createSyncResult()),
+        } as Response);
+      });
+      globalThis.fetch = nativeFetch as typeof fetch;
+
+      try {
+        await new HttpSyncTransport("http://api.example.com").synchronize(createPayload());
+        expect(nativeFetch).toHaveBeenCalledTimes(1);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
   });
 
   describe("synchronize", () => {
@@ -140,6 +160,7 @@ describe("HttpSyncTransport", () => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
+          credentials: "include",
           headers: expect.objectContaining({
             "Content-Type": "application/json",
           }),

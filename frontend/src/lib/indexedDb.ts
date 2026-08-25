@@ -54,6 +54,8 @@ export interface ActivityEvent {
   timestamp: string;
   documentId?: string;
   documentTitle?: string;
+  operationId?: string;
+  operationIds?: string[];
   metadata?: Record<string, string | number>;
 }
 

@@ -57,12 +57,12 @@ export const EditorPage: React.FC = () => {
     }
 
     setTitle(newTitle);
-    console.log("[Editor] calling updateDocument for title:", document.id);
-    updateDocument(document.id, { title: newTitle });
 
-    // Create operation for title change
+    // Create the operation first so the activity can reference its real id.
     console.log("[Editor] creating UPDATE_TITLE operation");
-    createOperation(document.id, "UPDATE_TITLE", { type: "UPDATE_TITLE", title: newTitle });
+    const operation = createOperation(document.id, "UPDATE_TITLE", { type: "UPDATE_TITLE", title: newTitle });
+    console.log("[Editor] calling updateDocument for title:", document.id);
+    updateDocument(document.id, { title: newTitle }, operation.id);
   };
 
   const handleContentChange = (newContent: string) => {
@@ -76,12 +76,11 @@ export const EditorPage: React.FC = () => {
       debounceRef.current = setTimeout(() => {
         // Only persist and create operation if content actually changed
         if (newContent !== lastPersistedContentRef.current) {
-          console.log("[Editor] debounced updateDocument for content:", document.id);
-          updateDocument(document.id, { content: newContent });
-
-          // Create operation for content change
+          // Create the operation first so the activity can reference its real id.
           console.log("[Editor] creating UPDATE_CONTENT operation");
-          createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          const operation = createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          console.log("[Editor] debounced updateDocument for content:", document.id);
+          updateDocument(document.id, { content: newContent }, operation.id);
 
           lastPersistedContentRef.current = newContent;
         }
@@ -125,11 +124,10 @@ export const EditorPage: React.FC = () => {
       }
       debounceRef.current = setTimeout(() => {
         if (newContent !== lastPersistedContentRef.current) {
-          updateDocument(document.id, { content: newContent });
-
-          // Create operation for content change
+          // Create the operation first so the activity can reference its real id.
           console.log("[Editor] creating UPDATE_CONTENT operation");
-          createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          const operation = createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          updateDocument(document.id, { content: newContent }, operation.id);
 
           lastPersistedContentRef.current = newContent;
         }
@@ -176,11 +174,10 @@ export const EditorPage: React.FC = () => {
       }
       debounceRef.current = setTimeout(() => {
         if (newContent !== lastPersistedContentRef.current) {
-          updateDocument(document.id, { content: newContent });
-
-          // Create operation for content change
+          // Create the operation first so the activity can reference its real id.
           console.log("[Editor] creating UPDATE_CONTENT operation");
-          createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          const operation = createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
+          updateDocument(document.id, { content: newContent }, operation.id);
 
           lastPersistedContentRef.current = newContent;
         }

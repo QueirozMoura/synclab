@@ -5,6 +5,8 @@ import type { DocumentOperationRepository } from "@domain/document-operations/Do
 import type { DocumentSnapshotRepository } from "@domain/document-operations/DocumentSnapshotRepository.js";
 import type { DocumentAuthorizationRepository } from "@domain/auth/DocumentAuthorizationRepository.js";
 import type { AuthContext } from "@domain/auth/AuthContext.js";
+import type { SessionService } from "@application/auth/SessionService.js";
+import type { SessionHttpConfig } from "@application/auth/sessionConfig.js";
 import { ApiKeyValidator, InvalidApiKeyError } from "@application/auth/ApiKeyValidator.js";
 import type { Operation } from "@domain/operations/Operation.js";
 import { OperationSerializer } from "@domain/operations/OperationSerializer.js";
@@ -72,6 +74,8 @@ export function registerSyncRoutes(
   snapshotRepository: DocumentSnapshotRepository,
   authzRepository: DocumentAuthorizationRepository,
   apiKeyValidator: ApiKeyValidator,
+  sessionService: SessionService | null = null,
+  sessionConfig: SessionHttpConfig | null = null,
 ): void {
   const syncService = new SyncService(repository, authzRepository);
   const documentSyncService = new DocumentSyncService(documentRepository, snapshotRepository);
@@ -158,6 +162,23 @@ export function registerSyncRoutes(
    * Extrai e valida a API Key do header Authorization.
    * Anexa o AuthContext ao request para uso nas rotas.
    */
+  /** Autentica o /sync pela sessão web existente; API keys permanecem para /sync/push e /sync/pull. */
+  async function authenticateSessionOrApiKey(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+    if (!sessionService || !sessionConfig) {
+      return authenticate(request, reply);
+    }
+
+    const user = await sessionService.getAuthenticatedUser(request.cookies[sessionConfig.cookieName]);
+    if (!user) {
+      return reply.status(401).send({ error: "Unauthorized", message: "Unauthenticated session" });
+    }
+
+    request.authContext = {
+      clientId: user.id,
+      deviceId: request.headers["x-device-id"] as string ?? "session-device",
+    };
+  }
+
   async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     const startTime = Date.now();
     try {
@@ -726,7 +747,7 @@ export function registerSyncRoutes(
           },
         },
       },
-      preHandler: authenticate,
+      preHandler: authenticateSessionOrApiKey,
       config: {
         rateLimit: rateLimitConfig,
       },

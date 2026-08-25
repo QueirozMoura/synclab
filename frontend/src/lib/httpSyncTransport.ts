@@ -28,7 +28,7 @@ export class HttpSyncTransport implements SyncTransport {
 
   constructor(baseUrl: string, fetchFn?: FetchFn) {
     this.#baseUrl = baseUrl.replace(/\/$/, "");
-    this.#fetchFn = fetchFn ?? fetch;
+    this.#fetchFn = fetchFn ?? ((url, options) => globalThis.fetch(url, options));
   }
 
   #toSyncOperation(op: Operation): SyncOperation {
@@ -76,14 +76,16 @@ export class HttpSyncTransport implements SyncTransport {
   }
 
   async synchronize(payload: SyncPayload): Promise<SyncPayload> {
+    const url = `${this.#baseUrl}/sync`;
     const outgoingPayload = {
       deviceId: payload.deviceId,
       operations: payload.operations.map(this.#toSyncOperation),
       snapshots: payload.snapshots,
     };
 
-    const response = await this.#fetchFn(`${this.#baseUrl}/sync`, {
+    const response = await this.#fetchFn(url, {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },

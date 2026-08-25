@@ -10,6 +10,7 @@ import { FavoritesPage } from "./pages/FavoritesPage";
 import { RootLayout } from "./components/RootLayout";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
+import { ActivityDetailsPage } from "./pages/ActivityDetailsPage";
 import { ProtectedRoute } from "./context/AuthContext";
 
 export const router = createBrowserRouter([
@@ -25,6 +26,10 @@ export const router = createBrowserRouter([
       {
         path: "/app",
         element: <ProtectedRoute><DashboardPage /></ProtectedRoute>,
+      },
+      {
+        path: "/app/activity/:activityId",
+        element: <ProtectedRoute><ActivityDetailsPage /></ProtectedRoute>,
       },
       {
         path: "/app/favorites",

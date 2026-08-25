@@ -185,7 +185,7 @@ export async function createServer(): Promise<FastifyInstance> {
     : null;
   registerAuthRoutes(app, sessionService, sessionConfig, passwordAuthService, googleOAuthService);
 
-  registerSyncRoutes(app, repository, documentRepository, snapshotRepository, authzRepository, apiKeyValidator);
+  registerSyncRoutes(app, repository, documentRepository, snapshotRepository, authzRepository, apiKeyValidator, sessionService, sessionConfig);
 
   app.get("/health", async () => {
     // Se usa PostgreSQL, verifica conexão

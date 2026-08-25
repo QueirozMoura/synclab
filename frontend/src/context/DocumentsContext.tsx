@@ -18,7 +18,7 @@ export interface DocumentsContextType {
   getDocument: (id: string) => Document | undefined;
   getPendingOperationsForDocument?: (id: string) => number;
   activity: ActivityEvent[];
-  updateDocument: (id: string, data: Partial<Document>) => void;
+  updateDocument: (id: string, data: Partial<Document>, operationId?: string) => void;
   toggleFavorite: (id: string) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
   syncDocuments: () => Promise<SyncResult>;
@@ -297,15 +297,14 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.error("[DocumentsContext] Failed to persist new document:", error);
     });
 
-    appendActivity({ type: "DOCUMENT_CREATED", documentId: newDoc.id, documentTitle: newDoc.title });
-
-    // Create operation for document creation
+    // Create the operation first so the activity can reference its real id.
     console.log("[Context] creating CREATE_DOCUMENT operation");
-    createOperation(newDoc.id, "CREATE_DOCUMENT", {
+    const operation = createOperation(newDoc.id, "CREATE_DOCUMENT", {
       type: "CREATE_DOCUMENT",
       title: newDoc.title,
       content: newDoc.content,
     });
+    appendActivity({ type: "DOCUMENT_CREATED", documentId: newDoc.id, documentTitle: newDoc.title, operationId: operation.id });
 
     return newDoc;
   }, [appendActivity, createOperation]);
@@ -318,9 +317,9 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     return getOperationsForDocument(id).filter((operation) => operation.confirmedAt === undefined).length;
   }, [getOperationsForDocument]);
 
-  const updateDocument = useCallback((id: string, data: Partial<Document>) => {
+  const updateDocument = useCallback((id: string, data: Partial<Document>, operationId?: string) => {
     const currentDocument = documents.find((item) => item.id === id);
-    if (currentDocument && (data.title !== undefined || data.content !== undefined)) appendActivity({ type: "DOCUMENT_UPDATED", documentId: id, documentTitle: data.title ?? currentDocument.title });
+    if (currentDocument && (data.title !== undefined || data.content !== undefined)) appendActivity({ type: "DOCUMENT_UPDATED", documentId: id, documentTitle: data.title ?? currentDocument.title, operationId });
     console.log("[Context] updateDocument called:", { id, data });
     setDocuments((prev) => {
       const doc = prev.find((d) => d.id === id);
