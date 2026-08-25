@@ -1,13 +1,16 @@
 import type { Document } from "../types/document";
 import type { Operation } from "../types/operation";
 import type { DocumentSnapshot } from "../types/documentSnapshot";
+import type { HistoricalActivityRecord } from "../types/historicalActivityRecord";
+import { VectorClock } from "./vectorClock";
 
 const DB_NAME = "synclab_store";
 const DOCUMENTS_STORE = "documents";
 const OPERATIONS_STORE = "operations";
 const SNAPSHOTS_STORE = "snapshots";
 const ACTIVITY_STORE = "activity";
-const DB_VERSION = 4;
+const HISTORICAL_ACTIVITY_STORE = "historicalActivity";
+const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -41,6 +44,9 @@ function openDatabase(): Promise<IDBDatabase> {
       }
       if (!database.objectStoreNames.contains(ACTIVITY_STORE)) {
         database.createObjectStore(ACTIVITY_STORE, { keyPath: "id" });
+      }
+      if (!database.objectStoreNames.contains(HISTORICAL_ACTIVITY_STORE)) {
+        database.createObjectStore(HISTORICAL_ACTIVITY_STORE, { keyPath: "operationId" });
       }
     };
   });
@@ -84,6 +90,65 @@ export async function pruneActivity(limit = 100): Promise<void> {
   const database = await openDatabase();
   const transaction = database.transaction(ACTIVITY_STORE, "readwrite");
   for (const event of events.slice(limit)) transaction.objectStore(ACTIVITY_STORE).delete(event.id);
+}
+
+export async function putHistoricalActivityRecord(record: HistoricalActivityRecord): Promise<void> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(HISTORICAL_ACTIVITY_STORE, "readwrite");
+    const request = transaction.objectStore(HISTORICAL_ACTIVITY_STORE).put({
+      ...record,
+      operation: { ...record.operation, payload: { ...record.operation.payload }, vectorClock: record.operation.vectorClock instanceof VectorClock ? record.operation.vectorClock.toMap() : { ...(record.operation.vectorClock as unknown as Record<string, number>) } },
+      before: record.before ? { ...record.before } : null,
+      after: record.after ? { ...record.after } : null,
+      vectorClock: { ...record.vectorClock },
+    });
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(new Error("Failed to persist historical activity record"));
+  });
+}
+
+export async function getHistoricalActivityRecord(operationId: string): Promise<HistoricalActivityRecord | undefined> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const request = database.transaction(HISTORICAL_ACTIVITY_STORE, "readonly").objectStore(HISTORICAL_ACTIVITY_STORE).get(operationId);
+    request.onsuccess = () => {
+      const record = request.result as HistoricalActivityRecord | undefined;
+      resolve(record ? cloneHistoricalActivityRecord(record) : undefined);
+    };
+    request.onerror = () => reject(new Error("Failed to get historical activity record"));
+  });
+}
+
+export async function deleteHistoricalActivityRecord(operationId: string): Promise<void> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const request = database.transaction(HISTORICAL_ACTIVITY_STORE, "readwrite").objectStore(HISTORICAL_ACTIVITY_STORE).delete(operationId);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(new Error("Failed to delete historical activity record"));
+  });
+}
+
+function cloneHistoricalActivityRecord(record: HistoricalActivityRecord): HistoricalActivityRecord {
+  const serializedVectorClock = record.operation.vectorClock as unknown as Record<string, number> | { clock: Record<string, number> };
+  const operationVectorClock = record.operation.vectorClock instanceof VectorClock
+    ? record.operation.vectorClock.toMap()
+    : typeof serializedVectorClock === "object" &&
+        "clock" in serializedVectorClock &&
+        typeof serializedVectorClock.clock === "object"
+      ? serializedVectorClock.clock
+      : serializedVectorClock as Record<string, number>;
+  return {
+    ...record,
+    operation: {
+      ...record.operation,
+      payload: { ...record.operation.payload },
+      vectorClock: VectorClock.from(operationVectorClock),
+    },
+    before: record.before ? { ...record.before } : null,
+    after: record.after ? { ...record.after } : null,
+    vectorClock: { ...record.vectorClock },
+  };
 }
 
 export async function getAllDocuments(): Promise<Document[]> {
