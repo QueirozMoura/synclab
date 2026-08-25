@@ -1,13 +1,55 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 interface EditorHeaderProps {
   title: string;
 }
 
 export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [shareOpen, setShareOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAccountOpen(false);
+    };
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    document.addEventListener("click", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      document.removeEventListener("click", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  const displayName = user?.name ?? user?.email ?? "Usuário";
+  const initials = displayName.trim().charAt(0).toUpperCase() || "U";
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    setAccountOpen(false);
+    try {
+      await logout();
+      navigate("/", { replace: true });
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   const handleShare = () => {
     setShareOpen(!shareOpen);
@@ -156,9 +198,29 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
           )}
         </div>
 
-        {/* Avatar */}
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c0c1ff] to-[#8083ff] flex items-center justify-center text-white text-xs font-bold">
-          U
+        {/* Account avatar */}
+        <div ref={accountRef} className="relative">
+          <button type="button" aria-label="Abrir menu da conta" aria-haspopup="menu" aria-expanded={accountOpen} onClick={() => setAccountOpen((open) => !open)} className="w-8 h-8 overflow-hidden rounded-full bg-gradient-to-br from-[#c0c1ff] to-[#8083ff] flex items-center justify-center text-white text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c0c1ff] focus-visible:outline-offset-2">
+            {user?.avatarUrl ? <img src={user.avatarUrl} alt={`Avatar de ${displayName}`} className="h-full w-full object-cover" /> : initials}
+          </button>
+          {accountOpen && (
+            <div role="menu" aria-label="Menu da conta" className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border-[#464554] bg-[#1b1b23] p-1.5 shadow-2xl animate-fade-in">
+              <div className="flex items-center gap-3 border-b border-[#464554] px-3 py-3">
+                <div className="w-9 h-9 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-[#c0c1ff] to-[#8083ff] flex items-center justify-center text-white text-xs font-bold">{user?.avatarUrl ? <img src={user.avatarUrl} alt={`Avatar de ${displayName}`} className="h-full w-full object-cover" /> : initials}</div>
+                <div className="min-w-0"><p className="truncate text-sm font-medium text-[#e4e1ed]">{displayName}</p><p className="truncate text-xs text-[#908fa0]">{user?.email}</p></div>
+              </div>
+              <div className="border-b border-[#464554] py-1.5 text-xs text-[#c7c4d7]">
+                <div className="flex items-center gap-2 px-3 py-1.5"><span className={`h-2 w-2 rounded-full ${isOnline ? "bg-[#10b981]" : "bg-[#f59e0b]"}`} />{isOnline ? "Online" : "Offline"}</div>
+                <div className="px-3 py-1.5">✓ Salvo localmente</div>
+              </div>
+              <div className="py-1">
+                <button type="button" role="menuitem" className="w-full rounded-lg px-3 py-2 text-left text-sm text-[#e4e1ed] hover:bg-[#292932]" onClick={() => setAccountOpen(false)}>Minha conta</button>
+                <Link role="menuitem" to="/app/settings" className="block rounded-lg px-3 py-2 text-sm text-[#e4e1ed] hover:bg-[#292932]" onClick={() => setAccountOpen(false)}>Configurações</Link>
+                <Link role="menuitem" to="/app" className="block rounded-lg px-3 py-2 text-sm text-[#e4e1ed] hover:bg-[#292932]" onClick={() => setAccountOpen(false)}>Voltar ao ambiente</Link>
+              </div>
+              <div className="border-t border-[#464554] pt-1"><button type="button" role="menuitem" disabled={isLoggingOut} className="w-full rounded-lg px-3 py-2 text-left text-sm text-[#ffaaa8] hover:bg-[#292932] disabled:opacity-60" onClick={() => void handleLogout()}>{isLoggingOut ? "Sair..." : "Sair"}</button></div>
+            </div>
+          )}
         </div>
       </div>
     </div>

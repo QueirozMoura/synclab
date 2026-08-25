@@ -15,6 +15,7 @@ interface OperationManagerProviderProps {
 export const OperationManagerProvider: React.FC<OperationManagerProviderProps> = ({ children, transport }) => {
   const [manager] = useState(() => new OperationManager());
   const [syncCoordinator] = useState(() => new SyncCoordinator(manager, { transport }));
+  const [, setRevision] = useState(0);
 
   useEffect(() => {
     if (transport) {
@@ -30,7 +31,9 @@ export const OperationManagerProvider: React.FC<OperationManagerProviderProps> =
 
   const createOperation = useCallback(
     (documentId: string, type: OperationType, payload: OperationPayload): Operation => {
-      return manager.createOperation(documentId, type, payload);
+      const operation = manager.createOperation(documentId, type, payload);
+      setRevision((revision) => revision + 1);
+      return operation;
     },
     [manager]
   );
@@ -71,7 +74,14 @@ export const OperationManagerProvider: React.FC<OperationManagerProviderProps> =
     [manager]
   );
 
-  const sync = useCallback(() => syncCoordinator.sync(), [syncCoordinator]);
+  const sync = useCallback(() => {
+    const promise = syncCoordinator.sync();
+    void promise.then(
+      () => setRevision((revision) => revision + 1),
+      () => setRevision((revision) => revision + 1),
+    );
+    return promise;
+  }, [syncCoordinator]);
   const isSyncing = useCallback(() => syncCoordinator.isSyncing(), [syncCoordinator]);
   const getLastSyncResult = useCallback(() => syncCoordinator.getLastSyncResult(), [syncCoordinator]);
   const getLastSyncError = useCallback(() => syncCoordinator.getLastSyncError(), [syncCoordinator]);

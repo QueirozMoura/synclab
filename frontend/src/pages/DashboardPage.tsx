@@ -7,6 +7,7 @@ import { ActivityPanel } from "../components/dashboard/ActivityPanel";
 import { MobileTopbar } from "../components/dashboard/MobileTopbar";
 import { useDocuments } from "../hooks/useDocuments";
 import type { SyncResult } from "../types/sync";
+import type { SyncState } from "../lib/syncState";
 
 const localizeSyncError = (message: string): string => {
   if (message === "Invalid sync response") return "Resposta de sincronização inválida";
@@ -33,25 +34,31 @@ export const DashboardPage: React.FC = () => {
     getLastSuccessfulSyncAt,
     isOnline,
     syncState,
+    getPendingOperationsForDocument,
   } = useDocuments();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [isSyncPending, setIsSyncPending] = React.useState(false);
   const [syncFeedback, setSyncFeedback] = React.useState<"idle" | "success" | "error">("idle");
   const [syncErrorMessage, setSyncErrorMessage] = React.useState<string | null>(null);
   const [syncSummary, setSyncSummary] = React.useState<SyncResult | null>(null);
+  const [filterOpen, setFilterOpen] = React.useState(false);
+  const [filter, setFilter] = React.useState<"all" | "synced" | "pending" | "offline" | "error">("all");
 
-  const handleFilterClick = () => {
-    console.log("Filter clicked");
+  const getDocumentState = (docId: string): SyncState => {
+    if (!isOnline) return "offline";
+    if ((getPendingOperationsForDocument?.(docId) ?? 0) > 0) return "pending";
+    if (syncFeedback === "error") return "error";
+    return "synced";
   };
+
+  const handleFilterClick = () => setFilterOpen((open) => !open);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
 
   const handleSyncClick = async () => {
-    if (isSyncPending || !isOnline) {
-      return;
-    }
+    if (isSyncPending || !isOnline) return;
 
     setIsSyncPending(true);
     setSyncFeedback("idle");
@@ -93,8 +100,9 @@ export const DashboardPage: React.FC = () => {
         ? [localizeSyncError(syncErrorMessage)]
         : [];
 
-  const featuredDoc = documents[0];
-  const compactDocs = documents.slice(1, 3);
+  const filteredDocuments = documents.filter((doc) => filter === "all" || getDocumentState(doc.id) === filter);
+  const featuredDoc = filteredDocuments[0];
+  const compactDocs = filteredDocuments.slice(1, 3);
 
   return (
     <div className="dashboard-page flex h-screen overflow-hidden">
@@ -123,9 +131,19 @@ export const DashboardPage: React.FC = () => {
               isSyncing={isSyncPending || !isOnline}
               syncStatus={syncStatus}
               syncText={syncText}
-              syncDetails={syncDetails}
-              lastSuccessfulSyncAt={getLastSuccessfulSyncAt()}
-            />
+                syncDetails={syncDetails}
+                lastSuccessfulSyncAt={getLastSuccessfulSyncAt()}
+              />
+              {filterOpen && (
+                <div className="relative z-10 mt-3 flex-wrap gap-2" role="group" aria-label="Filtros de documentos">
+                  {(["all", "synced", "pending", "offline", "error"] as const).map((option) => (
+                    <button key={option} type="button" className={`dashboard-button dashboard-button-secondary rounded-lg px-3 py-1.5 text-xs ${filter === option ? "ring-2 ring-[#c0c1ff]" : ""}`} onClick={() => { setFilter(option); setFilterOpen(false); }}>
+                      {{ all: "Todos", synced: "Sincronizados", pending: "Alterações pendentes", offline: "Offline", error: "Com erro" }[option]}
+                    </button>
+                  ))}
+                  {filter !== "all" && <button type="button" className="dashboard-text-button px-2 text-xs" onClick={() => { setFilter("all"); setFilterOpen(false); }}>Limpar filtros</button>}
+                </div>
+              )}
 
             {/* Main Grid: Documents (8/12) + Activity (4/12) on desktop */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 lg:gap-8 mt-9">
@@ -157,7 +175,8 @@ export const DashboardPage: React.FC = () => {
                         title={featuredDoc.title}
                         badge={featuredDoc.id}
                         badgeColor="#c0c1ff"
-                            timeAgo="Agora mesmo"
+                        status={getDocumentState(featuredDoc.id) === "pending" ? "syncing" : getDocumentState(featuredDoc.id) === "offline" ? "offline" : "synced"}
+                        timeAgo={new Date(featuredDoc.updatedAt).toLocaleString("pt-BR") }
                         href={`/app/documents/${featuredDoc.id}`}
                       />
                     )}
@@ -172,7 +191,8 @@ export const DashboardPage: React.FC = () => {
                             title={doc.title}
                             icon={icon}
                             iconColor={iconColor}
-                            timeAgo="Sincronizado recentemente"
+                            status={getDocumentState(doc.id) === "pending" ? "syncing" : getDocumentState(doc.id) === "offline" ? "offline" : "synced"}
+                            timeAgo={new Date(doc.updatedAt).toLocaleString("pt-BR")}
                             href={`/app/documents/${doc.id}`}
                           />
                         );

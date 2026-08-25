@@ -5,7 +5,7 @@ import type { SyncStatus } from "../lib/syncCoordinator";
 import type { SyncState } from "../lib/syncState";
 import { deriveSyncState } from "../lib/syncState";
 import { DocumentsContext } from "./DocumentsContextType";
-import { getAllDocuments, putDocument, deleteDocument as deleteDocumentIdb } from "../lib/indexedDb";
+import { getAllDocuments, putDocument, deleteDocument as deleteDocumentIdb, recordActivity, getRecentActivity, type ActivityEvent } from "../lib/indexedDb";
 import { useOperationManager } from "../hooks/useOperationManager";
 import { useConnectivity } from "../hooks/useConnectivity";
 
@@ -16,6 +16,8 @@ export interface DocumentsContextType {
   syncState: SyncState;
   createDocument: (title?: string) => Document;
   getDocument: (id: string) => Document | undefined;
+  getPendingOperationsForDocument?: (id: string) => number;
+  activity: ActivityEvent[];
   updateDocument: (id: string, data: Partial<Document>) => void;
   toggleFavorite: (id: string) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
@@ -217,9 +219,11 @@ open http://localhost:3000
 export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const isOnline = useConnectivity();
   const {
     createOperation,
+    getOperationsForDocument,
     synchronizeDocument: syncDoc,
     synchronize,
     reconstructSyncedDocument,
@@ -237,6 +241,8 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     async function initialize() {
       try {
+        const storedActivity = await getRecentActivity();
+        if (mounted) setActivity(storedActivity);
         console.log("[Context] Initializing - loading from IndexedDB");
         const storedDocuments = await getAllDocuments();
         console.log("[Context] Initialization - loaded documents:", storedDocuments.length);
@@ -271,6 +277,12 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
   }, []);
 
+  const appendActivity = useCallback((event: Omit<ActivityEvent, "id" | "timestamp">) => {
+    const fullEvent: ActivityEvent = { ...event, id: crypto.randomUUID(), timestamp: new Date().toISOString() };
+    setActivity((current) => [fullEvent, ...current].slice(0, 100));
+    if (typeof recordActivity === "function") void recordActivity(fullEvent);
+  }, []);
+
   const createDocument = useCallback((title?: string): Document => {
     const now = new Date().toISOString();
     const newDoc: Document = {
@@ -285,6 +297,8 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.error("[DocumentsContext] Failed to persist new document:", error);
     });
 
+    appendActivity({ type: "DOCUMENT_CREATED", documentId: newDoc.id, documentTitle: newDoc.title });
+
     // Create operation for document creation
     console.log("[Context] creating CREATE_DOCUMENT operation");
     createOperation(newDoc.id, "CREATE_DOCUMENT", {
@@ -294,13 +308,19 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     return newDoc;
-  }, [createOperation]);
+  }, [appendActivity, createOperation]);
 
   const getDocument = useCallback((id: string): Document | undefined => {
     return documents.find((doc) => doc.id === id);
   }, [documents]);
 
+  const getPendingOperationsForDocument = useCallback((id: string): number => {
+    return getOperationsForDocument(id).filter((operation) => operation.confirmedAt === undefined).length;
+  }, [getOperationsForDocument]);
+
   const updateDocument = useCallback((id: string, data: Partial<Document>) => {
+    const currentDocument = documents.find((item) => item.id === id);
+    if (currentDocument && (data.title !== undefined || data.content !== undefined)) appendActivity({ type: "DOCUMENT_UPDATED", documentId: id, documentTitle: data.title ?? currentDocument.title });
     console.log("[Context] updateDocument called:", { id, data });
     setDocuments((prev) => {
       const doc = prev.find((d) => d.id === id);
@@ -318,7 +338,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
           : doc
       );
     });
-  }, []);
+  }, [appendActivity, documents]);
 
   const toggleFavorite = useCallback(async (id: string): Promise<void> => {
     const document = documents.find((item) => item.id === id);
@@ -412,8 +432,14 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
   );
 
   const syncDocuments = useCallback((): Promise<SyncResult> => {
-    return sync();
-  }, [sync]);
+    appendActivity({ type: "SYNC_STARTED" });
+    const promise = sync();
+    void promise.then(
+      (result) => appendActivity({ type: "SYNC_COMPLETED", metadata: { accepted: result.acceptedOperations.length, sent: result.missingOperations.length } }),
+      (error: unknown) => appendActivity({ type: "SYNC_FAILED", metadata: { message: error instanceof Error ? error.message : String(error) } }),
+    );
+    return promise;
+  }, [appendActivity, sync]);
 
   const getSyncStatus = useCallback((): SyncStatus => {
     return getCoordinatorSyncStatus();
@@ -449,6 +475,8 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       syncState,
       createDocument,
       getDocument,
+      getPendingOperationsForDocument,
+      activity,
       updateDocument,
       toggleFavorite,
       deleteDocument,
@@ -479,6 +507,8 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
       getLastSuccessfulSyncAt,
       synchronizeDocument,
       synchronizeAll,
+      getPendingOperationsForDocument,
+      activity,
     ]
   );
 

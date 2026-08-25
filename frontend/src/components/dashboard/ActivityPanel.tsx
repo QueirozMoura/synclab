@@ -1,12 +1,15 @@
 import React from "react";
 import { ActivityItem } from "./ActivityItem";
+import { useDocuments } from "../../hooks/useDocuments";
 
 export const ActivityPanel: React.FC = () => {
-  const activities = [
-    { title: "Você editou Visão geral da arquitetura", timeAgo: "há 10 minutos", dotColor: "#c0c1ff" },
-    { title: "Dispositivo 'MacBook Pro' sincronizado", timeAgo: "há 2 horas", dotColor: "#34343d" },
-    { title: "Notas de CRDT criadas", timeAgo: "Ontem", dotColor: "#34343d" },
-  ];
+  const { activity } = useDocuments();
+  const activities = activity.map((event) => ({
+    title: event.type === "DOCUMENT_CREATED" ? `Você criou ${event.documentTitle ?? "um documento"}` : event.type === "DOCUMENT_UPDATED" ? `Você editou ${event.documentTitle ?? "um documento"}` : event.type === "SYNC_COMPLETED" ? "Sincronização concluída" : event.type === "SYNC_FAILED" ? "Sincronização falhou" : "Sincronização iniciada",
+    timeAgo: new Date(event.timestamp).toLocaleString("pt-BR"),
+    dotColor: event.type === "SYNC_COMPLETED" ? "#10b981" : event.type === "SYNC_FAILED" ? "#ffb4ab" : "#c0c1ff",
+  }));
+  if (activities.length === 0) activities.push({ title: "Nenhuma atividade recente", timeAgo: "", dotColor: "#34343d" });
 
   return (
     <div className="dashboard-activity-panel h-full rounded-2xl flex flex-col">

@@ -6,7 +6,8 @@ const DB_NAME = "synclab_store";
 const DOCUMENTS_STORE = "documents";
 const OPERATIONS_STORE = "operations";
 const SNAPSHOTS_STORE = "snapshots";
-const DB_VERSION = 3;
+const ACTIVITY_STORE = "activity";
+const DB_VERSION = 4;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -38,10 +39,49 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!database.objectStoreNames.contains(SNAPSHOTS_STORE)) {
         database.createObjectStore(SNAPSHOTS_STORE, { keyPath: "documentId" });
       }
+      if (!database.objectStoreNames.contains(ACTIVITY_STORE)) {
+        database.createObjectStore(ACTIVITY_STORE, { keyPath: "id" });
+      }
     };
   });
 
   return dbPromise;
+}
+
+export interface ActivityEvent {
+  id: string;
+  type: "DOCUMENT_CREATED" | "DOCUMENT_UPDATED" | "SYNC_STARTED" | "SYNC_COMPLETED" | "SYNC_FAILED";
+  timestamp: string;
+  documentId?: string;
+  documentTitle?: string;
+  metadata?: Record<string, string | number>;
+}
+
+export async function recordActivity(event: ActivityEvent): Promise<void> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(ACTIVITY_STORE, "readwrite");
+    const request = transaction.objectStore(ACTIVITY_STORE).put(event);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(new Error("Failed to persist activity"));
+  });
+}
+
+export async function getRecentActivity(limit = 100): Promise<ActivityEvent[]> {
+  const database = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const request = database.transaction(ACTIVITY_STORE, "readonly").objectStore(ACTIVITY_STORE).getAll();
+    request.onsuccess = () => resolve((request.result as ActivityEvent[]).sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).slice(0, limit));
+    request.onerror = () => reject(new Error("Failed to load activity"));
+  });
+}
+
+export async function pruneActivity(limit = 100): Promise<void> {
+  const events = await getRecentActivity(limit + 1);
+  if (events.length <= limit) return;
+  const database = await openDatabase();
+  const transaction = database.transaction(ACTIVITY_STORE, "readwrite");
+  for (const event of events.slice(limit)) transaction.objectStore(ACTIVITY_STORE).delete(event.id);
 }
 
 export async function getAllDocuments(): Promise<Document[]> {

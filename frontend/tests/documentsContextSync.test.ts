@@ -31,6 +31,8 @@ const mockedIndexedDb = vi.hoisted(() => ({
   clearOperations: vi.fn().mockImplementation(() => Promise.resolve()),
   deleteSnapshot: vi.fn().mockImplementation(() => Promise.resolve()),
   clearSnapshots: vi.fn().mockImplementation(() => Promise.resolve()),
+  getRecentActivity: vi.fn().mockImplementation(() => Promise.resolve([])),
+  recordActivity: vi.fn().mockImplementation(() => Promise.resolve()),
 }));
 
 vi.mock("../src/lib/indexedDb", () => mockedIndexedDb);

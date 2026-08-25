@@ -7,8 +7,46 @@ import { useAuth } from "../../context/AuthContext";
 export const DashboardSidebar: React.FC = () => {
   const navigate = useNavigate();
   const { createDocument } = useDocuments();
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const { user, logout } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = React.useState(false);
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const accountMenuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!isAccountMenuOpen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsAccountMenuOpen(false);
+    };
+    document.addEventListener("click", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("click", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isAccountMenuOpen]);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    setIsAccountMenuOpen(false);
+    try {
+      await logout();
+      navigate("/", { replace: true });
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  const displayName = user?.name ?? user?.email ?? "Usuário";
+  const initials = displayName.trim().charAt(0).toUpperCase() || "U";
+  const handleAccountToggle = () => {
+    if (!isLoggingOut) setIsAccountMenuOpen((isOpen) => !isOpen);
+  };
 
   const handleNewDocument = () => {
     if (!isAuthenticated || isAuthLoading) { navigate("/login"); return; }
@@ -137,15 +175,29 @@ export const DashboardSidebar: React.FC = () => {
             <span>{item.label}</span>
           </NavLink>
         ))}
-        <button onClick={() => void logout()} className="dashboard-nav-item w-full text-left px-3 py-2 text-sm text-[#a9a5b7]">Sair</button>
-        <div className="dashboard-profile mt-3 pt-4 border-t flex items-center gap-3 px-3 py-2">
+        <div ref={accountMenuRef} className="relative mt-3 pt-4 border-t dashboard-profile">
+          {isAccountMenuOpen && (
+            <div role="menu" aria-label="Menu da conta" className="absolute bottom-full left-0 right-0 z-50 mb-2 rounded-xl border-[#464554] bg-[#1b1b26] p-1.5 shadow-2xl">
+              <div className="flex items-center gap-3 border-b border-[#464554] px-3 py-2.5">
+                <div className="w-8 h-8 shrink-0 rounded-full border-[#464554] bg-gradient-to-br from-[#c0c1ff] to-[#8083ff] flex items-center justify-center text-white text-xs font-bold">{initials}</div>
+                <div className="min-w-0"><p className="text-sm font-medium text-[#e4e1ed] truncate">{displayName}</p><p className="text-xs text-[#908fa0] truncate">{user?.email}</p></div>
+              </div>
+              <div className="py-1">
+                <button type="button" role="menuitem" className="dashboard-nav-item w-full rounded-lg px-3 py-2 text-left text-sm text-[#cbc8d6]" onClick={() => setIsAccountMenuOpen(false)}>Minha conta</button>
+                <button type="button" role="menuitem" className="dashboard-nav-item w-full rounded-lg px-3 py-2 text-left text-sm text-[#cbc8d6]" onClick={() => { setIsAccountMenuOpen(false); navigate("/app/settings"); }}>Configurações</button>
+              </div>
+              <div className="border-t border-[#464554] pt-1"><button type="button" role="menuitem" disabled={isLoggingOut} className="dashboard-nav-item w-full rounded-lg px-3 py-2 text-left text-sm text-[#ffaaa8] disabled:cursor-wait disabled:opacity-60" onClick={() => void handleLogout()}>{isLoggingOut ? "Sair..." : "Sair"}</button></div>
+            </div>
+          )}
+          <button type="button" aria-expanded={isAccountMenuOpen} aria-haspopup="menu" aria-label={`Abrir menu da conta de ${displayName}`} className="dashboard-profile-button dashboard-nav-item w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#c0c1ff] focus-visible:outline-offset-2" onClick={handleAccountToggle}>
           <div className="w-8 h-8 rounded-full border border-[#464554] bg-gradient-to-br from-[#c0c1ff] to-[#8083ff] flex items-center justify-center text-white text-xs font-bold">
-            G
+            {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[#e4e1ed] truncate">{user?.name ?? user?.email ?? "Usuário"}</p>
+            <p className="text-sm font-medium text-[#e4e1ed] truncate">{displayName}</p>
             <p className="text-xs text-[#908fa0] truncate">Plano Pro</p>
           </div>
+          </button>
         </div>
       </div>
     </div>

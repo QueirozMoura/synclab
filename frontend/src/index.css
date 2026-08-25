@@ -590,6 +590,10 @@ html[data-theme="light"] .landing-nav.is-scrolled {
   background: rgba(255, 255, 255, 0.86);
 }
 
+html[data-theme="light"] .landing-nav-login {
+  color: #171a23;
+}
+
 html[data-theme="light"] .landing-hero::before {
   background: radial-gradient(circle, rgba(76, 79, 190, 0.1), transparent 68%);
 }
@@ -869,6 +873,27 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
 
 .landing-nav-link:hover {
   color: #f7f4fb;
+}
+
+.landing-nav-login {
+  align-items: center;
+  background: rgba(201, 199, 255, 0.08);
+  border: 1px solid var(--landing-line);
+  border-radius: 8px;
+  color: #f7f4fb;
+  display: inline-flex;
+  font-weight: 600;
+  justify-content: center;
+  min-width: 5rem;
+  padding: 0.65rem 1rem;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.landing-nav-login:hover {
+  background: rgba(201, 199, 255, 0.16);
+  border-color: rgba(201, 199, 255, 0.35);
+  color: #f7f4fb;
+  transform: translateY(-2px);
 }
 
 .landing-nav-cta,
@@ -1208,6 +1233,7 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
 
 @media (max-width: 700px) {
   .landing-nav-link { display: none; }
+  .landing-nav-login { display: inline-flex; }
   .landing-nav-inner { height: 4.25rem; }
   .landing-hero { padding-bottom: 5rem; }
   .landing-hero h1 { font-size: clamp(3.35rem, 15vw, 5rem); }

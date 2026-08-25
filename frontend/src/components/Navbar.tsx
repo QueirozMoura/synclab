@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
             <button
               type="button"
               onClick={() => window.open(`${authApiBaseUrl}/auth/google`, "_self")}
-              className="landing-nav-link text-sm"
+              className="landing-nav-login text-sm"
             >
               Login
             </button>

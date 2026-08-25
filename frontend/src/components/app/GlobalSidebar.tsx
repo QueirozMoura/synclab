@@ -1,6 +1,5 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useDocuments } from "../../hooks/useDocuments";
 import { useAuth } from "../../context/AuthContext";
 import { LoginButton } from "../auth/LoginButton";
@@ -91,13 +90,13 @@ export const GlobalSidebar: React.FC = () => {
       <div className="global-sidebar-glow" aria-hidden="true" />
       {/* Header */}
       <div className="global-sidebar-header">
-        <div className="global-sidebar-brand">
+        <Link to="/app/" aria-label="Voltar ao ambiente" className="global-sidebar-brand cursor-pointer transition-opacity hover:opacity-80">
           <div className="global-sidebar-logo" aria-hidden="true">S</div>
           <div className="min-w-0">
             <p className="global-sidebar-title">Synclab</p>
             <p className="global-sidebar-subtitle">Editor offline-first</p>
           </div>
-        </div>
+        </Link>
         {!isAuthenticated && !isAuthLoading && <LoginButton />}
         <button onClick={handleNewDocument} className="global-sidebar-cta" disabled={!isAuthenticated || isAuthLoading} aria-label={!isAuthenticated || isAuthLoading ? "Faça login para criar um documento" : "Novo documento"}>
           <span className="global-sidebar-cta-icon" aria-hidden="true">+</span>
