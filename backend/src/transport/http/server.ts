@@ -3,6 +3,8 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyCookie from "@fastify/cookie";
 import { SessionService } from "@application/auth/SessionService.js";
 import { PasswordAuthService } from "@application/auth/PasswordAuthService.js";
+import { GoogleOAuthService } from "@application/auth/GoogleOAuthService.js";
+import { getGoogleOAuthConfig } from "@application/auth/googleOAuthConfig.js";
 import { PostgresAuthAccountRepository } from "@infrastructure/persistence/postgres/PostgresAuthAccountRepository.js";
 import { getSessionHttpConfig } from "@application/auth/sessionConfig.js";
 import { PostgresUserRepository } from "@infrastructure/persistence/postgres/PostgresUserRepository.js";
@@ -162,7 +164,11 @@ export async function createServer(): Promise<FastifyInstance> {
     ? new PasswordAuthService(userRepository, authAccountRepository, sessionService)
     : null;
 
-  registerAuthRoutes(app, sessionService, sessionConfig, passwordAuthService);
+  const googleConfig = getGoogleOAuthConfig();
+  const googleOAuthService = googleConfig && userRepository && authAccountRepository && sessionService
+    ? new GoogleOAuthService(googleConfig, userRepository, authAccountRepository, sessionService)
+    : null;
+  registerAuthRoutes(app, sessionService, sessionConfig, passwordAuthService, googleOAuthService);
 
   registerSyncRoutes(app, repository, documentRepository, snapshotRepository, authzRepository, apiKeyValidator);
 

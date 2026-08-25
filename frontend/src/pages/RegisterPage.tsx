@@ -77,6 +77,7 @@ export const RegisterPage: React.FC = () => {
             />
           </label>
         ))}
+        <button type="button" onClick={() => { window.location.href = "/auth/google"; }} className="mb-3 w-full rounded-lg border-[var(--border)] p-3 font-semibold">Continuar com Google</button>
         <button
           disabled={busy}
           className="mt-2 w-full rounded-lg bg-[var(--primary-container)] p-3 font-semibold text-white"

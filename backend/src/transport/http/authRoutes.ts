@@ -2,13 +2,33 @@ import type { FastifyInstance } from "fastify";
 import type { SessionService } from "@application/auth/SessionService.js";
 import type { SessionHttpConfig } from "@application/auth/sessionConfig.js";
 import { EmailAlreadyExistsError, InvalidAuthInputError, InvalidCredentialsError, PasswordAuthService } from "@application/auth/PasswordAuthService.js";
+import { GoogleOAuthService, OAuthError } from "@application/auth/GoogleOAuthService.js";
+import { getGoogleOAuthConfig } from "@application/auth/googleOAuthConfig.js";
 
 export function registerAuthRoutes(
   app: FastifyInstance,
   sessionService: SessionService | null,
   config: SessionHttpConfig,
   passwordAuthService: PasswordAuthService | null = null,
+  googleOAuthService: GoogleOAuthService | null = null,
 ): void {
+  app.get("/auth/google", async (_request, reply) => {
+    if (!googleOAuthService) return reply.status(503).send({ error: "OAUTH_UNAVAILABLE" });
+    return reply.redirect(googleOAuthService.createAuthorizationUrl());
+  });
+
+  app.get<{ Querystring: { code?: string; state?: string }}>("/auth/google/callback", async (request, reply) => {
+    if (!googleOAuthService) return reply.status(503).send({ error: "OAUTH_UNAVAILABLE" });
+    try {
+      const result = await googleOAuthService.authenticate(request.query.code, request.query.state);
+      setSessionCookie(reply, config, result.token);
+      return reply.redirect(getGoogleOAuthConfig()?.appBaseUrl ?? "/app");
+    } catch (error) {
+      if (error instanceof OAuthError) return reply.status(400).send({ error: "OAUTH_FAILED" });
+      throw error;
+    }
+  });
+
   app.post<{ Body: { email?: unknown; password?: unknown; name?: unknown }}>("/auth/register", async (request, reply) => {
     if (!passwordAuthService) return reply.status(503).send({ error: "AUTH_UNAVAILABLE" });
     try {
