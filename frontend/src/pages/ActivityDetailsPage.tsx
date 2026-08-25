@@ -1,11 +1,36 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { reconstructHistoricalState, type HistoricalStateResult } from "../lib/documentHistory";
 import { useDocuments } from "../hooks/useDocuments";
 
 export const ActivityDetailsPage: React.FC = () => {
   const { activityId } = useParams<{ activityId: string }>();
   const { activity } = useDocuments();
   const event = activity.find((item) => item.id === activityId);
+  const [historicalState, setHistoricalState] = useState<{
+    operationId: string;
+    result: HistoricalStateResult;
+  } | null>(null);
+  const operationId = event?.operationId;
+  const isHistoryLoading = Boolean(operationId) && historicalState?.operationId !== operationId;
+
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!event || !operationId) {
+      return () => { cancelled = true; };
+    }
+
+    void reconstructHistoricalState(event.documentId ?? "", operationId)
+      .then((result) => {
+        if (!cancelled) setHistoricalState({ operationId, result });
+      })
+      .catch(() => {
+        if (!cancelled) setHistoricalState({ operationId, result: { status: "insufficient_history" } });
+      })
+
+    return () => { cancelled = true; };
+  }, [event, operationId]);
 
   if (
     !event ||
@@ -38,6 +63,7 @@ export const ActivityDetailsPage: React.FC = () => {
   const date = new Date(event.timestamp).toLocaleString("pt-BR");
   const relatedOperationIds =
     event.operationIds ?? (event.operationId ? [event.operationId] : []);
+  const historicalResult = historicalState?.result;
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-8 text-[var(--text-primary)]">
@@ -85,6 +111,69 @@ export const ActivityDetailsPage: React.FC = () => {
             </p>
           </div>
         </section>
+        {event.operationId && (
+          <section className="mt-10" aria-live="polite">
+            <h2 className="text-lg font-semibold">Histórico</h2>
+            {isHistoryLoading && <p className="mt-4 text-sm text-[var(--text-secondary)]">Carregando histórico…</p>}
+            {!isHistoryLoading && historicalResult?.status === "success" && (
+              <div className="mt-4 space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
+                    <p className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--text-secondary)]">Before</p>
+                    {historicalResult.before ? (
+                      <>
+                        <p className="mt-3 text-xs font-medium uppercase tracking-[0.1em] text-[var(--text-secondary)]">Título</p>
+                        <p className="mt-1 rounded-xl border-red-500/30 bg-red-500/10 p-3 text-lg font-medium text-[var(--text-primary)]">− {historicalResult.before.title}</p>
+                        <p className="mt-3 text-xs font-medium uppercase tracking-[0.1em] text-[var(--text-secondary)]">Conteúdo</p>
+                        <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-xl border-red-500/30 bg-red-500/10 p-4 text-sm text-[var(--text-secondary)]">− {historicalResult.before.content}</pre>
+                      </>
+                    ) : (
+                      <p className="mt-3 text-sm text-[var(--text-secondary)]">Documento inexistente antes da operação.</p>
+                    )}
+                  </div>
+                  <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
+                    <p className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--text-secondary)]">After</p>
+                    {historicalResult.after ? (
+                      <>
+                        <p className="mt-3 text-xs font-medium uppercase tracking-[0.1em] text-[var(--text-secondary)]">Título</p>
+                        <p className="mt-1 rounded-xl border-emerald-500/30 bg-emerald-500/10 p-3 text-lg font-medium text-[var(--text-primary)]">+ {historicalResult.after.title}</p>
+                        <p className="mt-3 text-xs font-medium uppercase tracking-[0.1em] text-[var(--text-secondary)]">Conteúdo</p>
+                        <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-xl border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-[var(--text-secondary)]">+ {historicalResult.after.content}</pre>
+                      </>
+                    ) : (
+                      <p className="mt-3 text-sm text-[var(--text-secondary)]">Documento excluído após a operação.</p>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
+                  {historicalResult.operation.type === "UPDATE_TITLE" && (
+                    <p className="text-sm"><span className="font-medium">Título alterado:</span> {historicalResult.before?.title ?? "(inexistente)"} → {historicalResult.after?.title ?? "(inexistente)"}</p>
+                  )}
+                  {historicalResult.operation.type === "UPDATE_CONTENT" && (
+                    <div className="text-sm">
+                      <p className="font-medium">Conteúdo alterado</p>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div>
+                          <p className="mb-1 text-xs font-medium uppercase tracking-[0.1em] text-red-400">− Removido</p>
+                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-xl border-red-500/30 bg-red-500/10 p-3 text-[var(--text-secondary)]">{historicalResult.before?.content ?? "(inexistente)"}</pre>
+                        </div>
+                        <div>
+                          <p className="mb-1 text-xs font-medium uppercase tracking-[0.1em] text-emerald-400">+ Adicionado</p>
+                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-xl border-emerald-500/30 bg-emerald-500/10 p-3 text-[var(--text-secondary)]">{historicalResult.after?.content ?? "(inexistente)"}</pre>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {historicalResult.operation.type === "CREATE_DOCUMENT" && <p className="text-sm font-medium">Documento criado.</p>}
+                  {historicalResult.operation.type === "DELETE_DOCUMENT" && <p className="text-sm font-medium">Documento excluído.</p>}
+                </div>
+              </div>
+            )}
+            {!isHistoryLoading && historicalState && historicalState.result.status !== "success" && (
+              <p className="mt-4 text-sm text-[var(--text-secondary)]">Histórico não disponível para esta atividade.</p>
+            )}
+          </section>
+        )}
       </div>
     </main>
   );
