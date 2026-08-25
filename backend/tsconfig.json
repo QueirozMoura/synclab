@@ -9,10 +9,11 @@
     "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
-      "@domain/*": ["src/domain/*"],
-      "@application/*": ["src/application/*"],
-      "@infrastructure/*": ["src/infrastructure/*"],
-      "@transport/*": ["src/transport/*"]
+      "#domain/*": ["src/domain/*"],
+      "#application/*": ["src/application/*"],
+      "#infrastructure/*": ["src/infrastructure/*"],
+      "#transport/*": ["src/transport/*"],
+      "#types/*": ["src/types/*"]
     },
     "strict": true,
     "noUnusedLocals": true,

@@ -1,4 +1,4 @@
-import type { DocumentAuthorizationRepository } from "@domain/auth/DocumentAuthorizationRepository.js";
+import type { DocumentAuthorizationRepository } from "#domain/auth/DocumentAuthorizationRepository.js";
 
 /**
  * Implementação em memória de DocumentAuthorizationRepository.

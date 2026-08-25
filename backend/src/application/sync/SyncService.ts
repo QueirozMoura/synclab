@@ -1,10 +1,10 @@
-import type { Operation } from "@domain/operations/Operation.js";
-import type { ServerOperationRepository } from "@domain/sync/ServerOperationRepository.js";
-import type { DocumentAuthorizationRepository } from "@domain/auth/DocumentAuthorizationRepository.js";
-import type { AuthContext } from "@domain/auth/AuthContext.js";
-import { OperationSerializer } from "@domain/operations/OperationSerializer.js";
-import { OperationType } from "@domain/operations/types.js";
-import { VectorClock } from "@domain/vector-clock/VectorClock.js";
+import type { Operation } from "#domain/operations/Operation.js";
+import type { ServerOperationRepository } from "#domain/sync/ServerOperationRepository.js";
+import type { DocumentAuthorizationRepository } from "#domain/auth/DocumentAuthorizationRepository.js";
+import type { AuthContext } from "#domain/auth/AuthContext.js";
+import { OperationSerializer } from "#domain/operations/OperationSerializer.js";
+import { OperationType } from "#domain/operations/types.js";
+import { VectorClock } from "#domain/vector-clock/VectorClock.js";
 
 /**
  * Resultado de uma operação de push.
@@ -306,9 +306,9 @@ export class SyncService {
   }
 }
 
-import type { DocumentOperationRepository } from "@domain/document-operations/DocumentOperationRepository.js";
-import type { DocumentSnapshotRepository } from "@domain/document-operations/DocumentSnapshotRepository.js";
-import type { DocumentOperation } from "@domain/document-operations/DocumentOperation.js";
+import type { DocumentOperationRepository } from "#domain/document-operations/DocumentOperationRepository.js";
+import type { DocumentSnapshotRepository } from "#domain/document-operations/DocumentSnapshotRepository.js";
+import type { DocumentOperation } from "#domain/document-operations/DocumentOperation.js";
 import { DocumentOperationAdapter } from "./DocumentOperationAdapter.js";
 import type { SyncPayload, SyncResult, DocumentSnapshot } from "../../types/sync.js";
 import type { SyncOperation } from "../../types/syncOperation.js";

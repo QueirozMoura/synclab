@@ -3,6 +3,13 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "imports": {
+    "#domain/*": "./dist/domain/*",
+    "#application/*": "./dist/application/*",
+    "#infrastructure/*": "./dist/infrastructure/*",
+    "#transport/*": "./dist/transport/*",
+    "#types/*": "./dist/types/*"
+  },
   "scripts": {
     "build": "tsc",
     "migrate": "tsx --env-file=.env src/infrastructure/persistence/migrations/run.ts",

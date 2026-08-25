@@ -16,7 +16,7 @@ import {
   type UpdateTitleOperationParams,
   type UpdateContentOperationParams,
   type DeleteDocumentOperationParams,
-} from "@domain/document-operations/DocumentOperation.js";
+} from "#domain/document-operations/DocumentOperation.js";
 
 export class DocumentOperationAdapterError extends Error {
   constructor(

@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import type { SessionService } from "@application/auth/SessionService.js";
-import type { SessionHttpConfig } from "@application/auth/sessionConfig.js";
-import { EmailAlreadyExistsError, InvalidAuthInputError, InvalidCredentialsError, PasswordAuthService } from "@application/auth/PasswordAuthService.js";
-import { GoogleOAuthService, OAuthError } from "@application/auth/GoogleOAuthService.js";
-import { getGoogleOAuthConfig } from "@application/auth/googleOAuthConfig.js";
+import type { SessionService } from "#application/auth/SessionService.js";
+import type { SessionHttpConfig } from "#application/auth/sessionConfig.js";
+import { EmailAlreadyExistsError, InvalidAuthInputError, InvalidCredentialsError, PasswordAuthService } from "#application/auth/PasswordAuthService.js";
+import { GoogleOAuthService, OAuthError } from "#application/auth/GoogleOAuthService.js";
+import { getGoogleOAuthConfig } from "#application/auth/googleOAuthConfig.js";
 
 export function registerAuthRoutes(
   app: FastifyInstance,

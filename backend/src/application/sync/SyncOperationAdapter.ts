@@ -1,4 +1,4 @@
-import type { Operation } from "@domain/operations/index.js";
+import type { Operation } from "#domain/operations/index.js";
 import { SyncOperationType, type SyncOperation } from "../../types/syncOperation.js";
 
 export class SyncOperationAdapterError extends Error {

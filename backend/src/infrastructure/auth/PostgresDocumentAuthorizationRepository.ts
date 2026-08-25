@@ -1,5 +1,5 @@
 import pg from "pg";
-import type { DocumentAuthorizationRepository } from "@domain/auth/DocumentAuthorizationRepository.js";
+import type { DocumentAuthorizationRepository } from "#domain/auth/DocumentAuthorizationRepository.js";
 
 export class PostgresDocumentAuthorizationRepository implements DocumentAuthorizationRepository {
   constructor(private readonly pool: pg.Pool) {}

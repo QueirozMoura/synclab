@@ -1,5 +1,5 @@
-import type { OperationRepository } from "@domain/operations/OperationRepository.js";
-import { OperationSerializer } from "@domain/operations/OperationSerializer.js";
+import type { OperationRepository } from "#domain/operations/OperationRepository.js";
+import { OperationSerializer } from "#domain/operations/OperationSerializer.js";
 
 /**
  * Configuração do SyncClient.

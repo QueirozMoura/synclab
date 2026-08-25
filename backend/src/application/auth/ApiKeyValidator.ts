@@ -1,4 +1,4 @@
-import type { AuthContext } from "@domain/auth/AuthContext.js";
+import type { AuthContext } from "#domain/auth/AuthContext.js";
 
 /**
  * Representa uma API Key válida mapeada para um contexto de autenticação.

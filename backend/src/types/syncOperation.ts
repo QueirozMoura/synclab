@@ -1,4 +1,4 @@
-import type { ClockMap } from "@domain/vector-clock/types.js";
+import type { ClockMap } from "#domain/vector-clock/types.js";
 
 export enum SyncOperationType {
   CREATE_DOCUMENT = "CREATE_DOCUMENT",

@@ -1,15 +1,15 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply, FastifyError } from "fastify";
-import { SyncService, DocumentSyncService, DocumentAccessDeniedError } from "@application/sync/SyncService.js";
-import type { ServerOperationRepository } from "@domain/sync/ServerOperationRepository.js";
-import type { DocumentOperationRepository } from "@domain/document-operations/DocumentOperationRepository.js";
-import type { DocumentSnapshotRepository } from "@domain/document-operations/DocumentSnapshotRepository.js";
-import type { DocumentAuthorizationRepository } from "@domain/auth/DocumentAuthorizationRepository.js";
-import type { AuthContext } from "@domain/auth/AuthContext.js";
-import type { SessionService } from "@application/auth/SessionService.js";
-import type { SessionHttpConfig } from "@application/auth/sessionConfig.js";
-import { ApiKeyValidator, InvalidApiKeyError } from "@application/auth/ApiKeyValidator.js";
-import type { Operation } from "@domain/operations/Operation.js";
-import { OperationSerializer } from "@domain/operations/OperationSerializer.js";
+import { SyncService, DocumentSyncService, DocumentAccessDeniedError } from "#application/sync/SyncService.js";
+import type { ServerOperationRepository } from "#domain/sync/ServerOperationRepository.js";
+import type { DocumentOperationRepository } from "#domain/document-operations/DocumentOperationRepository.js";
+import type { DocumentSnapshotRepository } from "#domain/document-operations/DocumentSnapshotRepository.js";
+import type { DocumentAuthorizationRepository } from "#domain/auth/DocumentAuthorizationRepository.js";
+import type { AuthContext } from "#domain/auth/AuthContext.js";
+import type { SessionService } from "#application/auth/SessionService.js";
+import type { SessionHttpConfig } from "#application/auth/sessionConfig.js";
+import { ApiKeyValidator, InvalidApiKeyError } from "#application/auth/ApiKeyValidator.js";
+import type { Operation } from "#domain/operations/Operation.js";
+import { OperationSerializer } from "#domain/operations/OperationSerializer.js";
 import type { SyncPayload, SyncResult, SyncOperation } from "../../types/sync.js";
 
 const SYNC_RATE_LIMIT_MAX = parseInt(process.env.SYNC_RATE_LIMIT_MAX ?? "100", 10);
