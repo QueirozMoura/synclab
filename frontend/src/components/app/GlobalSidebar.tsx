@@ -2,12 +2,19 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { useDocuments } from "../../hooks/useDocuments";
+import { useAuth } from "../../context/AuthContext";
+import { LoginButton } from "../auth/LoginButton";
 
 export const GlobalSidebar: React.FC = () => {
   const navigate = useNavigate();
   const { createDocument } = useDocuments();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   const handleNewDocument = () => {
+    if (!isAuthenticated || isAuthLoading) {
+      navigate("/login");
+      return;
+    }
     const document = createDocument();
     navigate(`/app/documents/${document.id}`);
   };
@@ -91,7 +98,8 @@ export const GlobalSidebar: React.FC = () => {
             <p className="global-sidebar-subtitle">Editor offline-first</p>
           </div>
         </div>
-        <button onClick={handleNewDocument} className="global-sidebar-cta">
+        {!isAuthenticated && !isAuthLoading && <LoginButton />}
+        <button onClick={handleNewDocument} className="global-sidebar-cta" disabled={!isAuthenticated || isAuthLoading} aria-label={!isAuthenticated || isAuthLoading ? "Faça login para criar um documento" : "Novo documento"}>
           <span className="global-sidebar-cta-icon" aria-hidden="true">+</span>
           <span>Novo documento</span>
           <span className="global-sidebar-cta-shortcut" aria-hidden="true">⌘N</span>

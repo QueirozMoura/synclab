@@ -1,5 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
+const authApiBaseUrl = import.meta.env.VITE_AUTH_API_BASE_URL ?? "http://localhost:3000";
 
 interface NavbarProps {
   onOpenApp?: () => void;
@@ -8,6 +11,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = () => {
   const [scrolled, setScrolled] = React.useState(false);
+  const { isAuthenticated, isLoading } = useAuth();
 
   React.useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 24);
@@ -71,11 +75,20 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
         {/* Right Actions */}
         <div className="flex items-center gap-3">
+          {!isLoading && !isAuthenticated && (
+            <button
+              type="button"
+              onClick={() => window.open(`${authApiBaseUrl}/auth/google`, "_self")}
+              className="landing-nav-link text-sm"
+            >
+              Login
+            </button>
+          )}
           <Link
             to="/app"
             className="landing-nav-cta text-sm"
           >
-            Abrir ambiente
+            Abrir Ambiente
           </Link>
         </div>
       </div>

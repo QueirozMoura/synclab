@@ -2,6 +2,7 @@ import "./index.css";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./router";
 import { DocumentsProvider } from "./context/DocumentsContext";
+import { AuthProvider } from "./context/AuthContext";
 import { OperationManagerProvider } from "./context/OperationManagerContext";
 import { HttpSyncTransport } from "./lib/httpSyncTransport";
 
@@ -11,9 +12,11 @@ const appSyncTransport = new HttpSyncTransport(syncApiBaseUrl);
 function App() {
   return (
     <OperationManagerProvider transport={appSyncTransport}>
-      <DocumentsProvider>
-        <RouterProvider router={router} />
-      </DocumentsProvider>
+      <AuthProvider>
+        <DocumentsProvider>
+          <RouterProvider router={router} />
+        </DocumentsProvider>
+      </AuthProvider>
     </OperationManagerProvider>
   );
 }

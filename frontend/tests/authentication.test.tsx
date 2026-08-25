@@ -53,6 +53,10 @@ describe("AuthContext", () => {
       expect(screen.getByTestId("email")).toHaveTextContent(user.email),
     );
     expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
+    expect(fetch).toHaveBeenCalledWith(
+      "http://localhost:3000/auth/me",
+      expect.objectContaining({ credentials: "include" }),
+    );
   });
   it("trata 401 e erro de rede sem falhar", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("offline"));
@@ -83,7 +87,7 @@ describe("AuthContext", () => {
     );
     expect(screen.getByTestId("authenticated")).toHaveTextContent("false");
     expect(fetch).toHaveBeenLastCalledWith(
-      "/auth/logout",
+      "http://localhost:3000/auth/logout",
       expect.objectContaining({ method: "POST", credentials: "include" }),
     );
     expect(localStorage.length).toBe(0);
@@ -215,7 +219,7 @@ describe("RegisterPage", () => {
         "As senhas não coincidem.",
       ),
     );
-    expect(fetch).not.toHaveBeenCalledWith("/auth/register", expect.anything());
+    expect(fetch).not.toHaveBeenCalledWith("http://localhost:3000/auth/register", expect.anything());
     expect(screen.getByRole("alert")).toHaveTextContent(
       "As senhas não coincidem.",
     );

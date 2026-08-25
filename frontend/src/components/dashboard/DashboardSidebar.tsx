@@ -7,9 +7,11 @@ import { useAuth } from "../../context/AuthContext";
 export const DashboardSidebar: React.FC = () => {
   const navigate = useNavigate();
   const { createDocument } = useDocuments();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { user, logout } = useAuth();
 
   const handleNewDocument = () => {
+    if (!isAuthenticated || isAuthLoading) { navigate("/login"); return; }
     const document = createDocument();
     navigate(`/app/documents/${document.id}`);
   };
@@ -91,6 +93,7 @@ export const DashboardSidebar: React.FC = () => {
             <p className="text-xs text-[#a9a5b7]">Ambiente offline-first</p>
           </div>
         </div>
+        {!isAuthenticated && !isAuthLoading && <button onClick={() => navigate("/login")} className="dashboard-nav-item w-full px-3 py-2 text-left text-sm">Login</button>}
         <button
           onClick={handleNewDocument}
           className="dashboard-button dashboard-button-primary w-full py-2.5 px-3 rounded-lg text-sm font-semibold flex items-center justify-center gap-2"

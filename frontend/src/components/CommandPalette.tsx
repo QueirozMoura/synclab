@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Icon } from "./Icon";
 import { useNavigate } from "react-router-dom";
 import { useDocuments } from "../hooks/useDocuments";
+import { useAuth } from "../context/AuthContext";
 
-type IconName = 
-  | "search" 
-  | "history" 
-  | "star" 
-  | "description" 
-  | "settings" 
+type IconName =
+  | "search"
+  | "history"
+  | "star"
+  | "description"
+  | "settings"
   | "help"
   | "note_add"
   | "manage_search"
@@ -41,11 +42,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
   const isFirstOpenRef = useRef(true);
   const navigate = useNavigate();
   const { createDocument } = useDocuments();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   const handleNewDocument = useCallback(() => {
+    if (!isAuthenticated || isAuthLoading) { navigate("/login"); return; }
     const document = createDocument();
     navigate(`/app/documents/${document.id}`);
-  }, [createDocument, navigate]);
+  }, [createDocument, isAuthenticated, isAuthLoading, navigate]);
 
   const commands = useMemo<Command[]>(
     () => [

@@ -1,5 +1,6 @@
 import fastify, { type FastifyInstance } from "fastify";
 import fastifyRateLimit from "@fastify/rate-limit";
+import fastifyCors from "@fastify/cors";
 import fastifyCookie from "@fastify/cookie";
 import { SessionService } from "@application/auth/SessionService.js";
 import { PasswordAuthService } from "@application/auth/PasswordAuthService.js";
@@ -139,6 +140,20 @@ export async function createServer(): Promise<FastifyInstance> {
         coerceTypes: false,
       },
     },
+  });
+
+  await app.register(fastifyCors, {
+    origin: (origin, callback) => {
+      callback(null, origin === "http://localhost:5173");
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  });
+  app.addHook("onSend", async (request, reply) => {
+    if (request.headers.origin === "http://localhost:5173") {
+      reply.header("Vary", "Origin");
+    }
   });
 
   await app.register(fastifyRateLimit, {

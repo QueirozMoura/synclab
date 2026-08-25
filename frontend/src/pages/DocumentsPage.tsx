@@ -5,21 +5,24 @@ import { WorkspaceSidebar } from "../components/app/WorkspaceSidebar";
 import { DocumentCard } from "../components/dashboard/DocumentCard";
 import { useDocuments } from "../hooks/useDocuments";
 import { DocumentDeleteDialog } from "../components/app/DocumentDeleteDialog";
+import { useAuth } from "../context/AuthContext";
 
 export const DocumentsPage: React.FC = () => {
   const { documents, createDocument, deleteDocument, toggleFavorite } = useDocuments();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const navigate = useNavigate();
   const [documentToDelete, setDocumentToDelete] = React.useState<{ id: string; title: string } | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
   const [feedback, setFeedback] = React.useState<{ tone: "success" | "error"; message: string } | null>(null);
 
   const handleNewDocument = () => {
+    if (!isAuthenticated || isAuthLoading) { navigate("/login"); return; }
     const document = createDocument();
     navigate(`/app/documents/${document.id}`);
   };
 
   const handleDelete = async () => {
-    if (!documentToDelete || deletingId) return;
+    if (!isAuthenticated || isAuthLoading || !documentToDelete || deletingId) return;
     const target = documentToDelete;
     setDeletingId(target.id);
     setFeedback(null);

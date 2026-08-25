@@ -2,6 +2,8 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+const authApiBaseUrl = import.meta.env.VITE_AUTH_API_BASE_URL ?? "http://localhost:3000";
+
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
@@ -77,7 +79,7 @@ export const RegisterPage: React.FC = () => {
             />
           </label>
         ))}
-        <button type="button" onClick={() => { window.location.href = "/auth/google"; }} className="mb-3 w-full rounded-lg border-[var(--border)] p-3 font-semibold">Continuar com Google</button>
+        <button type="button" onClick={() => window.open(`${authApiBaseUrl}/auth/google`, "_self")} className="mb-3 w-full rounded-lg border-[var(--border)] p-3 font-semibold">Continuar com Google</button>
         <button
           disabled={busy}
           className="mt-2 w-full rounded-lg bg-[var(--primary-container)] p-3 font-semibold text-white"

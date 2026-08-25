@@ -17,6 +17,21 @@ const user: User = {
 
 async function createApp(result: User | null) {
   const app = Fastify();
+  app.addHook("onRequest", async (request, reply) => {
+    const origin = request.headers.origin;
+    if (origin === "http://localhost:5173") {
+      reply.header("Access-Control-Allow-Origin", origin);
+      reply.header("Access-Control-Allow-Credentials", "true");
+      reply.header("Vary", "Origin");
+      if (request.method === "OPTIONS") {
+        reply
+          .header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+          .header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+          .code(204)
+          .send();
+      }
+    }
+  });
   await app.register(fastifyCookie);
   const service = {
     getAuthenticatedUser: async () => result,
@@ -39,6 +54,29 @@ describe("GET /auth/me", () => {
     const response = await app.inject({ method: "GET", url: "/auth/me" });
     expect(response.statusCode).toBe(401);
     expect(response.json()).toEqual({ error: "UNAUTHENTICATED" });
+    await app.close();
+  });
+
+  it("permite /auth/me com credenciais a partir do frontend", async () => {
+    const app = await createApp(user);
+    const response = await app.inject({
+      method: "GET",
+      url: "/auth/me",
+      headers: { origin: "http://localhost:5173" },
+    });
+    expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:5173");
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    await app.close();
+  });
+
+  it("não autoriza origens diferentes", async () => {
+    const app = await createApp(user);
+    const response = await app.inject({
+      method: "GET",
+      url: "/auth/me",
+      headers: { origin: "http://malicious.example" },
+    });
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
     await app.close();
   });
 

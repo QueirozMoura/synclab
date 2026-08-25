@@ -1,5 +1,5 @@
 import { getDeviceId } from "./deviceIdentity";
-import { VectorClock } from "./vectorClock";
+import { VectorClock, type ClockMap } from "./vectorClock";
 import { OperationLog } from "./operationLog";
 import { createOperation } from "./operationFactory";
 import { getAllOperations, putOperation, getSnapshot, putSnapshot, getAllSnapshots } from "./indexedDb";
@@ -16,6 +16,24 @@ import type { SyncPayload, SyncResult } from "../types/sync";
 import type { SyncTransport } from "../types/syncTransport";
 
 const SNAPSHOT_INTERVAL = 10;
+
+type SerializedVectorClock = ClockMap | { clock: ClockMap };
+
+function hydrateVectorClock(value: VectorClock | SerializedVectorClock): VectorClock {
+  if (value instanceof VectorClock) {
+    return VectorClock.from(value.toMap());
+  }
+
+  const serialized = value as SerializedVectorClock;
+  const map =
+    typeof serialized === "object" &&
+    serialized !== null &&
+    "clock" in serialized &&
+    typeof serialized.clock === "object"
+      ? serialized.clock
+      : serialized;
+  return VectorClock.from(map as ClockMap);
+}
 
 export class OperationManager {
   private readonly deviceId: string;
@@ -40,12 +58,19 @@ export class OperationManager {
       return;
     }
     const storedOperations = await getAllOperations();
-    this.operationLog.loadInitial(storedOperations);
+    // IndexedDB structured clone restores class instances as plain objects.
+    // Hydrate before the operations enter the log or any VectorClock method is called.
+    const hydratedOperations = storedOperations.map((operation) => ({
+      ...operation,
+      vectorClock: hydrateVectorClock(
+        operation.vectorClock as VectorClock | SerializedVectorClock,
+      ),
+    }));
+    this.operationLog.loadInitial(hydratedOperations);
     this.rebuildPendingOperationIds();
-    if (storedOperations.length > 0) {
-      for (const op of storedOperations) {
-        const opClock = VectorClock.from(op.vectorClock.toMap());
-        this.vectorClock = this.vectorClock.merge(opClock);
+    if (hydratedOperations.length > 0) {
+      for (const op of hydratedOperations) {
+        this.vectorClock = this.vectorClock.merge(op.vectorClock);
       }
     } else {
       const snapshots = await getAllSnapshots();

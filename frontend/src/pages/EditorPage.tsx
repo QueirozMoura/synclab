@@ -8,11 +8,14 @@ import { StatusFooter } from "../components/app/StatusFooter";
 import { MarkdownPreview } from "../components/app/MarkdownPreview";
 import { useDocuments } from "../hooks/useDocuments";
 import { useOperationManager } from "../hooks/useOperationManager";
+import { useAuth } from "../context/AuthContext";
 
 export const EditorPage: React.FC = () => {
   const { documentId } = useParams<{ documentId: string }>();
   const { getDocument, updateDocument } = useDocuments();
   const { createOperation } = useOperationManager();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const canEdit = isAuthenticated && !isAuthLoading;
 
   const document = getDocument(documentId || "");
 
@@ -38,14 +41,15 @@ export const EditorPage: React.FC = () => {
   }, [document?.id]);
 
   const handleTitleChange = (newTitle: string) => {
+    if (!canEdit) return;
     console.log("[Editor] handleTitleChange:", newTitle);
-    
+
     // Don't create operation if no valid document
     if (!document) {
       setTitle(newTitle);
       return;
     }
-    
+
     // Don't create operation if title hasn't actually changed
     if (newTitle === document.title) {
       setTitle(newTitle);
@@ -62,6 +66,7 @@ export const EditorPage: React.FC = () => {
   };
 
   const handleContentChange = (newContent: string) => {
+    if (!canEdit) return;
     console.log("[Editor] handleContentChange:", newContent.length, "chars");
     setContent(newContent);
     if (document) {
@@ -73,11 +78,11 @@ export const EditorPage: React.FC = () => {
         if (newContent !== lastPersistedContentRef.current) {
           console.log("[Editor] debounced updateDocument for content:", document.id);
           updateDocument(document.id, { content: newContent });
-          
+
           // Create operation for content change
           console.log("[Editor] creating UPDATE_CONTENT operation");
           createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
-          
+
           lastPersistedContentRef.current = newContent;
         }
       }, 300);
@@ -93,6 +98,7 @@ export const EditorPage: React.FC = () => {
   }, [documentId]);
 
   const applyFormat = useCallback((prefix: string, suffix: string = prefix) => {
+    if (!canEdit) return;
     const textarea = contentRef.current;
     if (!textarea) return;
 
@@ -120,11 +126,11 @@ export const EditorPage: React.FC = () => {
       debounceRef.current = setTimeout(() => {
         if (newContent !== lastPersistedContentRef.current) {
           updateDocument(document.id, { content: newContent });
-          
+
           // Create operation for content change
           console.log("[Editor] creating UPDATE_CONTENT operation");
           createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
-          
+
           lastPersistedContentRef.current = newContent;
         }
       }, 300);
@@ -134,7 +140,7 @@ export const EditorPage: React.FC = () => {
       textarea.focus();
       textarea.setSelectionRange(newCursorPos, newCursorPos);
     }, 0);
-  }, [content, document, updateDocument, createOperation]);
+  }, [canEdit, content, document, updateDocument, createOperation]);
 
   const handleH1 = useCallback(() => applyFormat("# "), [applyFormat]);
   const handleH2 = useCallback(() => applyFormat("## "), [applyFormat]);
@@ -143,6 +149,7 @@ export const EditorPage: React.FC = () => {
   const handleCode = useCallback(() => applyFormat("`", "`"), [applyFormat]);
 
   const handleLink = useCallback(() => {
+    if (!canEdit) return;
     const textarea = contentRef.current;
     if (!textarea) return;
 
@@ -170,11 +177,11 @@ export const EditorPage: React.FC = () => {
       debounceRef.current = setTimeout(() => {
         if (newContent !== lastPersistedContentRef.current) {
           updateDocument(document.id, { content: newContent });
-          
+
           // Create operation for content change
           console.log("[Editor] creating UPDATE_CONTENT operation");
           createOperation(document.id, "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: newContent });
-          
+
           lastPersistedContentRef.current = newContent;
         }
       }, 300);
@@ -184,7 +191,7 @@ export const EditorPage: React.FC = () => {
       textarea.focus();
       textarea.setSelectionRange(newCursorPos, newCursorPos);
     }, 0);
-  }, [content, document, updateDocument, createOperation]);
+  }, [canEdit, content, document, updateDocument, createOperation]);
 
   const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -250,6 +257,7 @@ export const EditorPage: React.FC = () => {
               type="text"
               value={title}
               onChange={(e) => handleTitleChange(e.target.value)}
+              readOnly={!canEdit}
               onKeyDown={handleTitleKeyDown}
               placeholder="Documento sem título"
               className="w-full text-4xl font-bold text-[#e4e1ed] bg-transparent border-none outline-none placeholder-[#908fa0] mb-4"
@@ -257,10 +265,13 @@ export const EditorPage: React.FC = () => {
             />
             <div className="w-12 h-1 bg-gradient-to-r from-[#c0c1ff] to-transparent rounded mb-4" />
 
+            {!canEdit && <div role="status" className="mb-4 rounded-lg border-[#464554] bg-[#1f1f27] px-4 py-3 text-sm text-[#c7c4d7]">Este documento está bloqueado para edição. Faça login para continuar.</div>}
+
             {/* Edit / Preview Toggle */}
             <div className="flex gap-2 mb-6">
               <button
                 onClick={() => setMode("edit")}
+                disabled={!canEdit}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                   mode === "edit"
                     ? "bg-[#c0c1ff] text-[#1000a9]"
@@ -287,6 +298,7 @@ export const EditorPage: React.FC = () => {
                 ref={contentRef}
                 value={content}
                 onChange={(e) => handleContentChange(e.target.value)}
+                readOnly={!canEdit}
                 placeholder={isNewDocument ? "Comece a escrever seu documento..." : ""}
                 className="w-full min-h-[500px] bg-transparent border-none outline-none text-[#c7c4d7] placeholder-[#908fa0] text-base leading-relaxed resize-none font-mono"
                 style={{ lineHeight: 1.7 }}

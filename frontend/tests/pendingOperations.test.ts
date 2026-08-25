@@ -41,6 +41,21 @@ describe("OperationManager pending operations", () => {
     persisted.length = 0;
   });
 
+  it("hidrata vectorClock serializado antes de disponibilizar a operação", async () => {
+    persisted.push({
+      ...operation("serialized", "doc-1"),
+      vectorClock: { "device-a": 3 } as unknown as VectorClock,
+    });
+
+    const manager = new OperationManager();
+    await manager.initialize();
+
+    const loaded = manager.getOperations()[0];
+    expect(loaded.vectorClock).toBeInstanceOf(VectorClock);
+    expect(loaded.vectorClock.toMap()).toEqual({ "device-a": 3 });
+    expect(manager.getVectorClock().toMap()).toEqual({ "device-a": 3 });
+  });
+
   it("marks local operations pending and remote operations non-pending", async () => {
     const manager = new OperationManager();
     manager.createOperation("doc-1", "UPDATE_CONTENT", {
