@@ -1,0 +1,249 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import { SyncService, DocumentAccessDeniedError } from "@application/sync/SyncService.js";
+import { InMemoryOperationRepository } from "@infrastructure/persistence/server/InMemoryOperationRepository.js";
+import { InMemoryDocumentAuthorizationRepository } from "@infrastructure/auth/InMemoryDocumentAuthorizationRepository.js";
+import { VectorClock } from "@domain/vector-clock/VectorClock.js";
+import { OperationType, createElementId } from "@domain/operations/types.js";
+function insert(id, deviceId, vectorClock, afterId, content) {
+    return {
+        id,
+        documentId: "doc-1",
+        deviceId,
+        type: OperationType.INSERT,
+        payload: { afterId, content },
+        vectorClock,
+    };
+}
+function remove(id, deviceId, vectorClock, elementIds) {
+    return {
+        id,
+        documentId: "doc-1",
+        deviceId,
+        type: OperationType.DELETE,
+        payload: { elementIds },
+        vectorClock,
+    };
+}
+const TEST_AUTH_CONTEXT = { clientId: "client-A", deviceId: "device-A" };
+const TEST_AUTH_CONTEXT_B = { clientId: "client-A", deviceId: "device-B" };
+describe("SyncService", () => {
+    let repository;
+    let authzRepository;
+    let syncService;
+    beforeEach(() => {
+        repository = new InMemoryOperationRepository();
+        authzRepository = new InMemoryDocumentAuthorizationRepository();
+        authzRepository.grantAccess("client-A", ["doc-1", "doc-2", "doc-inexistente"]);
+        authzRepository.grantAccess("client-B", ["doc-3"]);
+        syncService = new SyncService(repository, authzRepository);
+    });
+    describe("push", () => {
+        it("aceita operação válida INSERT", async () => {
+            const operation = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.accepted).toEqual(["op-1"]);
+            expect(result.rejected).toHaveLength(0);
+        });
+        it("aceita operação válida DELETE", async () => {
+            const elementIds = [createElementId("op-1", 0)];
+            const operation = remove("delete-1", "device-A", VectorClock.from({ "device-A": 2 }), elementIds);
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.accepted).toEqual(["delete-1"]);
+            expect(result.rejected).toHaveLength(0);
+        });
+        it("rejeita operação duplicada", async () => {
+            const operation = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
+            await syncService.push([operation], TEST_AUTH_CONTEXT);
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.accepted).toHaveLength(0);
+            expect(result.rejected).toHaveLength(1);
+            expect(result.rejected[0].operationId).toBe("op-1");
+            expect(result.rejected[0].reason).toBe("Duplicate operationId");
+        });
+        it("aceita múltiplas operações em lote", async () => {
+            const ops = [
+                insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                insert("op-2", "device-A", VectorClock.from({ "device-A": 2 }), null, "B"),
+                insert("op-3", "device-A", VectorClock.from({ "device-A": 3 }), null, "C"),
+            ];
+            const result = await syncService.push(ops, TEST_AUTH_CONTEXT);
+            expect(result.accepted).toEqual(["op-1", "op-2", "op-3"]);
+            expect(result.rejected).toHaveLength(0);
+        });
+        it("rejeita operação com ID inválido", async () => {
+            const operation = insert("", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.accepted).toHaveLength(0);
+            expect(result.rejected).toHaveLength(1);
+            expect(result.rejected[0].reason).toContain("Operation ID is required");
+        });
+        it("rejeita operação sem documentId", async () => {
+            const operation = {
+                ...insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                documentId: "",
+            };
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.rejected[0].reason).toContain("Document ID is required");
+        });
+        it("rejeita operação sem deviceId", async () => {
+            const operation = {
+                ...insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                deviceId: "",
+            };
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.rejected[0].reason).toContain("Device ID is required");
+        });
+        it("rejeita operação com tipo inválido", async () => {
+            const operation = {
+                ...insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                type: "INVALID",
+            };
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.rejected[0].reason).toContain("Invalid operation type");
+        });
+        it("rejeita INSERT sem content", async () => {
+            const operation = {
+                ...insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                payload: { afterId: null, content: 123 },
+            };
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.rejected[0].reason).toContain("content is required");
+        });
+        it("rejeita DELETE sem elementIds", async () => {
+            const operation = {
+                ...remove("delete-1", "device-A", VectorClock.from({ "device-A": 1 }), []),
+                payload: { elementIds: "not-an-array" },
+            };
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.rejected[0].reason).toContain("elementIds is required");
+        });
+        it("rejeita DELETE com elementIds não-strings", async () => {
+            const operation = {
+                ...remove("delete-1", "device-A", VectorClock.from({ "device-A": 1 }), []),
+                payload: { elementIds: [123] },
+            };
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.rejected[0].reason).toContain("Each elementId must be a string");
+        });
+        it("rejeita operação sem vectorClock", async () => {
+            const operation = {
+                ...insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                vectorClock: null,
+            };
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.rejected[0].reason).toContain("Vector clock is required");
+        });
+        it("rejeita operação com vectorClock inválido", async () => {
+            const operation = {
+                ...insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                vectorClock: { toMap: () => "invalid" },
+            };
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.rejected[0].reason).toContain("Vector clock toMap() must return an object");
+        });
+        it("mistura operações aceitas e rejeitadas no mesmo batch", async () => {
+            const ops = [
+                insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                insert("", "device-A", VectorClock.from({ "device-A": 1 }), null, "B"), // inválido
+                insert("op-3", "device-A", VectorClock.from({ "device-A": 2 }), null, "C"),
+            ];
+            const result = await syncService.push(ops, TEST_AUTH_CONTEXT);
+            expect(result.accepted).toEqual(["op-1", "op-3"]);
+            expect(result.rejected).toHaveLength(1);
+        });
+        it("rejeita operação com deviceId diferente do autenticado (spoofing)", async () => {
+            const operation = insert("op-1", "device-B", VectorClock.from({ "device-B": 1 }), null, "A");
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.accepted).toHaveLength(0);
+            expect(result.rejected).toHaveLength(1);
+            expect(result.rejected[0].reason).toContain("deviceId mismatch");
+        });
+        it("rejeita operações com operationId duplicado dentro do mesmo batch", async () => {
+            const vc = VectorClock.from({ "device-A": 1 });
+            const ops = [
+                insert("op-1", "device-A", vc, null, "A"),
+                insert("op-1", "device-A", vc.increment("device-A"), null, "B"), // mesmo ID, payload diferente
+            ];
+            const result = await syncService.push(ops, TEST_AUTH_CONTEXT);
+            expect(result.accepted).toHaveLength(1);
+            expect(result.rejected).toHaveLength(1);
+            expect(result.rejected[0].reason).toBe("Duplicate operationId within batch");
+        });
+        it("rejeita operação em documento sem autorização", async () => {
+            const operation = insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A");
+            operation.documentId = "doc-3"; // client-A não tem acesso a doc-3
+            const result = await syncService.push([operation], TEST_AUTH_CONTEXT);
+            expect(result.accepted).toHaveLength(0);
+            expect(result.rejected).toHaveLength(1);
+            expect(result.rejected[0].reason).toContain("does not have access");
+        });
+    });
+    describe("pull", () => {
+        it("retorna operações não conhecidas pelo cliente", async () => {
+            const ops = [
+                insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                insert("op-2", "device-A", VectorClock.from({ "device-A": 2 }), null, "B"),
+                insert("op-3", "device-A", VectorClock.from({ "device-A": 3 }), null, "C"),
+            ];
+            await syncService.push(ops, TEST_AUTH_CONTEXT);
+            const result = await syncService.pull("doc-1", ["op-1"], TEST_AUTH_CONTEXT);
+            expect(result.operations).toHaveLength(2);
+            expect(result.operations.map((op) => op.id)).toEqual(["op-2", "op-3"]);
+            expect(result.hasMore).toBe(false);
+        });
+        it("retorna array vazio se todas operações conhecidas", async () => {
+            const ops = [
+                insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                insert("op-2", "device-A", VectorClock.from({ "device-A": 2 }), null, "B"),
+            ];
+            await syncService.push(ops, TEST_AUTH_CONTEXT);
+            const result = await syncService.pull("doc-1", ["op-1", "op-2"], TEST_AUTH_CONTEXT);
+            expect(result.operations).toHaveLength(0);
+            expect(result.hasMore).toBe(false);
+        });
+        it("respeita limite de operações", async () => {
+            const ops = [
+                insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                insert("op-2", "device-A", VectorClock.from({ "device-A": 2 }), null, "B"),
+                insert("op-3", "device-A", VectorClock.from({ "device-A": 3 }), null, "C"),
+            ];
+            await syncService.push(ops, TEST_AUTH_CONTEXT);
+            const result = await syncService.pull("doc-1", [], TEST_AUTH_CONTEXT, 2);
+            expect(result.operations).toHaveLength(2);
+            expect(result.hasMore).toBe(true);
+        });
+        it("retorna hasMore false quando todas operações retornadas", async () => {
+            const ops = [
+                insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                insert("op-2", "device-A", VectorClock.from({ "device-A": 2 }), null, "B"),
+            ];
+            await syncService.push(ops, TEST_AUTH_CONTEXT);
+            const result = await syncService.pull("doc-1", [], TEST_AUTH_CONTEXT, 10);
+            expect(result.operations).toHaveLength(2);
+            expect(result.hasMore).toBe(false);
+        });
+        it("retorna vazio para documento inexistente", async () => {
+            const result = await syncService.pull("doc-inexistente", [], TEST_AUTH_CONTEXT);
+            expect(result.operations).toHaveLength(0);
+            expect(result.hasMore).toBe(false);
+        });
+        it("rejeita pull de documento sem autorização", async () => {
+            await expect(syncService.pull("doc-3", [], TEST_AUTH_CONTEXT)).rejects.toThrow(DocumentAccessDeniedError);
+        });
+    });
+    describe("serialização", () => {
+        it("serializa e desserializa operações", async () => {
+            const ops = [
+                insert("op-1", "device-A", VectorClock.from({ "device-A": 1 }), null, "A"),
+                insert("op-2", "device-A", VectorClock.from({ "device-A": 2 }), null, "B"),
+            ];
+            await syncService.push(ops, TEST_AUTH_CONTEXT);
+            const serialized = syncService.serializeOperations(ops);
+            const deserialized = syncService.deserializeOperations(serialized);
+            expect(deserialized).toHaveLength(2);
+            expect(deserialized[0].id).toBe("op-1");
+            expect(deserialized[1].id).toBe("op-2");
+            expect(deserialized[0].vectorClock.toMap()).toEqual({ "device-A": 1 });
+        });
+    });
+});
