@@ -205,3 +205,25 @@ describe("rotas de autenticação por senha", () => {
     await app.close();
   });
 });
+
+
+describe("POST /auth/logout", () => {
+  it("revoga a sessão, limpa o cookie e é idempotente", async () => {
+    const revokeSession = vi.fn(async () => undefined);
+    const app = Fastify();
+    await app.register(fastifyCookie);
+    registerAuthRoutes(
+      app,
+      { getAuthenticatedUser: vi.fn(async () => null), revokeSession } as never,
+      getSessionHttpConfig({ NODE_ENV: "test", SESSION_COOKIE_NAME: "test_session", SESSION_TTL_SECONDS: "60" }),
+    );
+    const response = await app.inject({ method: "POST", url: "/auth/logout", headers: { cookie: "test_session=session-token" } });
+    expect(response.statusCode).toBe(204);
+    expect(revokeSession).toHaveBeenCalledWith("session-token");
+    expect(response.headers["set-cookie"] as string).toMatch(/test_session=/);
+    expect(response.headers["set-cookie"] as string).toMatch(/Max-Age=0/);
+    const withoutCookie = await app.inject({ method: "POST", url: "/auth/logout" });
+    expect(withoutCookie.statusCode).toBe(204);
+    await app.close();
+  });
+});

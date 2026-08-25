@@ -35,6 +35,18 @@ export function registerAuthRoutes(
     }
   });
 
+  app.post("/auth/logout", async (request, reply) => {
+    const token = request.cookies[config.cookieName];
+    if (token && sessionService) await sessionService.revokeSession(token);
+    reply.clearCookie(config.cookieName, {
+      httpOnly: true,
+      sameSite: config.sameSite,
+      secure: config.secure,
+      path: config.path,
+    });
+    return reply.status(204).send();
+  });
+
   app.get("/auth/me", async (request, reply) => {
     const user = sessionService ? await sessionService.getAuthenticatedUser(request.cookies[config.cookieName]) : null;
     if (!user) return reply.status(401).send({ error: "UNAUTHENTICATED" });

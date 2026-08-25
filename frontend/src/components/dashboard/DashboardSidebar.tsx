@@ -2,10 +2,12 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { useDocuments } from "../../hooks/useDocuments";
+import { useAuth } from "../../context/AuthContext";
 
 export const DashboardSidebar: React.FC = () => {
   const navigate = useNavigate();
   const { createDocument } = useDocuments();
+  const { user, logout } = useAuth();
 
   const handleNewDocument = () => {
     const document = createDocument();
@@ -132,12 +134,13 @@ export const DashboardSidebar: React.FC = () => {
             <span>{item.label}</span>
           </NavLink>
         ))}
+        <button onClick={() => void logout()} className="dashboard-nav-item w-full text-left px-3 py-2 text-sm text-[#a9a5b7]">Sair</button>
         <div className="dashboard-profile mt-3 pt-4 border-t flex items-center gap-3 px-3 py-2">
           <div className="w-8 h-8 rounded-full border border-[#464554] bg-gradient-to-br from-[#c0c1ff] to-[#8083ff] flex items-center justify-center text-white text-xs font-bold">
             G
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[#e4e1ed] truncate">Gustavo</p>
+            <p className="text-sm font-medium text-[#e4e1ed] truncate">{user?.name ?? user?.email ?? "Usuário"}</p>
             <p className="text-xs text-[#908fa0] truncate">Plano Pro</p>
           </div>
         </div>

@@ -8,6 +8,9 @@ import { EditorPage } from "./pages/EditorPage";
 import { NewDocumentRedirect } from "./pages/NewDocumentRedirect";
 import { FavoritesPage } from "./pages/FavoritesPage";
 import { RootLayout } from "./components/RootLayout";
+import { LoginPage } from "./pages/LoginPage";
+import { RegisterPage } from "./pages/RegisterPage";
+import { ProtectedRoute } from "./context/AuthContext";
 
 export const router = createBrowserRouter([
   {
@@ -17,33 +20,35 @@ export const router = createBrowserRouter([
         path: "/",
         Component: LandingPage,
       },
+      { path: "/login", Component: LoginPage },
+      { path: "/register", Component: RegisterPage },
       {
         path: "/app",
-        Component: DashboardPage,
+        element: <ProtectedRoute><DashboardPage /></ProtectedRoute>,
       },
       {
         path: "/app/favorites",
-        Component: FavoritesPage,
+        element: <ProtectedRoute><FavoritesPage /></ProtectedRoute>,
       },
       {
         path: "/app/documents",
-        Component: DocumentsPage,
+        element: <ProtectedRoute><DocumentsPage /></ProtectedRoute>,
       },
       {
         path: "/app/documents/new",
-        Component: NewDocumentRedirect,
+        element: <ProtectedRoute><NewDocumentRedirect /></ProtectedRoute>,
       },
       {
         path: "/app/documents/:documentId",
-        Component: EditorPage,
+        element: <ProtectedRoute><EditorPage /></ProtectedRoute>,
       },
       {
         path: "/app/settings",
-        Component: SettingsPage,
+        element: <ProtectedRoute><SettingsPage /></ProtectedRoute>,
       },
       {
         path: "/app/help",
-        Component: HelpPage,
+        element: <ProtectedRoute><HelpPage /></ProtectedRoute>,
       },
     ],
   },
