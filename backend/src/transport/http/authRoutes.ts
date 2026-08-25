@@ -68,6 +68,10 @@ export function registerAuthRoutes(
   });
 
   app.get("/auth/me", async (request, reply) => {
+    console.log("[AUTH DEBUG]", {
+  hasCookie: Boolean(request.cookies[config.cookieName]),
+  cookieName: config.cookieName,
+});
     const user = sessionService ? await sessionService.getAuthenticatedUser(request.cookies[config.cookieName]) : null;
     if (!user) return reply.status(401).send({ error: "UNAUTHENTICATED" });
     return reply.send({ user });
