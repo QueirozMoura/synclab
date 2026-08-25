@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fastify, { type FastifyInstance } from "fastify";
 import { InMemoryOperationRepository } from "@infrastructure/persistence/server/InMemoryOperationRepository.js";
 import { InMemoryDocumentAuthorizationRepository } from "@infrastructure/auth/InMemoryDocumentAuthorizationRepository.js";
+import { InMemoryDocumentOperationRepository } from "@infrastructure/persistence/document-operations/InMemoryDocumentOperationRepository.js";
+import { InMemoryDocumentSnapshotRepository } from "@infrastructure/persistence/document-operations/InMemoryDocumentSnapshotRepository.js";
 import { ApiKeyValidator } from "@application/auth/ApiKeyValidator.js";
 import { registerSyncRoutes } from "@transport/http/routes.js";
 import { SqliteFactory } from "@infrastructure/persistence/sqlite/SqliteFactory.js";
@@ -69,7 +71,14 @@ describe("SyncClient", () => {
       { apiKey: API_KEY_CLIENT_B_DEVICE_C, clientId: "client-B", deviceId: "device-C" },
     ]);
 
-    registerSyncRoutes(app, serverRepository, authzRepository, apiKeyValidator);
+    registerSyncRoutes(
+      app,
+      serverRepository,
+      new InMemoryDocumentOperationRepository(),
+      new InMemoryDocumentSnapshotRepository(),
+      authzRepository,
+      apiKeyValidator,
+    );
     await app.listen({ port, host: "127.0.0.1" });
     serverUrl = `http://127.0.0.1:${port}`;
   });

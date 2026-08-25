@@ -16,4 +16,5 @@ export interface DocumentAuthorizationRepository {
    * @returns true se o cliente tem acesso, false caso contrário
    */
   canAccessDocument(clientId: string, documentId: string): Promise<boolean>;
+  grantAccess?(clientId: string, documentId: string): void | Promise<void>;
 }

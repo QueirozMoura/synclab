@@ -788,6 +788,15 @@ export function registerSyncRoutes(
         throw error;
       }
 
+      if (authzRepository.grantAccess) {
+        const acceptedIds = new Set(result.acceptedOperations.map((operation) => operation.id));
+        for (const operation of payload.operations) {
+          if (operation.type === "CREATE_DOCUMENT" && acceptedIds.has(operation.id)) {
+            await authzRepository.grantAccess(authContext.clientId, operation.documentId);
+          }
+        }
+      }
+
       app.log.info({
         requestId: request.requestId,
         clientId: authContext.clientId,

@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node dist/server.js",
+    "lint": "tsc --noEmit",
     "dev": "node --env-file=.env --import=tsx/esm src/server.ts"
   },
   "dependencies": {
