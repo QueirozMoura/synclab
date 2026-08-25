@@ -2,16 +2,18 @@ import { getDeviceId } from "./deviceIdentity";
 import { VectorClock, type ClockMap } from "./vectorClock";
 import { OperationLog } from "./operationLog";
 import { createOperation } from "./operationFactory";
-import { getAllOperations, putOperation, getSnapshot, putSnapshot, getAllSnapshots } from "./indexedDb";
+import { getAllOperations, putOperation, putHistoricalActivityRecord, getSnapshot, putSnapshot, getAllSnapshots } from "./indexedDb";
 import { reconstructDocument } from "./documentStateEngine";
 import { orderOperations } from "./operationOrdering";
 import { reduceOperations } from "./documentReducer";
 import { createDocumentSnapshot } from "./documentSnapshot";
 import { compactPersistedOperations } from "./compactPersistedOperations";
+import { reconstructHistoricalState } from "./documentHistory";
 import { SyncEngine } from "./syncEngine";
 import type { Document } from "../types/document";
 import type { Operation, OperationType, OperationPayload } from "../types/operation";
 import type { DocumentSnapshot } from "../types/documentSnapshot";
+import type { HistoricalActivityRecord } from "../types/historicalActivityRecord";
 import type { SyncPayload, SyncResult } from "../types/sync";
 import type { SyncTransport } from "../types/syncTransport";
 
@@ -111,36 +113,74 @@ export class OperationManager {
     const operation = createOperation(documentId, type, payload, this.vectorClock);
     this.operationLog.append(operation);
     this.pendingOperationIds.add(operation.id);
+    const operations = this.getOperationsForDocument(documentId);
     putOperation(operation).catch((error) => {
       console.error("[OperationManager] Failed to persist operation:", error);
     });
+    void this.persistHistoricalRecordAndContinue(operation, operations);
 
-    if (type !== "DELETE_DOCUMENT") {
-      const operations = this.getOperationsForDocument(documentId);
-      if (operations.length % SNAPSHOT_INTERVAL === 0) {
-        const document = this.reconstructDocument(documentId);
-        if (document) {
-          const snapshot = createDocumentSnapshot(documentId, document, operations.length, this.vectorClock);
-          putSnapshot(snapshot)
-            .then(() => {
-              return compactPersistedOperations(operations, snapshot);
-            })
-            .then(() => {
-              // Compactação concluída com sucesso no IndexedDB
-              // O OperationLog em memória NÃO é alterado nesta etapa
-            })
-            .catch((error) => {
-              if (error.message?.includes("Failed to persist snapshot") || error.message?.includes("putSnapshot")) {
-                console.error("[OperationManager] Failed to persist snapshot, skipping compaction:", error);
-              } else {
-                console.error("[OperationManager] Compaction failed after successful snapshot:", error);
-              }
-            });
-        }
+
+    return operation;
+  }
+
+  private async persistHistoricalRecordAndContinue(
+    operation: Operation,
+    operations: Operation[],
+  ): Promise<void> {
+    const snapshot = this.createSnapshotIfNeeded(operation, operations);
+    let historicalState: Awaited<ReturnType<typeof reconstructHistoricalState>>;
+    try {
+      historicalState = await reconstructHistoricalState(
+        operation.documentId,
+        operation.id,
+        { getOperations: async () => this.getOperations() },
+      );
+    } catch (error) {
+      console.error("[OperationManager] Failed to reconstruct historical state:", error);
+      historicalState = { status: "insufficient_history" };
+    }
+
+    if (historicalState.status === "success") {
+      const record: HistoricalActivityRecord = {
+        documentId: operation.documentId,
+        operationId: operation.id,
+        operation: { ...historicalState.operation, payload: { ...historicalState.operation.payload } },
+        before: historicalState.before ? { ...historicalState.before } : null,
+        after: historicalState.after ? { ...historicalState.after } : null,
+        vectorClock: operation.vectorClock.toMap(),
+        createdAt: new Date().toISOString(),
+      };
+      try {
+        await putHistoricalActivityRecord(record);
+      } catch (error) {
+        console.error("[OperationManager] Failed to persist historical activity record:", error);
       }
     }
 
-    return operation;
+    if (snapshot) {
+      try {
+        await putSnapshot(snapshot);
+        await compactPersistedOperations(operations, snapshot);
+      } catch (error) {
+        if (error instanceof Error && (error.message.includes("Failed to persist snapshot") || error.message.includes("putSnapshot"))) {
+          console.error("[OperationManager] Failed to persist snapshot, skipping compaction:", error);
+        } else {
+          console.error("[OperationManager] Compaction failed after successful snapshot:", error);
+        }
+      }
+    }
+  }
+
+  private createSnapshotIfNeeded(
+    operation: Operation,
+    operations: Operation[],
+  ): DocumentSnapshot | null {
+    if (operation.type === "DELETE_DOCUMENT" || operations.length % SNAPSHOT_INTERVAL !== 0) {
+      return null;
+    }
+    const document = this.reconstructDocument(operation.documentId);
+    if (!document) return null;
+    return createDocumentSnapshot(operation.documentId, document, operations.length, this.vectorClock);
   }
 
   getOperations(): Operation[] {

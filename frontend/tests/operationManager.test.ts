@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../src/lib/indexedDb", () => ({
   getAllOperations: vi.fn().mockResolvedValue([]),
   putOperation: vi.fn().mockResolvedValue(undefined),
+  putHistoricalActivityRecord: vi.fn().mockResolvedValue(undefined),
   putSnapshot: vi.fn().mockResolvedValue(undefined),
   getSnapshot: vi.fn().mockResolvedValue(undefined),
   getAllSnapshots: vi.fn().mockResolvedValue([]),
@@ -13,6 +14,10 @@ vi.mock("../src/lib/compactPersistedOperations", () => ({
   compactPersistedOperations: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock("../src/lib/documentHistory", () => ({
+  reconstructHistoricalState: vi.fn().mockResolvedValue({ status: "insufficient_history" }),
+}));
+
 vi.mock("../src/lib/deviceIdentity", () => ({
   getDeviceId: () => "test-device-id",
 }));
@@ -20,12 +25,14 @@ vi.mock("../src/lib/deviceIdentity", () => ({
 import { OperationManager } from "../src/lib/operationManager";
 import { OperationLog } from "../src/lib/operationLog";
 import { VectorClock } from "../src/lib/vectorClock";
-import { putSnapshot, getAllSnapshots, putOperation, getAllOperations, getSnapshot } from "../src/lib/indexedDb";
+import { putSnapshot, getAllSnapshots, putOperation, putHistoricalActivityRecord, getAllOperations, getSnapshot } from "../src/lib/indexedDb";
 import type { SyncResult } from "../types/sync";
 import { compactPersistedOperations } from "../src/lib/compactPersistedOperations";
+import { reconstructHistoricalState } from "../src/lib/documentHistory";
 import type { Document, Operation } from "../src/types/operation";
 import type { DocumentSnapshot, SyncPayload } from "../src/types/documentSnapshot";
 import type { SyncTransport } from "../src/types/syncTransport";
+import type { HistoricalActivityRecord } from "../src/types/historicalActivityRecord";
 
 describe("OperationManager", () => {
   const createOp = (id: string, overrides: Partial<Operation> = {}): Operation => ({
@@ -5182,5 +5189,51 @@ it("deve lidar com duplicatas", async () => {
       expect(doc2).not.toBeNull();
       expect(doc3).not.toBeNull();
     });
+  });
+});
+
+describe("HistoricalActivityRecord automático", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(putHistoricalActivityRecord).mockResolvedValue(undefined);
+    vi.mocked(putOperation).mockResolvedValue(undefined);
+    vi.mocked(putSnapshot).mockResolvedValue(undefined);
+    vi.mocked(compactPersistedOperations).mockResolvedValue([]);
+    vi.mocked(reconstructHistoricalState).mockResolvedValue({ status: "insufficient_history" });
+  });
+
+  it("persiste o checkpoint quando a reconstrução é confiável", async () => {
+    const manager = new OperationManager();
+    const create = manager.createOperation("history-doc", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Initial", content: "Before" });
+    const update = manager.createOperation("history-doc", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "After" });
+    const before = { id: "history-doc", title: "Initial", content: "Before", createdAt: create.timestamp, updatedAt: create.timestamp };
+    const after = { ...before, title: "After", updatedAt: update.timestamp };
+    vi.mocked(reconstructHistoricalState).mockResolvedValue({ status: "success", operation: update, before, after });
+    manager.createOperation("history-doc", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "Later" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(putHistoricalActivityRecord).toHaveBeenCalled();
+    const record = vi.mocked(putHistoricalActivityRecord).mock.calls.at(-1)?.[0] as HistoricalActivityRecord;
+    expect(record.before).toEqual(before);
+    expect(record.after).toEqual(after);
+    expect(record.operation.id).toBe(update.id);
+  });
+
+  it("não persiste checkpoint para histórico insuficiente", async () => {
+    const manager = new OperationManager();
+    manager.createOperation("history-doc", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Unknown" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(putHistoricalActivityRecord).not.toHaveBeenCalled();
+  });
+
+  it("persiste o checkpoint antes da compactação", async () => {
+    const calls: string[] = [];
+    const manager = new OperationManager();
+    vi.mocked(reconstructHistoricalState).mockImplementation(async (_documentId, operationId) => ({ status: "success", operation: manager.getOperations().find((candidate) => candidate.id === operationId)!, before: null, after: null }));
+    vi.mocked(putHistoricalActivityRecord).mockImplementation(async () => { calls.push("history"); });
+    vi.mocked(putSnapshot).mockImplementation(async () => { calls.push("snapshot"); });
+    vi.mocked(compactPersistedOperations).mockImplementation(async () => { calls.push("compact"); return []; });
+    for (let i = 0; i < 10; i++) manager.createOperation("history-doc", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: `Title ${i}`, content: "Content" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls.indexOf("history")).toBeLessThan(calls.indexOf("compact"));
   });
 });
