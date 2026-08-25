@@ -2,6 +2,8 @@ import fastify, { type FastifyInstance } from "fastify";
 import fastifyRateLimit from "@fastify/rate-limit";
 import fastifyCookie from "@fastify/cookie";
 import { SessionService } from "@application/auth/SessionService.js";
+import { PasswordAuthService } from "@application/auth/PasswordAuthService.js";
+import { PostgresAuthAccountRepository } from "@infrastructure/persistence/postgres/PostgresAuthAccountRepository.js";
 import { getSessionHttpConfig } from "@application/auth/sessionConfig.js";
 import { PostgresUserRepository } from "@infrastructure/persistence/postgres/PostgresUserRepository.js";
 import { PostgresSessionRepository } from "@infrastructure/persistence/postgres/PostgresSessionRepository.js";
@@ -151,12 +153,16 @@ export async function createServer(): Promise<FastifyInstance> {
   const sessionPool = repository instanceof PostgresOperationRepository ? repository.getPool() : null;
   const userRepository = sessionPool ? new PostgresUserRepository(sessionPool) : null;
   const sessionRepository = sessionPool ? new PostgresSessionRepository(sessionPool) : null;
+  const authAccountRepository = sessionPool ? new PostgresAuthAccountRepository(sessionPool) : null;
   const sessionConfig = getSessionHttpConfig();
   const sessionService = userRepository && sessionRepository
     ? new SessionService(sessionRepository, userRepository, sessionConfig)
     : null;
+  const passwordAuthService = userRepository && authAccountRepository && sessionService
+    ? new PasswordAuthService(userRepository, authAccountRepository, sessionService)
+    : null;
 
-  registerAuthRoutes(app, sessionService, sessionConfig);
+  registerAuthRoutes(app, sessionService, sessionConfig, passwordAuthService);
 
   registerSyncRoutes(app, repository, documentRepository, snapshotRepository, authzRepository, apiKeyValidator);
 
