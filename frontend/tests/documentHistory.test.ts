@@ -358,3 +358,51 @@ describe("casos adicionais de histórico", () => {
       ]);
   });
 });
+
+
+describe("checkpoints históricos persistidos", () => {
+  function checkpointSource(record: {
+    documentId: string;
+    operationId: string;
+    operation: Operation;
+    before: { id: string; title: string; content: string; createdAt: string; updatedAt: string } | null;
+    after: { id: string; title: string; content: string; createdAt: string; updatedAt: string } | null;
+    vectorClock: Record<string, number>;
+    createdAt: string;
+  }, operations: Operation[] = []) {
+    return {
+      getOperations: async () => operations,
+      getHistoricalActivityRecord: async () => record,
+    };
+  }
+
+  it("usa checkpoint válido mesmo quando a operação foi compactada", async () => {
+    const operation = op("checkpointed", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "after" }, { a: 2 });
+    const before = { id: "doc-1", title: "Before title", content: "before", createdAt: "2024-01-01T00:00:00.000Z", updatedAt: "2024-01-01T00:00:01.000Z" };
+    const after = { ...before, content: "after", updatedAt: "2024-01-01T00:00:02.000Z" };
+    const result = await reconstructHistoricalState("doc-1", operation.id, checkpointSource({ documentId: "doc-1", operationId: operation.id, operation, before, after, vectorClock: { a: 2 }, createdAt: "2024-01-01T00:00:03.000Z" }));
+    expect(result).toEqual({ status: "success", operation, before, after });
+  });
+
+  it("não deixa operações posteriores contaminarem o checkpoint", async () => {
+    const operation = op("checkpointed-title", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Historical" }, { a: 2 });
+    const later = op("later-title", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Current" }, { a: 3 });
+    const before = { id: "doc-1", title: "Before", content: "Content", createdAt: "2024-01-01T00:00:00.000Z", updatedAt: "2024-01-01T00:00:01.000Z" };
+    const after = { ...before, title: "Historical", updatedAt: "2024-01-01T00:00:02.000Z" };
+    const result = await reconstructHistoricalState("doc-1", operation.id, checkpointSource({ documentId: "doc-1", operationId: operation.id, operation, before, after, vectorClock: { a: 2 }, createdAt: "2024-01-01T00:00:03.000Z" }, [later]));
+    expect(result.status).toBe("success");
+    if (result.status === "success") expect([result.before?.title, result.after?.title]).toEqual(["Before", "Historical"]);
+  });
+
+  it("rejeita checkpoint de outro documento sem consultar operações como fallback", async () => {
+    const operation = op("wrong-document", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "wrong" }, { a: 1 }, "doc-2");
+    const result = await reconstructHistoricalState("doc-1", operation.id, checkpointSource({ documentId: "doc-2", operationId: operation.id, operation, before: null, after: null, vectorClock: { a: 1 }, createdAt: "2024-01-01T00:00:01.000Z" }, []));
+    expect(result.status).toBe("operation_document_mismatch");
+  });
+
+  it("rejeita checkpoint estruturalmente inválido", async () => {
+    const operation = op("invalid-checkpoint", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "after" }, { a: 1 });
+    const result = await reconstructHistoricalState("doc-1", operation.id, checkpointSource({ documentId: "doc-1", operationId: operation.id, operation, before: null, after: null, vectorClock: { a: 1 }, createdAt: "2024-01-01T00:00:01.000Z" }, []));
+    expect(result.status).toBe("insufficient_history");
+  });
+});

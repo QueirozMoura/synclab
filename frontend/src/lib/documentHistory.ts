@@ -1,7 +1,8 @@
 import type { Document } from "../types/document";
 import type { Operation } from "../types/operation";
 import { VectorClock, type ClockMap } from "./vectorClock";
-import { getAllOperations } from "./indexedDb";
+import * as indexedDb from "./indexedDb";
+import type { HistoricalActivityRecord } from "../types/historicalActivityRecord";
 import { reconstructDocument } from "./documentStateEngine";
 import { orderOperations } from "./operationOrdering";
 
@@ -23,10 +24,22 @@ export type HistoricalStateResult =
 
 export interface DocumentHistorySource {
   getOperations(): Promise<Operation[]>;
+  getHistoricalActivityRecord?: (
+    operationId: string,
+  ) => Promise<HistoricalActivityRecord | undefined>;
 }
 
 const defaultSource: DocumentHistorySource = {
-  getOperations: getAllOperations,
+  getOperations: indexedDb.getAllOperations,
+  getHistoricalActivityRecord: async (operationId) => {
+    const getter = (indexedDb as unknown as Record<string, unknown>)[
+      "getHistoricalActivityRecord"
+    ];
+    if (typeof getter !== "function") return undefined;
+    return (getter as (id: string) => Promise<HistoricalActivityRecord | undefined>)(
+      operationId,
+    );
+  },
 };
 
 const supportedOperationTypes: ReadonlySet<Operation["type"]> = new Set([
@@ -103,12 +116,85 @@ function provesDeletedState(operations: Operation[]): boolean {
   return lastLifecycleOperation?.type === "DELETE_DOCUMENT";
 }
 
+function isDocument(value: Document | null, documentId: string): value is Document {
+  return value !== null &&
+    value.id === documentId &&
+    typeof value.title === "string" &&
+    typeof value.content === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string";
+}
+
+function isValidHistoricalRecord(
+  record: HistoricalActivityRecord,
+  documentId: string,
+  operationId: string,
+): boolean {
+  if (record.documentId !== documentId || record.operationId !== operationId) {
+    return false;
+  }
+  const operation = record.operation;
+  if (!operation || operation.id !== operationId || operation.documentId !== documentId) {
+    return false;
+  }
+  if (!supportedOperationTypes.has(operation.type)) return false;
+
+  switch (operation.type) {
+    case "CREATE_DOCUMENT":
+      return record.before === null && isDocument(record.after, documentId);
+    case "DELETE_DOCUMENT":
+      return isDocument(record.before, documentId) && record.after === null;
+    case "UPDATE_TITLE": {
+      if (!isDocument(record.before, documentId) || !isDocument(record.after, documentId)) return false;
+      const payload = operation.payload;
+      return payload.type === "UPDATE_TITLE" &&
+        record.after.title === payload.title &&
+        record.after.content === record.before.content;
+    }
+    case "UPDATE_CONTENT": {
+      if (!isDocument(record.before, documentId) || !isDocument(record.after, documentId)) return false;
+      const payload = operation.payload;
+      return payload.type === "UPDATE_CONTENT" &&
+        record.after.content === payload.content &&
+        record.after.title === record.before.title;
+    }
+  }
+}
+
 /** Reconstructs the two states around one operation without using the current document. */
 export async function reconstructHistoricalState(
   documentId: string,
   operationId: string,
   source: DocumentHistorySource = defaultSource,
 ): Promise<HistoricalStateResult> {
+  let checkpoint: HistoricalActivityRecord | undefined;
+  if (source.getHistoricalActivityRecord) {
+    try {
+      checkpoint = await source.getHistoricalActivityRecord(operationId);
+    } catch {
+      checkpoint = undefined;
+    }
+  }
+
+  if (checkpoint) {
+    const hydratedCheckpoint: HistoricalActivityRecord = {
+      ...checkpoint,
+      operation: hydrateOperation(checkpoint.operation),
+    };
+    if (hydratedCheckpoint.documentId !== documentId) {
+      return { status: "operation_document_mismatch" };
+    }
+    if (!isValidHistoricalRecord(hydratedCheckpoint, documentId, operationId)) {
+      return { status: "insufficient_history" };
+    }
+    return {
+      status: "success",
+      operation: hydratedCheckpoint.operation,
+      before: hydratedCheckpoint.before,
+      after: hydratedCheckpoint.after,
+    };
+  }
+
   const operations = (await source.getOperations()).map(hydrateOperation);
   const operation = operations.find(
     (candidate) => candidate.id === operationId,
