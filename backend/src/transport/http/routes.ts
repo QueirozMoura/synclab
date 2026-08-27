@@ -168,6 +168,12 @@ export function registerSyncRoutes(
       return authenticate(request, reply);
     }
 
+    console.log("[SYNC AUTH DEBUG]", {
+      hasCookie: Boolean(request.cookies[sessionConfig.cookieName]),
+      cookieName: sessionConfig.cookieName,
+      origin: request.headers.origin,
+      host: request.headers.host,
+    });
     const user = await sessionService.getAuthenticatedUser(request.cookies[sessionConfig.cookieName]);
     if (!user) {
       return reply.status(401).send({ error: "Unauthorized", message: "Unauthenticated session" });
