@@ -56,6 +56,11 @@ export const EditorPage: React.FC = () => {
       return;
     }
 
+    // Keep the previous title and reject empty or whitespace-only values.
+    if (newTitle.trim().length === 0) {
+      return;
+    }
+
     setTitle(newTitle);
 
     // Create the operation first so the activity can reference its real id.
