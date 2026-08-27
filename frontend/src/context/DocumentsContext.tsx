@@ -8,6 +8,7 @@ import { DocumentsContext } from "./DocumentsContextType";
 import { getAllDocuments, putDocument, deleteDocument as deleteDocumentIdb, recordActivity, getRecentActivity, type ActivityEvent } from "../lib/indexedDb";
 import { useOperationManager } from "../hooks/useOperationManager";
 import { useConnectivity } from "../hooks/useConnectivity";
+import { AuthContext } from "./authContext";
 
 export interface DocumentsContextType {
   documents: Document[];
@@ -223,6 +224,12 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [isLoading, setIsLoading] = useState(true);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const isOnline = useConnectivity();
+  const auth = React.useContext(AuthContext);
+  // DocumentsProvider is also used independently in library/test contexts;
+  // the application always supplies AuthProvider here.
+  const isAuthenticated = auth?.isAuthenticated ?? true;
+  const isAuthLoading = auth?.isLoading ?? false;
+  const [isRefreshingAuth, setIsRefreshingAuth] = useState(false);
   const {
     createOperation,
     getOperationsForDocument,
@@ -440,17 +447,48 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [appendActivity, sync]);
 
   const previousOnlineState = useRef(isOnline);
+  const pendingOnlineSync = useRef(false);
+  const authRefreshRequested = useRef(false);
   useEffect(() => {
     const recoveredConnection = previousOnlineState.current === false && isOnline === true;
     previousOnlineState.current = isOnline;
 
-    if (recoveredConnection) {
-      void syncDocuments().catch(() => {
-        // The existing sync activity/state records the failure; pending
-        // operations remain available for a later manual or online transition.
-      });
+    if (!isOnline) {
+      pendingOnlineSync.current = false;
+      authRefreshRequested.current = false;
+      return;
     }
-  }, [isOnline, syncDocuments]);
+
+    if (recoveredConnection) {
+      pendingOnlineSync.current = true;
+      authRefreshRequested.current = false;
+    }
+
+    // The online event can arrive while AuthProvider is still validating or
+    // refreshing the session. Keep the recovery request pending until that
+    // state is settled; this avoids sending /sync before the session cookie is
+    // available.
+    if (!pendingOnlineSync.current || isAuthLoading || isRefreshingAuth) {
+      return;
+    }
+
+    if (auth?.refreshUser && !authRefreshRequested.current) {
+      authRefreshRequested.current = true;
+      setIsRefreshingAuth(true);
+      void auth.refreshUser().finally(() => setIsRefreshingAuth(false));
+      return;
+    }
+
+    if (!isAuthenticated) {
+      return;
+    }
+
+    pendingOnlineSync.current = false;
+    void Promise.resolve().then(() => syncDocuments()).catch(() => {
+      // The existing sync activity/state records the failure; pending
+      // operations remain available for a later manual or online transition.
+    });
+  }, [auth, isOnline, isAuthLoading, isAuthenticated, isRefreshingAuth, syncDocuments]);
 
   const getSyncStatus = useCallback((): SyncStatus => {
     return getCoordinatorSyncStatus();
