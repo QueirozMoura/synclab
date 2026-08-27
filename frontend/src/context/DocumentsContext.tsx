@@ -216,6 +216,8 @@ open http://localhost:3000
   },
 ];
 
+void initialDocuments;
+
 export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -251,17 +253,14 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
             console.log("[Context] Using stored documents from IndexedDB");
             setDocuments(storedDocuments);
           } else {
-            console.log("[Context] No stored documents, using seeds");
-            setDocuments(initialDocuments);
-            for (const doc of initialDocuments) {
-              await putDocument(doc);
-            }
+            console.log("[Context] No stored documents, starting empty");
+            setDocuments([]);
           }
         }
       } catch (error) {
         console.error("[DocumentsContext] Failed to initialize:", error);
         if (mounted) {
-          setDocuments(initialDocuments);
+          setDocuments([]);
         }
       } finally {
         if (mounted) {
