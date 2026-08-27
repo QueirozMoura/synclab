@@ -26,12 +26,15 @@ export class InMemorySyncTransport implements SyncTransport {
     return this.#remotePayload;
   }
 
-  async synchronize(_payload: SyncPayload): Promise<SyncPayload> {
-    void _payload;
+  async synchronize(payload: SyncPayload): Promise<SyncPayload> {
     return {
       deviceId: this.#remotePayload.deviceId,
       operations: [...this.#remotePayload.operations],
       snapshots: [...this.#remotePayload.snapshots],
+      acknowledgedOperationIds: [
+        ...(this.#remotePayload.acknowledgedOperationIds ?? []),
+        ...payload.operations.map((operation) => operation.id),
+      ],
     };
   }
 }

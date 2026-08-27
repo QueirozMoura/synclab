@@ -15,6 +15,7 @@ vi.mock("../src/lib/indexedDb", () => ({
   getAllSnapshots: vi.fn(async () => []),
   getSnapshot: vi.fn(async () => undefined),
   putSnapshot: vi.fn(async () => undefined),
+  putHistoricalActivityRecord: vi.fn(async () => undefined),
 }));
 vi.mock("../src/lib/compactPersistedOperations", () => ({
   compactPersistedOperations: vi.fn(),
@@ -95,6 +96,49 @@ describe("OperationManager pending operations", () => {
     const reloaded = new OperationManager();
     await reloaded.initialize();
     expect(reloaded.hasPendingOperations()).toBe(false);
+  });
+
+  it("returns only pending operations in causal order", async () => {
+    const manager = new OperationManager();
+    const created = manager.createOperation("doc-1", "CREATE_DOCUMENT", {
+      type: "CREATE_DOCUMENT",
+      title: "Local",
+      content: "",
+    });
+    const title = manager.createOperation("doc-1", "UPDATE_TITLE", {
+      type: "UPDATE_TITLE",
+      title: "Updated",
+    });
+    const content = manager.createOperation("doc-1", "UPDATE_CONTENT", {
+      type: "UPDATE_CONTENT",
+      content: "Offline",
+    });
+
+    const pending = manager.getPendingOperations();
+
+    expect(pending.map((item) => item.id)).toEqual([created.id, title.id, content.id]);
+    expect(pending.every((item) => item.confirmedAt === undefined)).toBe(true);
+    expect(manager.hasPendingOperations()).toBe(true);
+  });
+
+  it("rebuilds pending operations after a new manager initializes", async () => {
+    const manager = new OperationManager();
+    const created = manager.createOperation("doc-1", "CREATE_DOCUMENT", {
+      type: "CREATE_DOCUMENT",
+      title: "Local",
+      content: "",
+    });
+    const title = manager.createOperation("doc-1", "UPDATE_TITLE", {
+      type: "UPDATE_TITLE",
+      title: "Updated",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const reloaded = new OperationManager();
+    await reloaded.initialize();
+
+    expect(reloaded.getPendingOperations().map((item) => item.id)).toEqual([created.id, title.id]);
+    expect(reloaded.hasPendingOperations()).toBe(true);
   });
 
   it("rebuilds legacy and multiple-document pending operations deterministically", async () => {

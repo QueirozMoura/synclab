@@ -902,6 +902,43 @@ describe("DocumentsContext - SyncCoordinator integration", () => {
     expect(syncMock).not.toHaveBeenCalled();
   });
 
+  it("should sync once when connectivity recovers", async () => {
+    const syncMock = vi.fn(() => Promise.resolve({ acceptedOperations: [], missingOperations: [], snapshots: [] }));
+    vi.spyOn(operationManagerHook, "useOperationManager").mockReturnValue(
+      createOperationManagerContextMock({ sync: syncMock })
+    );
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    const { unmount } = useDocumentsWithMockedOperationManager();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await Promise.resolve();
+    });
+
+    expect(syncMock).toHaveBeenCalledTimes(1);
+    unmount();
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+  });
+
+  it("should not loop after an automatic sync failure", async () => {
+    const syncMock = vi.fn(() => Promise.reject(new Error("offline")));
+    vi.spyOn(operationManagerHook, "useOperationManager").mockReturnValue(
+      createOperationManagerContextMock({ sync: syncMock })
+    );
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    const { unmount } = useDocumentsWithMockedOperationManager();
+
+    await act(async () => {
+      window.dispatchEvent(new Event("online"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(syncMock).toHaveBeenCalledTimes(1);
+    unmount();
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+  });
+
   it("should delegate sync status selectors to OperationManagerContext", async () => {
     const getSyncStatusMock = vi.fn((): SyncStatus => "success");
     const isSyncingMock = vi.fn(() => true);

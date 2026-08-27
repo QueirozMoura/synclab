@@ -16,6 +16,7 @@ import {
 } from "../src/context/AuthContext";
 import { LoginPage } from "../src/pages/LoginPage";
 import { RegisterPage } from "../src/pages/RegisterPage";
+import { getOfflineAuthUser } from "../src/lib/offlineAuthStorage";
 
 const user = {
   id: "u1",
@@ -40,13 +41,15 @@ function renderAuth(ui: React.ReactNode) {
 }
 beforeEach(() => {
   vi.restoreAllMocks();
-  localStorage.clear();
-  sessionStorage.clear();
+  window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 
 describe("AuthContext", () => {
   it("carrega usuário autenticado", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(response(200, { user }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(response(200, {
+      user: { ...user, token: "secret-token", password: "secret-password", cookie: "secret-cookie" },
+    }));
     renderAuth(<Probe />);
     expect(screen.getByTestId("loading")).toHaveTextContent("true");
     await waitFor(() =>
@@ -57,14 +60,39 @@ describe("AuthContext", () => {
       "http://localhost:3000/auth/me",
       expect.objectContaining({ credentials: "include" }),
     );
+    await waitFor(() => expect(getOfflineAuthUser()).toEqual(user));
+    const persisted = window.localStorage.getItem("synclab_offline_auth_user") ?? "";
+    expect(persisted).not.toContain("password");
+    expect(persisted).not.toContain("token");
+    expect(persisted).not.toContain("cookie");
   });
-  it("trata 401 e erro de rede sem falhar", async () => {
+  it("restaura usuário previamente autenticado quando a rede falha", async () => {
+    window.localStorage.setItem("synclab_offline_auth_user", JSON.stringify(user));
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("offline"));
+    renderAuth(<Probe />);
+    await waitFor(() =>
+      expect(screen.getByTestId("email")).toHaveTextContent(user.email),
+    );
+    expect(screen.getByTestId("authenticated")).toHaveTextContent("true");
+  });
+  it("mantém não autenticado quando a rede falha sem estado local", async () => {
+    window.localStorage.removeItem("synclab_offline_auth_user");
+    expect(getOfflineAuthUser()).toBeNull();
     vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("offline"));
     renderAuth(<Probe />);
     await waitFor(() =>
       expect(screen.getByTestId("loading")).toHaveTextContent("false"),
     );
     expect(screen.getByTestId("authenticated")).toHaveTextContent("false");
+  });
+  it("não mascara uma sessão inválida retornada pelo backend", async () => {
+    window.localStorage.setItem("synclab_offline_auth_user", JSON.stringify(user));
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(response(401));
+    renderAuth(<Probe />);
+    await waitFor(() =>
+      expect(screen.getByTestId("authenticated")).toHaveTextContent("false"),
+    );
+    expect(getOfflineAuthUser()).toBeNull();
   });
   it("refreshUser atualiza e logout limpa o usuário sem storage", async () => {
     const fetch = vi
@@ -90,8 +118,8 @@ describe("AuthContext", () => {
       "http://localhost:3000/auth/logout",
       expect.objectContaining({ method: "POST", credentials: "include" }),
     );
-    expect(localStorage.length).toBe(0);
-    expect(sessionStorage.length).toBe(0);
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
   });
   it("não manipula documentos quando /auth/me falha", async () => {
     const indexed = vi.spyOn(globalThis, "indexedDB", "get");

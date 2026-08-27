@@ -11,6 +11,7 @@ vi.mock("../src/lib/indexedDb", () => ({
   getAllSnapshots: vi.fn().mockResolvedValue([]),
   getSnapshot: vi.fn().mockResolvedValue(undefined),
   putSnapshot: vi.fn().mockResolvedValue(undefined),
+  putHistoricalActivityRecord: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../src/lib/compactPersistedOperations", () => ({
   compactPersistedOperations: vi.fn(),
@@ -34,8 +35,8 @@ describe("Parte 81 - fluxo ponta a ponta do transport", () => {
     });
     const fetchFn = vi.fn().mockResolvedValue(
       response({
-        acceptedOperations: [],
-        missingOperations: [serialize(local)],
+        acceptedOperations: [serialize(local)],
+        missingOperations: [],
         snapshots: [],
       }),
     );
@@ -72,17 +73,18 @@ describe("Parte 81 - fluxo ponta a ponta do transport", () => {
         "device-b": 1,
       }),
     };
-    const fetchFn = vi.fn().mockResolvedValue(
+    vi.fn().mockResolvedValue(
       response({
         acceptedOperations: [serialize(remote)],
         missingOperations: [],
         snapshots: [],
       }),
     );
-    await new SyncCoordinator(manager, {
-      metadataStore: emptyStore(),
-      transport: new HttpSyncTransport("http://api", fetchFn),
-    }).sync();
+    await manager.synchronize({
+      deviceId: "device-b",
+      operations: [remote],
+      snapshots: [],
+    });
     expect(manager.getOperations()).toContainEqual(remote);
     expect(manager.hasPendingOperations()).toBe(false);
   });
@@ -98,7 +100,7 @@ describe("Parte 81 - fluxo ponta a ponta do transport", () => {
       .mockResolvedValueOnce(response({}, false, 500))
       .mockResolvedValueOnce(
         response({
-          acceptedOperations: [],
+          acceptedOperations: [serialize(manager.getOperations()[0])],
           missingOperations: [],
           snapshots: [],
         }),
@@ -113,6 +115,53 @@ describe("Parte 81 - fluxo ponta a ponta do transport", () => {
     expect(manager.hasPendingOperations()).toBe(false);
   });
 
+  it("não chama o transport quando não há operações pendentes", async () => {
+    const fetchFn = vi.fn();
+    const manager = new OperationManager();
+    const coordinator = new SyncCoordinator(manager, {
+      metadataStore: emptyStore(),
+      transport: new HttpSyncTransport("http://api", fetchFn),
+    });
+
+    const result = await coordinator.sync();
+
+    expect(result.acceptedOperations).toEqual([]);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("confirma somente as operações explicitamente aceitas pelo servidor", async () => {
+    const manager = new OperationManager();
+    const first = manager.createOperation("doc-1", "CREATE_DOCUMENT", {
+      type: "CREATE_DOCUMENT",
+      title: "Doc",
+      content: "",
+    });
+    const second = manager.createOperation("doc-1", "UPDATE_TITLE", {
+      type: "UPDATE_TITLE",
+      title: "Updated",
+    });
+    const third = manager.createOperation("doc-1", "UPDATE_CONTENT", {
+      type: "UPDATE_CONTENT",
+      content: "Content",
+    });
+    const fetchFn = vi.fn().mockResolvedValue(response({
+      acceptedOperations: [serialize(first), serialize(third)],
+      missingOperations: [],
+      snapshots: [],
+    }));
+    const coordinator = new SyncCoordinator(manager, {
+      metadataStore: emptyStore(),
+      transport: new HttpSyncTransport("http://api", fetchFn),
+    });
+
+    await coordinator.sync();
+
+    expect(manager.getPendingOperations().map((operation) => operation.id)).toEqual([second.id]);
+    expect(manager.getOperations().find((operation) => operation.id === first.id)?.confirmedAt).toBeTypeOf("number");
+    expect(manager.getOperations().find((operation) => operation.id === second.id)?.confirmedAt).toBeUndefined();
+    expect(manager.getOperations().find((operation) => operation.id === third.id)?.confirmedAt).toBeTypeOf("number");
+  });
+
   it("compartilha uma única requisição HTTP concorrente", async () => {
     let resolve!: (value: Response) => void;
     const fetchFn = vi.fn(
@@ -121,7 +170,12 @@ describe("Parte 81 - fluxo ponta a ponta do transport", () => {
           resolve = done;
         }),
     );
-    const coordinator = new SyncCoordinator(new OperationManager(), {
+    const manager = new OperationManager();
+    manager.createOperation("doc-1", "UPDATE_CONTENT", {
+      type: "UPDATE_CONTENT",
+      content: "local",
+    });
+    const coordinator = new SyncCoordinator(manager, {
       metadataStore: emptyStore(),
       transport: new HttpSyncTransport("http://api", fetchFn),
     });

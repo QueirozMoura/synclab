@@ -126,8 +126,8 @@ describe("Parte 82 - recuperação de falhas de sincronização", () => {
       .mockRejectedValueOnce(new Error("temporary"))
       .mockResolvedValueOnce(
         response({
-          acceptedOperations: [],
-          missingOperations: [serialized(operation)],
+          acceptedOperations: [serialized(operation)],
+          missingOperations: [],
           snapshots: [],
         }),
       );
@@ -153,7 +153,12 @@ describe("Parte 82 - recuperação de falhas de sincronização", () => {
           }),
       )
       .mockResolvedValue(response(emptyResult));
-    const sync = coordinator(new OperationManager(), fetchFn);
+    const manager = new OperationManager();
+    manager.createOperation("doc-1", "UPDATE_CONTENT", {
+      type: "UPDATE_CONTENT",
+      content: "local",
+    });
+    const sync = coordinator(manager, fetchFn);
     const first = sync.sync();
     const second = sync.sync();
     const third = sync.sync();
@@ -164,6 +169,7 @@ describe("Parte 82 - recuperação de falhas de sincronização", () => {
     reject(new Error("network"));
     await expect(first).rejects.toThrow("network");
     await expect(sync.sync()).resolves.toEqual(emptyResult);
+    expect(manager.hasPendingOperations()).toBe(true);
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 
@@ -171,8 +177,8 @@ describe("Parte 82 - recuperação de falhas de sincronização", () => {
     const { manager, operation } = setup();
     const fetchFn = vi.fn().mockResolvedValue(
       response({
-        acceptedOperations: [],
-        missingOperations: [serialized(operation)],
+        acceptedOperations: [serialized(operation)],
+        missingOperations: [],
         snapshots: [],
       }),
     );
@@ -183,7 +189,7 @@ describe("Parte 82 - recuperação de falhas de sincronização", () => {
     expect(manager.getOperations()).toHaveLength(1);
     expect(manager.hasPendingOperations()).toBe(false);
     await sync.sync();
-    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(manager.getOperations()).toHaveLength(1);
   });
 
@@ -202,8 +208,8 @@ describe("Parte 82 - recuperação de falhas de sincronização", () => {
       .mockRejectedValueOnce(new Error("temporary"))
       .mockResolvedValueOnce(
         response({
-          acceptedOperations: [],
-          missingOperations: [serialized(first), serialized(second)],
+          acceptedOperations: [serialized(first), serialized(second)],
+          missingOperations: [],
           snapshots: [],
         }),
       );

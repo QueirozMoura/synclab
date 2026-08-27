@@ -48,6 +48,7 @@ export const OperationManagerProvider: React.FC<OperationManagerProviderProps> =
     },
     [manager]
   );
+  const getPendingOperations = useCallback(() => manager.getPendingOperations(), [manager]);
   const hasPendingOperations = useCallback(() => manager.hasPendingOperations(), [manager]);
 
   const synchronize = useCallback(
@@ -97,6 +98,7 @@ export const OperationManagerProvider: React.FC<OperationManagerProviderProps> =
       createOperation,
       getOperations,
       getOperationsForDocument,
+      getPendingOperations,
       hasPendingOperations,
       synchronize,
       synchronizeDocument,
@@ -110,7 +112,7 @@ export const OperationManagerProvider: React.FC<OperationManagerProviderProps> =
       getLastSyncError,
       getLastSuccessfulSyncAt,
     }),
-    [createOperation, getOperations, getOperationsForDocument, hasPendingOperations, synchronize, synchronizeDocument, reconstructSyncedDocument, sync, syncCoordinator, setSyncTransport, getSyncStatus, isSyncing, getLastSyncResult, getLastSyncError, getLastSuccessfulSyncAt]
+    [createOperation, getOperations, getOperationsForDocument, getPendingOperations, hasPendingOperations, synchronize, synchronizeDocument, reconstructSyncedDocument, sync, syncCoordinator, setSyncTransport, getSyncStatus, isSyncing, getLastSyncResult, getLastSyncError, getLastSuccessfulSyncAt]
   );
 
   return <OperationManagerContext.Provider value={value}>{children}</OperationManagerContext.Provider>;

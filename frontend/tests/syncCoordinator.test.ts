@@ -12,7 +12,7 @@ const result: SyncResult = {
 
 function dependencies() {
   const manager = {
-    syncWithTransport: vi
+    syncPendingOperations: vi
       .fn<() => Promise<SyncResult>>()
       .mockResolvedValue(result),
     setSyncTransport: vi.fn(),
@@ -46,7 +46,7 @@ describe("SyncCoordinator", () => {
     const { manager, transport } = dependencies();
     const coordinator = new SyncCoordinator(manager, { transport });
     await expect(coordinator.sync()).resolves.toBe(result);
-    expect(manager.syncWithTransport).toHaveBeenCalledTimes(1);
+    expect(manager.syncPendingOperations).toHaveBeenCalledTimes(1);
     expect(coordinator.getStatus()).toBe("success");
     expect(coordinator.getLastSyncResult()).toBe(result);
     expect(coordinator.getLastSyncError()).toBeNull();
@@ -57,7 +57,7 @@ describe("SyncCoordinator", () => {
   it("keeps the previous successful timestamp after a failure", async () => {
     const { manager, transport } = dependencies();
     const failure = new Error("temporary failure");
-    manager.syncWithTransport = vi
+    manager.syncPendingOperations = vi
       .fn()
       .mockResolvedValueOnce(result)
       .mockRejectedValueOnce(failure);
@@ -80,7 +80,7 @@ describe("SyncCoordinator", () => {
     expect(coordinator.getLastSyncError()?.message).toContain("not configured");
     coordinator.setTransport(transport);
     await expect(coordinator.sync()).resolves.toBe(result);
-    expect(manager.syncWithTransport).toHaveBeenCalledTimes(1);
+    expect(manager.syncPendingOperations).toHaveBeenCalledTimes(1);
     expect(coordinator.getStatus()).toBe("success");
     expect(coordinator.getLastSyncError()).toBeNull();
   });
@@ -88,7 +88,7 @@ describe("SyncCoordinator", () => {
   it("updates the timestamp once for concurrent callers", async () => {
     const { manager, transport } = dependencies();
     let resolveSync!: (value: SyncResult) => void;
-    manager.syncWithTransport = vi.fn(
+    manager.syncPendingOperations = vi.fn(
       () =>
         new Promise<SyncResult>((resolve) => {
           resolveSync = resolve;
@@ -102,7 +102,7 @@ describe("SyncCoordinator", () => {
     expect(first).toBe(second);
     resolveSync(result);
     await Promise.all([first, second]);
-    expect(manager.syncWithTransport).toHaveBeenCalledTimes(1);
+    expect(manager.syncPendingOperations).toHaveBeenCalledTimes(1);
     expect(coordinator.getLastSuccessfulSyncAt()).toBe(3000);
     vi.restoreAllMocks();
   });
@@ -110,7 +110,7 @@ describe("SyncCoordinator", () => {
   it("shares one asynchronous synchronization among concurrent callers", async () => {
     const { manager, transport } = dependencies();
     let resolveSync!: (value: SyncResult) => void;
-    manager.syncWithTransport = vi.fn(
+    manager.syncPendingOperations = vi.fn(
       () =>
         new Promise<SyncResult>((resolve) => {
           resolveSync = resolve;
@@ -122,7 +122,7 @@ describe("SyncCoordinator", () => {
     const third = coordinator.sync();
     expect(first).toBe(second);
     expect(second).toBe(third);
-    expect(manager.syncWithTransport).toHaveBeenCalledTimes(1);
+    expect(manager.syncPendingOperations).toHaveBeenCalledTimes(1);
     expect(coordinator.isSyncing()).toBe(true);
     resolveSync(result);
     await expect(Promise.all([first, second, third])).resolves.toEqual([
@@ -136,7 +136,7 @@ describe("SyncCoordinator", () => {
   it("releases the lock after a failure and retries", async () => {
     const { manager, transport } = dependencies();
     const failure = new Error("temporary failure");
-    manager.syncWithTransport = vi
+    manager.syncPendingOperations = vi
       .fn()
       .mockRejectedValueOnce(failure)
       .mockResolvedValueOnce(result);
@@ -144,7 +144,7 @@ describe("SyncCoordinator", () => {
     await expect(coordinator.sync()).rejects.toBe(failure);
     expect(coordinator.getLastSyncError()).toBe(failure);
     await expect(coordinator.sync()).resolves.toBe(result);
-    expect(manager.syncWithTransport).toHaveBeenCalledTimes(2);
+    expect(manager.syncPendingOperations).toHaveBeenCalledTimes(2);
     expect(coordinator.getStatus()).toBe("success");
   });
 });

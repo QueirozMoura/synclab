@@ -1,6 +1,11 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext, useAuth, type AuthUser } from "./authContext";
+import {
+  clearOfflineAuthUser,
+  getOfflineAuthUser,
+  saveOfflineAuthUser,
+} from "../lib/offlineAuthStorage";
 // eslint-disable-next-line react-refresh/only-export-components
 export { useAuth };
 
@@ -27,10 +32,20 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
   const refreshUser = React.useCallback(async () => {
     try {
       const response = await authFetch("/auth/me");
-      if (response.ok) setUser((await response.json()).user as AuthUser);
-      else if (response.status === 401) setUser(null);
+      if (response.ok) {
+        const authenticatedUser = (await response.json()).user as AuthUser;
+        setUser(authenticatedUser);
+        saveOfflineAuthUser(authenticatedUser);
+      } else if (response.status === 401) {
+        clearOfflineAuthUser();
+        setUser(null);
+      } else {
+        // A real HTTP response is authoritative; do not mask it with local state.
+        setUser(null);
+      }
     } catch {
-      /* Preserve local documents when the server is unavailable. */
+      /* Fetch rejection means the server could not be reached. */
+      setUser(getOfflineAuthUser());
     } finally {
       setIsLoading(false);
     }
@@ -40,8 +55,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({
     return () => window.clearTimeout(timer);
   }, [refreshUser]);
   const logout = React.useCallback(async () => {
-    await authFetch("/auth/logout", { method: "POST" });
-    setUser(null);
+    try {
+      await authFetch("/auth/logout", { method: "POST" });
+    } finally {
+      clearOfflineAuthUser();
+      setUser(null);
+    }
   }, []);
   return (
     <AuthContext.Provider

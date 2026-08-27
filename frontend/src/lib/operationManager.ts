@@ -209,6 +209,12 @@ export class OperationManager {
     return this.pendingOperationIds.size > 0;
   }
 
+  getPendingOperations(): Operation[] {
+    return orderOperations(
+      this.getOperations().filter((operation) => this.pendingOperationIds.has(operation.id)),
+    );
+  }
+
   private rebuildPendingOperationIds(): void {
     this.pendingOperationIds.clear();
     for (const operation of this.operationLog.getAll()) {
@@ -313,16 +319,59 @@ export class OperationManager {
 
     const localOperations = this.getOperations();
     const localSnapshots = await getAllSnapshots();
-
     const localPayload: SyncPayload = {
       deviceId: this.deviceId,
       operations: localOperations,
       snapshots: localSnapshots,
     };
-
     const remotePayload = await this.syncTransport.synchronize(localPayload);
     const result = await this.synchronize(remotePayload);
     await this.confirmLocalOperations(localOperations);
+    return result;
+  }
+
+  async syncPendingOperations(): Promise<SyncResult> {
+    if (!this.syncTransport) {
+      throw new Error("SyncTransport not configured. Call setTransport() before syncPendingOperations().");
+    }
+
+    const pendingOperations = this.getPendingOperations();
+    if (pendingOperations.length === 0) {
+      return {
+        acceptedOperations: [],
+        missingOperations: [],
+        snapshots: [],
+      };
+    }
+
+    const localSnapshots = await getAllSnapshots();
+    const localPayload: SyncPayload = {
+      deviceId: this.deviceId,
+      operations: pendingOperations,
+      snapshots: localSnapshots,
+    };
+
+    const remotePayload = await this.syncTransport.synchronize(localPayload);
+    const pendingIds = new Set(pendingOperations.map((operation) => operation.id));
+    const acknowledgedIds = new Set(
+      remotePayload.acknowledgedOperationIds?.filter((id) => pendingIds.has(id)) ?? [],
+    );
+    // Keep unacknowledged submitted operations in the merge input so that the
+    // generic synchronization path cannot interpret their absence as a server
+    // confirmation. They are confirmed only by the explicit acknowledgment set.
+    const mergePayload: SyncPayload = {
+      ...remotePayload,
+      operations: [
+        ...remotePayload.operations,
+        ...pendingOperations.filter(
+          (operation) => !remotePayload.operations.some((remote) => remote.id === operation.id),
+        ),
+      ],
+    };
+    const result = await this.synchronize(mergePayload);
+    await this.confirmLocalOperations(
+      pendingOperations.filter((operation) => acknowledgedIds.has(operation.id)),
+    );
     return result;
   }
 

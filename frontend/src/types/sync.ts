@@ -5,6 +5,8 @@ export interface SyncPayload {
   deviceId: string;
   operations: Operation[];
   snapshots: DocumentSnapshot[];
+  /** IDs acknowledged by the server; internal transport metadata, not sent over HTTP. */
+  acknowledgedOperationIds?: string[];
 }
 
 export interface SyncResult {

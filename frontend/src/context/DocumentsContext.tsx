@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react";
 import type { Document } from "../types/document";
 import type { SyncPayload, SyncResult } from "../types/sync";
 import type { SyncStatus } from "../lib/syncCoordinator";
@@ -438,6 +438,19 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
     return promise;
   }, [appendActivity, sync]);
+
+  const previousOnlineState = useRef(isOnline);
+  useEffect(() => {
+    const recoveredConnection = previousOnlineState.current === false && isOnline === true;
+    previousOnlineState.current = isOnline;
+
+    if (recoveredConnection) {
+      void syncDocuments().catch(() => {
+        // The existing sync activity/state records the failure; pending
+        // operations remain available for a later manual or online transition.
+      });
+    }
+  }, [isOnline, syncDocuments]);
 
   const getSyncStatus = useCallback((): SyncStatus => {
     return getCoordinatorSyncStatus();

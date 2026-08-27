@@ -37,6 +37,7 @@ export class HttpSyncTransport {
             deviceId,
             operations: allOperations.map(this.#toOperation),
             snapshots: syncResult.snapshots ?? [],
+            acknowledgedOperationIds: syncResult.acceptedOperations.map((operation) => operation.id),
         };
     }
     #isSyncResult(value) {

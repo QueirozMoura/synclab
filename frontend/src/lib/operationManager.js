@@ -159,6 +159,9 @@ export class OperationManager {
     hasPendingOperations() {
         return this.pendingOperationIds.size > 0;
     }
+    getPendingOperations() {
+        return orderOperations(this.getOperations().filter((operation) => this.pendingOperationIds.has(operation.id)));
+    }
     rebuildPendingOperationIds() {
         this.pendingOperationIds.clear();
         for (const operation of this.operationLog.getAll()) {
@@ -251,14 +254,38 @@ export class OperationManager {
         }
         const localOperations = this.getOperations();
         const localSnapshots = await getAllSnapshots();
-        const localPayload = {
-            deviceId: this.deviceId,
-            operations: localOperations,
-            snapshots: localSnapshots,
-        };
+        const localPayload = { deviceId: this.deviceId, operations: localOperations, snapshots: localSnapshots };
         const remotePayload = await this.syncTransport.synchronize(localPayload);
         const result = await this.synchronize(remotePayload);
         await this.confirmLocalOperations(localOperations);
+        return result;
+    }
+    async syncPendingOperations() {
+        if (!this.syncTransport) {
+            throw new Error("SyncTransport not configured. Call setTransport() before syncPendingOperations().");
+        }
+        const pendingOperations = this.getPendingOperations();
+        if (pendingOperations.length === 0) {
+            return { acceptedOperations: [], missingOperations: [], snapshots: [] };
+        }
+        const localSnapshots = await getAllSnapshots();
+        const localPayload = {
+            deviceId: this.deviceId,
+            operations: pendingOperations,
+            snapshots: localSnapshots,
+        };
+        const remotePayload = await this.syncTransport.synchronize(localPayload);
+        const pendingIds = new Set(pendingOperations.map((operation) => operation.id));
+        const acknowledgedIds = new Set(remotePayload.acknowledgedOperationIds?.filter((id) => pendingIds.has(id)) ?? []);
+        const mergePayload = {
+            ...remotePayload,
+            operations: [
+                ...remotePayload.operations,
+                ...pendingOperations.filter((operation) => !remotePayload.operations.some((remote) => remote.id === operation.id)),
+            ],
+        };
+        const result = await this.synchronize(mergePayload);
+        await this.confirmLocalOperations(pendingOperations.filter((operation) => acknowledgedIds.has(operation.id)));
         return result;
     }
     async confirmLocalOperations(operations) {

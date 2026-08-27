@@ -47,8 +47,10 @@ export class SyncCoordinator {
     let syncPromise: Promise<SyncResult>;
     try {
       syncPromise = this.transport
-        ? this.operationManager.syncWithTransport()
-        : Promise.reject(
+      ? (this.operationManager as OperationManager & {
+        syncPendingOperations?: () => Promise<SyncResult>;
+      }).syncPendingOperations?.() ?? this.operationManager.syncWithTransport()
+      : Promise.reject(
             new Error(
               "SyncTransport not configured. Call setTransport() before sync().",
             ),

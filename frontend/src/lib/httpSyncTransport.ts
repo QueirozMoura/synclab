@@ -64,6 +64,7 @@ export class HttpSyncTransport implements SyncTransport {
       deviceId,
       operations: allOperations.map(this.#toOperation),
       snapshots: syncResult.snapshots ?? [],
+      acknowledgedOperationIds: syncResult.acceptedOperations.map((operation) => operation.id),
     };
   }
 
