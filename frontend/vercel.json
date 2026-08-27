@@ -5,6 +5,10 @@
       "destination": "https://synclab-sali.onrender.com/auth/:path*"
     },
     {
+      "source": "/sync",
+      "destination": "https://synclab-sali.onrender.com/sync"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
