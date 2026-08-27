@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { VectorClock } from "../src/lib/vectorClock";
 import type { Operation } from "../src/types/operation";
+import type { SyncPayload } from "../src/types/sync";
+import type { SyncTransport } from "../src/types/syncTransport";
 
 const persisted: Operation[] = [];
 
@@ -139,6 +141,41 @@ describe("OperationManager pending operations", () => {
 
     expect(reloaded.getPendingOperations().map((item) => item.id)).toEqual([created.id, title.id]);
     expect(reloaded.hasPendingOperations()).toBe(true);
+  });
+
+  it("skips a legacy blank UPDATE_TITLE while synchronizing valid pending operations", async () => {
+    const invalidTitle: Operation = {
+      ...operation("legacy-empty-title", "doc-1"),
+      type: "UPDATE_TITLE",
+      payload: { type: "UPDATE_TITLE", title: "   " },
+    };
+    const validContent = operation("valid-content", "doc-1");
+    persisted.push(invalidTitle, validContent);
+
+    const synchronize = vi.fn(async (payload: SyncPayload) => ({
+      deviceId: payload.deviceId,
+      operations: payload.operations,
+      snapshots: [],
+      acknowledgedOperationIds: payload.operations.map((operation) => operation.id),
+    }));
+    const transport: SyncTransport = { synchronize };
+    const manager = new OperationManager();
+    manager.setSyncTransport(transport);
+    await manager.initialize();
+
+    await expect(manager.syncPendingOperations()).resolves.toEqual({
+      acceptedOperations: [],
+      missingOperations: [],
+      snapshots: [],
+    });
+
+    expect(synchronize).toHaveBeenCalledTimes(1);
+    expect(synchronize.mock.calls[0][0].operations.map((item) => item.id)).toEqual([
+      validContent.id,
+    ]);
+    expect(persisted.find((item) => item.id === invalidTitle.id)?.confirmedAt).toBeTypeOf("number");
+    expect(persisted.find((item) => item.id === validContent.id)?.confirmedAt).toBeTypeOf("number");
+    expect(manager.hasPendingOperations()).toBe(false);
   });
 
   it("rebuilds legacy and multiple-document pending operations deterministically", async () => {

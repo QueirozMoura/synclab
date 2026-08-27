@@ -21,6 +21,16 @@ const SNAPSHOT_INTERVAL = 10;
 
 type SerializedVectorClock = ClockMap | { clock: ClockMap };
 
+function isValidSyncOperation(operation: Operation): boolean {
+  if (operation.type !== "UPDATE_TITLE") {
+    return true;
+  }
+
+  return operation.payload.type === "UPDATE_TITLE"
+    && typeof operation.payload.title === "string"
+    && operation.payload.title.trim().length > 0;
+}
+
 function hydrateVectorClock(value: VectorClock | SerializedVectorClock): VectorClock {
   if (value instanceof VectorClock) {
     return VectorClock.from(value.toMap());
@@ -258,7 +268,7 @@ export class OperationManager {
   }
 
   async synchronize(remotePayload: SyncPayload): Promise<SyncResult> {
-    const localOperations = this.getOperations();
+    const localOperations = this.getOperations().filter(isValidSyncOperation);
     const localSnapshots = await getAllSnapshots();
     const syncEngine = new SyncEngine();
     const { operations, result } = syncEngine.synchronize(localOperations, localSnapshots, remotePayload);
@@ -318,15 +328,22 @@ export class OperationManager {
     }
 
     const localOperations = this.getOperations();
+    const invalidLocalOperations = localOperations.filter(
+      (operation) => !isValidSyncOperation(operation),
+    );
+    if (invalidLocalOperations.length > 0) {
+      await this.confirmLocalOperations(invalidLocalOperations);
+    }
+    const validLocalOperations = localOperations.filter(isValidSyncOperation);
     const localSnapshots = await getAllSnapshots();
     const localPayload: SyncPayload = {
       deviceId: this.deviceId,
-      operations: localOperations,
+      operations: validLocalOperations,
       snapshots: localSnapshots,
     };
     const remotePayload = await this.syncTransport.synchronize(localPayload);
     const result = await this.synchronize(remotePayload);
-    await this.confirmLocalOperations(localOperations);
+    await this.confirmLocalOperations(validLocalOperations);
     return result;
   }
 
@@ -336,7 +353,18 @@ export class OperationManager {
     }
 
     const pendingOperations = this.getPendingOperations();
-    if (pendingOperations.length === 0) {
+    const invalidPendingOperations = pendingOperations.filter(
+      (operation) => !isValidSyncOperation(operation),
+    );
+    if (invalidPendingOperations.length > 0) {
+      // Legacy invalid operations must not be sent to /sync. Keep their records
+      // locally for history, but close only those queue entries so valid ones
+      // can continue through the same synchronization attempt.
+      await this.confirmLocalOperations(invalidPendingOperations);
+    }
+
+    const validPendingOperations = pendingOperations.filter(isValidSyncOperation);
+    if (validPendingOperations.length === 0) {
       return {
         acceptedOperations: [],
         missingOperations: [],
@@ -347,12 +375,12 @@ export class OperationManager {
     const localSnapshots = await getAllSnapshots();
     const localPayload: SyncPayload = {
       deviceId: this.deviceId,
-      operations: pendingOperations,
+      operations: validPendingOperations,
       snapshots: localSnapshots,
     };
 
     const remotePayload = await this.syncTransport.synchronize(localPayload);
-    const pendingIds = new Set(pendingOperations.map((operation) => operation.id));
+    const pendingIds = new Set(validPendingOperations.map((operation) => operation.id));
     const acknowledgedIds = new Set(
       remotePayload.acknowledgedOperationIds?.filter((id) => pendingIds.has(id)) ?? [],
     );
@@ -363,14 +391,14 @@ export class OperationManager {
       ...remotePayload,
       operations: [
         ...remotePayload.operations,
-        ...pendingOperations.filter(
+        ...validPendingOperations.filter(
           (operation) => !remotePayload.operations.some((remote) => remote.id === operation.id),
         ),
       ],
     };
     const result = await this.synchronize(mergePayload);
     await this.confirmLocalOperations(
-      pendingOperations.filter((operation) => acknowledgedIds.has(operation.id)),
+      validPendingOperations.filter((operation) => acknowledgedIds.has(operation.id)),
     );
     return result;
   }
