@@ -6,7 +6,9 @@ import { AuthProvider } from "./context/AuthContext";
 import { OperationManagerProvider } from "./context/OperationManagerContext";
 import { HttpSyncTransport } from "./lib/httpSyncTransport";
 
-const syncApiBaseUrl = import.meta.env.VITE_SYNC_API_BASE_URL ?? "http://localhost:3000";
+const syncApiBaseUrl = import.meta.env.PROD
+  ? "/"
+  : (import.meta.env.VITE_SYNC_API_BASE_URL ?? "http://localhost:3000");
 const appSyncTransport = new HttpSyncTransport(syncApiBaseUrl);
 
 function App() {
