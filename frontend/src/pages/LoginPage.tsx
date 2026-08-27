@@ -2,7 +2,9 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-const authApiBaseUrl = import.meta.env.VITE_AUTH_API_BASE_URL ?? "http://localhost:3000";
+const authApiBaseUrl = import.meta.env.PROD
+  ? ""
+  : (import.meta.env.VITE_AUTH_API_BASE_URL ?? "http://localhost:3000");
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate(); const location = useLocation(); const { refreshUser } = useAuth();

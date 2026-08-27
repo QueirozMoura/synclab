@@ -4,7 +4,9 @@ import { AuthContext, useAuth, type AuthUser } from "./authContext";
 // eslint-disable-next-line react-refresh/only-export-components
 export { useAuth };
 
-const authApiBaseUrl = import.meta.env.VITE_AUTH_API_BASE_URL ?? "http://localhost:3000";
+const authApiBaseUrl = import.meta.env.PROD
+  ? ""
+  : (import.meta.env.VITE_AUTH_API_BASE_URL ?? "http://localhost:3000");
 
 async function authFetch(
   url: string,
