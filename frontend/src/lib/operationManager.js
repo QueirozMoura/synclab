@@ -286,7 +286,13 @@ export class OperationManager {
         }
         const validPendingOperations = pendingOperations.filter(isValidSyncOperation);
         if (validPendingOperations.length === 0) {
-            return { acceptedOperations: [], missingOperations: [], snapshots: [] };
+            return {
+                acceptedOperations: [],
+                missingOperations: [],
+                snapshots: [],
+                sentOperationIds: [],
+                receivedOperationIds: [],
+            };
         }
         const localSnapshots = await getAllSnapshots();
         const localPayload = {
