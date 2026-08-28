@@ -107,11 +107,11 @@ const SyncOperationGroup: React.FC<SyncOperationGroupProps> = ({
   }, [operations]);
 
   return (
-  <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
+  <div className="activity-surface rounded-2xl p-6">
     <h3 className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--text-secondary)]">{title}</h3>
     <div className="mt-4 space-y-5">
       {groupedOperations.map(([documentId, grouped]) => (
-        <section key={documentId} className="rounded-xl border-[var(--border)] p-4" data-testid={`document-group-${documentId}`}>
+        <section key={documentId} className="activity-surface rounded-xl p-4" data-testid={`document-group-${documentId}`}>
           <div className="flex items-baseline justify-between gap-3">
             <h4 className="font-medium">{documentId === "__unidentified__" ? "Documento não identificado" : getDocumentTitle(documentId) ?? "Documento indisponível"}</h4>
             <span className="text-xs text-[var(--text-secondary)]">{grouped.length} {grouped.length === 1 ? "alteração" : "alterações"}</span>
@@ -120,7 +120,7 @@ const SyncOperationGroup: React.FC<SyncOperationGroupProps> = ({
       {grouped.map((operation) => {
         const isExpanded = expandedOperationId === operation.id;
         return (
-          <div key={operation.id} className="rounded-xl border-[var(--border)] p-4">
+          <div key={operation.id} className="activity-surface rounded-xl p-4">
             <button
               type="button"
               className="w-full text-left"
@@ -317,54 +317,68 @@ export const ActivityDetailsPage: React.FC = () => {
   const titleChanged = Boolean(currentDocument && historicalVersionState && currentDocument.title !== historicalVersionState.title);
   const contentChanged = Boolean(currentDocument && historicalVersionState && currentDocument.content !== historicalVersionState.content);
   return (
-    <main className="min-h-screen bg-[var(--background)] px-6 py-8 text-[var(--text-primary)]">
-      <div className="mx-auto max-w-4xl">
-        <Link to="/app" className="dashboard-text-button">
-          ← Voltar para atividade
-        </Link>
-        <header className="mt-10">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-[var(--primary)]">
-            Alteração
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold">{title}</h1>
-          <p className="mt-3 text-sm text-[var(--text-secondary)]">{date}</p>
-          {relatedOperationIds.length > 0 && (
-            <p className="mt-2 text-xs text-[var(--text-secondary)]">
-              Operação relacionada: {relatedOperationIds.length}
-            </p>
-          )}
+    <main className="activity-detail-shell min-h-screen px-4 py-6 text-[var(--text-primary)] sm:px-6 sm:py-8">
+      <div className="activity-detail-content mx-auto max-w-5xl">
+        <nav className="flex flex-wrap items-center justify-between gap-4" aria-label="Navegação estrutural">
+          <Link to="/app" className="activity-back dashboard-text-button" aria-label="Voltar para atividade">
+            <span aria-hidden="true">←</span> Voltar para atividade
+          </Link>
+          <span className="activity-breadcrumb">Atividade <span aria-hidden="true">/</span> Histórico <span aria-hidden="true">/</span> Alteração</span>
+        </nav>
+        <header className="activity-hero activity-section mt-8 overflow-hidden rounded-3xl p-6 sm:mt-10 sm:p-9">
+          <div className="relative z-10 flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex gap-4 sm:gap-5">
+              <div className="activity-icon" aria-hidden="true">✎</div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="activity-eyebrow">Alteração registrada</p>
+                  <span className="activity-pill">DOCUMENT_UPDATED</span>
+                </div>
+                <h1 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
+                <p className="mt-3 text-sm text-[var(--text-secondary)]">{date}</p>
+              </div>
+            </div>
+            {relatedOperationIds.length > 0 && (
+              <div className="shrink-0 rounded-xl border-[var(--border)] bg-black/10 px-4 py-3 text-sm">
+                <p className="activity-label">Operação relacionada</p>
+                <p className="mt-1 font-mono text-[var(--primary)]">#{relatedOperationIds.length}</p>
+              </div>
+            )}
+          </div>
+          <div className="relative z-10 mt-8 flex items-center gap-3 border-t border-white/10 pt-5 text-sm text-[var(--text-secondary)]">
+            <span className="activity-document-icon h-8 w-8 text-sm" aria-hidden="true">▤</span>
+            <span>Documento relacionado</span><strong className="text-[var(--text-primary)]">{event.documentTitle ?? "Documento"}</strong>
+          </div>
         </header>
-        <section className="mt-10">
-          <h2 className="text-lg font-semibold">Resumo</h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
-              <p className="text-3xl font-semibold">1</p>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
+        <section className="activity-section mt-12">
+          <div className="flex items-end justify-between gap-4"><div><p className="activity-eyebrow">Visão geral</p><h2 className="mt-1 text-xl font-semibold">Resumo</h2></div><span className="activity-label">Rastreabilidade local</span></div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="activity-surface activity-metric rounded-2xl p-6">
+              <p className="activity-label">Delta detectado</p>
+              <p className="activity-metric-number mt-3">1</p>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
                 alteração
               </p>
             </div>
-            <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
-              <p className="text-3xl font-semibold">1</p>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                documento
-              </p>
+            <div className="activity-surface activity-metric rounded-2xl p-6">
+              <p className="activity-label">Entidade afetada</p>
+              <p className="activity-metric-number mt-3">1</p>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">documento</p>
             </div>
           </div>
         </section>
-        <section className="mt-10">
-          <h2 className="text-lg font-semibold">Documento</h2>
-          <div className="mt-4 rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6 transition-colors hover:border-[var(--outline-variant)]">
-            <p className="text-lg font-medium">
-              {event.documentTitle ?? "Documento"}
-            </p>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">
-              Última alteração: {date}
-            </p>
+        <section className="activity-section mt-12">
+          <p className="activity-eyebrow">Entidade rastreada</p><h2 className="mt-1 text-xl font-semibold">Documento</h2>
+          <div className="activity-surface activity-document mt-5 rounded-2xl p-5 transition-all sm:p-6">
+            <span className="activity-document-icon text-xl" aria-hidden="true">▤</span>
+            <div className="min-w-0"><p className="truncate text-lg font-semibold">{event.documentTitle ?? "Documento"}</p>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">Última alteração: {date}</p>
+            </div>
           </div>
         </section>
         {event.type === "SYNC_COMPLETED" && (syncChanges.sent.length + syncChanges.received.length + syncChanges.all.length > 0) && (
-          <section className="mt-10" aria-live="polite">
-            <h2 className="text-lg font-semibold">Sincronização</h2>
+          <section className="activity-section mt-12" aria-live="polite">
+            <p className="activity-eyebrow">Fluxo offline-first</p><h2 className="mt-1 text-xl font-semibold">Sincronização</h2>
             <p className="mt-2 text-sm text-[var(--text-secondary)]">
               {syncChanges.sent.length + syncChanges.received.length + syncChanges.all.length} alterações relacionadas a esta sincronização.
             </p>
@@ -381,21 +395,21 @@ export const ActivityDetailsPage: React.FC = () => {
           </section>
         )}
         {historicalVersionState && (
-          <section className="mt-10" aria-live="polite">
-            <h2 className="text-lg font-semibold">Versão deste momento</h2>
-            <div className="mt-4 rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
+          <section className="activity-section mt-12" aria-live="polite">
+            <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="activity-eyebrow">Snapshot histórico</p><h2 className="mt-1 text-xl font-semibold">Versão deste momento</h2></div><span className="activity-pill">congelada · {date}</span></div>
+            <div className="activity-surface activity-snapshot mt-5 rounded-2xl p-5 sm:p-6">
               <p className="text-sm text-[var(--text-secondary)]">
                 Estado do documento reconstruído no momento desta atividade ({date}).
               </p>
               <p className="mt-4 text-lg font-medium">{historicalVersionState.title}</p>
-              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl border-[var(--border)] bg-[var(--background)] p-4 text-sm text-[var(--text-secondary)]">
+              <pre className="activity-code mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl border p-4 text-sm text-[var(--text-secondary)]">
                 {historicalVersionState.content}
               </pre>
               {historicalVersionState.deleted && (
                 <p className="mt-3 text-sm text-[var(--text-secondary)]">Documento excluído neste momento.</p>
               )}
               {canRestore && (
-                <button type="button" className="dashboard-text-button mt-5 rounded-lg border-[var(--border)] px-4 py-2 text-sm" onClick={restoreVersion} disabled={isRestoring}>
+                <button type="button" className="activity-restore dashboard-text-button mt-5 rounded-lg px-4 py-2 text-sm" onClick={restoreVersion} disabled={isRestoring} aria-label={isRestoring ? "Restaurando esta versão" : "Restaurar esta versão"}>
                   {isRestoring ? "Restaurando..." : "Restaurar esta versão"}
                 </button>
               )}
@@ -403,12 +417,12 @@ export const ActivityDetailsPage: React.FC = () => {
                 <p className="mt-4 text-sm text-[var(--text-secondary)]" role="status">{restorationMessage}</p>
               )}
             </div>
-            <div className="mt-4 rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
+            <div className="activity-surface mt-4 rounded-2xl p-6">
               <p className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--text-secondary)]">Versão atual</p>
               {currentDocument ? (
                 <>
                   <p className="mt-3 text-lg font-medium">{currentDocument.title}</p>
-                  <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl border-[var(--border)] bg-[var(--background)] p-4 text-sm text-[var(--text-secondary)]">
+                  <pre className="activity-code mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl border p-4 text-sm text-[var(--text-secondary)]">
                     {currentDocument.content}
                   </pre>
                   <div className="mt-4 space-y-2 text-sm text-[var(--text-secondary)]">
@@ -423,14 +437,14 @@ export const ActivityDetailsPage: React.FC = () => {
           </section>
         )}
         {event.operationId && (
-          <section className="mt-10" aria-live="polite">
-            <h2 className="text-lg font-semibold">Histórico</h2>
+          <section className="activity-section mt-12" aria-live="polite">
+            <div className="flex items-end justify-between gap-3"><div><p className="activity-eyebrow">Linha do tempo</p><h2 className="mt-1 text-xl font-semibold">Histórico</h2></div><span className="activity-label">Before → After</span></div>
             {isHistoryLoading && <p className="mt-4 text-sm text-[var(--text-secondary)]">Carregando histórico…</p>}
             {!isHistoryLoading && historicalResult?.status === "success" && (
               <div className="mt-4 space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
-                    <p className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--text-secondary)]">Before</p>
+                  <div className="activity-surface activity-diff-panel activity-diff-removed rounded-2xl p-6">
+                    <p className="activity-label">Before · estado anterior</p>
                     {historicalResult.before ? (
                       <>
                         <p className="mt-3 text-xs font-medium uppercase tracking-[0.1em] text-[var(--text-secondary)]">Título</p>
@@ -442,8 +456,8 @@ export const ActivityDetailsPage: React.FC = () => {
                       <p className="mt-3 text-sm text-[var(--text-secondary)]">Documento inexistente antes da operação.</p>
                     )}
                   </div>
-                  <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
-                    <p className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--text-secondary)]">After</p>
+                  <div className="activity-surface activity-diff-panel activity-diff-added rounded-2xl p-6">
+                    <p className="activity-label">After · estado resultante</p>
                     {historicalResult.after ? (
                       <>
                         <p className="mt-3 text-xs font-medium uppercase tracking-[0.1em] text-[var(--text-secondary)]">Título</p>
@@ -456,7 +470,7 @@ export const ActivityDetailsPage: React.FC = () => {
                     )}
                   </div>
                 </div>
-                <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
+                <div className="activity-surface rounded-2xl p-6">
                   {historicalResult.operation.type === "UPDATE_TITLE" && (
                     <p className="text-sm"><span className="font-medium">Título alterado:</span> {historicalResult.before?.title ?? "(inexistente)"} → {historicalResult.after?.title ?? "(inexistente)"}</p>
                   )}
@@ -464,13 +478,13 @@ export const ActivityDetailsPage: React.FC = () => {
                     <div className="text-sm">
                       <p className="font-medium">Conteúdo alterado</p>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <div>
-                          <p className="mb-1 text-xs font-medium uppercase tracking-[0.1em] text-red-400">− Removido</p>
-                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-xl border-red-500/30 bg-red-500/10 p-3 text-[var(--text-secondary)]">{historicalResult.before?.content ?? "(inexistente)"}</pre>
+                        <div className="activity-diff-panel activity-diff-removed rounded-xl border p-3">
+                          <p className="mb-2 text-xs font-bold uppercase tracking-[0.1em]">− Removido</p>
+                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words text-[var(--text-secondary)]">{historicalResult.before?.content ?? "(inexistente)"}</pre>
                         </div>
-                        <div>
-                          <p className="mb-1 text-xs font-medium uppercase tracking-[0.1em] text-emerald-400">+ Adicionado</p>
-                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-xl border-emerald-500/30 bg-emerald-500/10 p-3 text-[var(--text-secondary)]">{historicalResult.after?.content ?? "(inexistente)"}</pre>
+                        <div className="activity-diff-panel activity-diff-added rounded-xl border p-3">
+                          <p className="mb-2 text-xs font-bold uppercase tracking-[0.1em]">+ Adicionado</p>
+                          <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words text-[var(--text-secondary)]">{historicalResult.after?.content ?? "(inexistente)"}</pre>
                         </div>
                       </div>
                     </div>

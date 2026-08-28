@@ -1516,3 +1516,51 @@ html[data-theme="light"] .editor-toolbar-surface { border-color:rgba(27,35,50,.1
 html[data-theme="light"] .editor-toolbar-button { color:#626b7b; }
 html[data-theme="light"] .editor-toolbar-button:hover,html[data-theme="light"] .editor-toolbar-button.is-hovered { border-color:rgba(76,79,190,.16); background:rgba(76,79,190,.09); color:#31347e; box-shadow:0 4px 12px rgba(34,43,60,.08); }
 html[data-theme="light"] .editor-toolbar-divider { background:rgba(27,35,50,.15); }
+
+
+/* Activity detail: a focused version-control workspace */
+.activity-detail-shell {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(circle at 8% 0%, rgba(128, 131, 255, .12), transparent 30rem), radial-gradient(circle at 92% 24%, rgba(40, 190, 175, .06), transparent 24rem), var(--background);
+}
+.activity-detail-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .22;
+  background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+}
+.activity-detail-content { position: relative; }
+.activity-breadcrumb { color: var(--outline); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; }
+.activity-back { display: inline-flex; align-items: center; gap: .55rem; color: var(--text-secondary); transition: color 160ms ease, transform 160ms ease; }
+.activity-back:hover { color: var(--primary); transform: translateX(-3px); }
+.activity-hero { position: relative; border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border)); background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, var(--surface)), color-mix(in srgb, var(--surface) 88%, transparent)); box-shadow: 0 24px 70px rgba(0,0,0,.24), inset 0 1px rgba(255,255,255,.06); }
+.activity-hero::after { content: ""; position: absolute; width: 14rem; height: 14rem; right: -5rem; top: -6rem; border-radius: 999px; background: color-mix(in srgb, var(--primary) 16%, transparent); filter: blur(48px); pointer-events: none; }
+.activity-eyebrow { color: var(--primary); font-size: .7rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+.activity-icon { display: grid; place-items: center; width: 3.25rem; height: 3.25rem; border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent); border-radius: 1rem; color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); font-size: 1.35rem; box-shadow: 0 0 28px color-mix(in srgb, var(--primary) 15%, transparent); }
+.activity-pill { display: inline-flex; align-items: center; border: 1px solid color-mix(in srgb, var(--primary) 28%, transparent); border-radius: 999px; padding: .35rem .7rem; color: var(--primary); background: color-mix(in srgb, var(--primary) 9%, transparent); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.activity-section { animation: activity-in 360ms ease both; }
+.activity-surface { border: 1px solid color-mix(in srgb, var(--border) 90%, transparent); background: linear-gradient(145deg, color-mix(in srgb, var(--surface) 96%, transparent), color-mix(in srgb, var(--surface-lowest) 92%, transparent)); box-shadow: 0 12px 34px rgba(0,0,0,.14), inset 0 1px rgba(255,255,255,.025); }
+.activity-surface:hover { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); }
+.activity-label { color: var(--outline); font-size: .68rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.activity-metric { transition: transform 180ms ease, border-color 180ms ease; }
+.activity-metric:hover { transform: translateY(-3px); }
+.activity-metric-number { font-variant-numeric: tabular-nums; font-size: 2.35rem; line-height: 1; font-weight: 700; color: var(--text-primary); }
+.activity-document { display: flex; align-items: center; gap: 1rem; }
+.activity-document-icon { display: grid; place-items: center; flex: 0 0 auto; width: 2.75rem; height: 2.75rem; border-radius: .85rem; color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--surface)); }
+.activity-code { border-color: color-mix(in srgb, var(--outline-variant) 55%, transparent); background: color-mix(in srgb, var(--background) 78%, #111827); font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; line-height: 1.7; }
+.activity-snapshot { border-color: color-mix(in srgb, #36d399 28%, var(--border)); }
+.activity-restore { display: inline-flex; align-items: center; gap: .5rem; border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border)); background: color-mix(in srgb, var(--primary) 13%, var(--surface)); color: var(--primary); box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 10%, transparent); transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease; }
+.activity-restore:hover:not(:disabled), .activity-restore:focus-visible { transform: translateY(-2px); background: color-mix(in srgb, var(--primary) 21%, var(--surface)); box-shadow: 0 12px 30px color-mix(in srgb, var(--primary) 18%, transparent); }
+.activity-restore:disabled { cursor: wait; opacity: .65; }
+.activity-diff-panel { position: relative; overflow: hidden; }
+.activity-diff-panel::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: currentColor; opacity: .7; }
+.activity-diff-removed { color: #ff9c93; border-color: rgba(255, 112, 100, .22); background: rgba(255, 82, 70, .07); }
+.activity-diff-added { color: #79e5b0; border-color: rgba(74, 222, 128, .22); background: rgba(74, 222, 128, .07); }
+.activity-status { display: flex; align-items: center; gap: .55rem; border-radius: .75rem; padding: .7rem .85rem; background: color-mix(in srgb, var(--success) 8%, var(--surface)); color: var(--text-secondary); }
+@media (max-width: 640px) { .activity-detail-shell { padding-left: 1rem; padding-right: 1rem; } .activity-hero { padding: 1.25rem; } .activity-hero h1 { font-size: 1.75rem; line-height: 1.15; } .activity-code { font-size: .76rem; } }
+@media (prefers-reduced-motion: reduce) { .activity-section, .activity-metric, .activity-back, .activity-restore { animation: none; transition: none; } }
