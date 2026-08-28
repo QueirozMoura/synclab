@@ -7,7 +7,7 @@ import { useOperationManager } from "../hooks/useOperationManager";
 
 export const ActivityDetailsPage: React.FC = () => {
   const { activityId } = useParams<{ activityId: string }>();
-  const { activity } = useDocuments();
+  const { activity, getDocument } = useDocuments();
   const { getOperationsForDocument } = useOperationManager();
   const event = activity.find((item) => item.id === activityId);
   const [historicalState, setHistoricalState] = useState<{
@@ -94,6 +94,9 @@ export const ActivityDetailsPage: React.FC = () => {
   const historicalVersionState = historicalVersion && historicalVersion.operationId === operationId
     ? historicalVersion.state
     : null;
+  const currentDocument = documentId ? getDocument(documentId) : undefined;
+  const titleChanged = Boolean(currentDocument && historicalVersionState && currentDocument.title !== historicalVersionState.title);
+  const contentChanged = Boolean(currentDocument && historicalVersionState && currentDocument.content !== historicalVersionState.content);
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-8 text-[var(--text-primary)]">
       <div className="mx-auto max-w-4xl">
@@ -153,6 +156,23 @@ export const ActivityDetailsPage: React.FC = () => {
               </pre>
               {historicalVersionState.deleted && (
                 <p className="mt-3 text-sm text-[var(--text-secondary)]">Documento excluído neste momento.</p>
+              )}
+            </div>
+            <div className="mt-4 rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
+              <p className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--text-secondary)]">Versão atual</p>
+              {currentDocument ? (
+                <>
+                  <p className="mt-3 text-lg font-medium">{currentDocument.title}</p>
+                  <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl border-[var(--border)] bg-[var(--background)] p-4 text-sm text-[var(--text-secondary)]">
+                    {currentDocument.content}
+                  </pre>
+                  <div className="mt-4 space-y-2 text-sm text-[var(--text-secondary)]">
+                    <p>{titleChanged ? "O título foi alterado posteriormente." : "Não houve alteração posterior no título."}</p>
+                    <p>{contentChanged ? "O conteúdo foi alterado posteriormente." : "Não houve alteração posterior no conteúdo."}</p>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-3 text-sm text-[var(--text-secondary)]">A versão atual não está disponível.</p>
               )}
             </div>
           </section>

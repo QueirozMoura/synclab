@@ -8,13 +8,23 @@ const state = vi.hoisted(() => ({
   activity: [] as Array<Record<string, unknown>>,
   operations: [] as Operation[],
   reconstruct: vi.fn(),
+  currentDocument: {
+    id: "doc-1",
+    title: "Atual",
+    content: "Conteúdo atual",
+    createdAt: "",
+    updatedAt: "",
+  } as Record<string, string>,
 }));
 
 const getOperationsForDocument = vi.hoisted(() =>
   vi.fn(() => state.operations),
 );
 vi.mock("../src/hooks/useDocuments", () => ({
-  useDocuments: () => ({ activity: state.activity }),
+  useDocuments: () => ({
+    activity: state.activity,
+    getDocument: () => state.currentDocument,
+  }),
 }));
 vi.mock("../src/hooks/useOperationManager", () => ({
   useOperationManager: () => ({ getOperationsForDocument }),
@@ -79,6 +89,13 @@ const documentState = (
 describe("ActivityDetailsPage - versão histórica", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    state.currentDocument = {
+      id: "doc-1",
+      title: "Atual",
+      content: "Conteúdo atual",
+      createdAt: "",
+      updatedAt: "",
+    };
     state.activity = [
       {
         id: "activity-1",
@@ -158,6 +175,50 @@ describe("ActivityDetailsPage - versão histórica", () => {
     render(<ActivityDetailsPage />);
     expect(await screen.findByText("Conteúdo histórico")).toBeTruthy();
     expect(screen.queryByText("Conteúdo posterior")).toBeNull();
+  });
+
+  it("identifica diferenças entre título e conteúdo históricos e atuais", async () => {
+    const { ActivityDetailsPage } =
+      await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    await screen.findByText("Versão atual");
+    expect(
+      screen.getByText("O título foi alterado posteriormente."),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("O conteúdo foi alterado posteriormente."),
+    ).toBeTruthy();
+  });
+
+  it("indica quando não existem alterações posteriores", async () => {
+    state.currentDocument = {
+      id: "doc-1",
+      title: "Título histórico",
+      content: "Conteúdo inicial",
+      createdAt: "",
+      updatedAt: "",
+    };
+    const { ActivityDetailsPage } =
+      await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    await screen.findByText("Versão atual");
+    expect(
+      screen.getAllByText("Não houve alteração posterior no título."),
+    ).toHaveLength(1);
+    expect(
+      screen.getAllByText("Não houve alteração posterior no conteúdo."),
+    ).toHaveLength(1);
+  });
+
+  it("preserva a versão histórica quando o documento atual não existe", async () => {
+    state.currentDocument = undefined as never;
+    const { ActivityDetailsPage } =
+      await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    await screen.findByText("Versão deste momento");
+    expect(
+      screen.getByText("A versão atual não está disponível."),
+    ).toBeTruthy();
   });
 
   it("não deixa uma operação posterior alterar a versão anterior", async () => {
