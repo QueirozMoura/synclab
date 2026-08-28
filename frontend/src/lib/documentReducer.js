@@ -8,7 +8,7 @@ function createEmptyDocument(id) {
         deleted: false,
     };
 }
-export function reduceOperations(initialDocument, operations) {
+export function reduceOperationsWithDeleted(initialDocument, operations) {
     let doc = initialDocument
         ? { ...initialDocument, deleted: false }
         : null;
@@ -51,8 +51,10 @@ export function reduceOperations(initialDocument, operations) {
             }
         }
     }
-    if (doc?.deleted) {
-        return null;
-    }
     return doc;
+}
+
+export function reduceOperations(initialDocument, operations) {
+    const doc = reduceOperationsWithDeleted(initialDocument, operations);
+    return doc?.deleted ? null : doc;
 }

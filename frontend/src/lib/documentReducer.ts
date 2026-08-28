@@ -16,7 +16,7 @@ function createEmptyDocument(id: string): ReducedDocument {
   };
 }
 
-export function reduceOperations(
+export function reduceOperationsWithDeleted(
   initialDocument: Document | null | undefined,
   operations: Operation[]
 ): ReducedDocument | null {
@@ -27,9 +27,7 @@ export function reduceOperations(
   for (const op of operations) {
     switch (op.type) {
       case "CREATE_DOCUMENT": {
-        if (!doc) {
-          doc = createEmptyDocument(op.documentId);
-        }
+        if (!doc) doc = createEmptyDocument(op.documentId);
         const payload = op.payload as OperationPayload & { type: "CREATE_DOCUMENT"; title: string; content: string };
         doc.title = payload.title;
         doc.content = payload.content;
@@ -38,7 +36,6 @@ export function reduceOperations(
         doc.deleted = false;
         break;
       }
-
       case "UPDATE_TITLE": {
         if (doc && !doc.deleted) {
           const payload = op.payload as OperationPayload & { type: "UPDATE_TITLE"; title: string };
@@ -47,7 +44,6 @@ export function reduceOperations(
         }
         break;
       }
-
       case "UPDATE_CONTENT": {
         if (doc && !doc.deleted) {
           const payload = op.payload as OperationPayload & { type: "UPDATE_CONTENT"; content: string };
@@ -56,7 +52,6 @@ export function reduceOperations(
         }
         break;
       }
-
       case "DELETE_DOCUMENT": {
         if (doc) {
           doc.deleted = true;
@@ -66,10 +61,13 @@ export function reduceOperations(
       }
     }
   }
-
-  if (doc?.deleted) {
-    return null;
-  }
-
   return doc;
+}
+
+export function reduceOperations(
+  initialDocument: Document | null | undefined,
+  operations: Operation[]
+): ReducedDocument | null {
+  const reduced = reduceOperationsWithDeleted(initialDocument, operations);
+  return reduced?.deleted ? null : reduced;
 }

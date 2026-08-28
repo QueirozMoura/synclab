@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { reconstructHistoricalState, type HistoricalStateResult } from "../lib/documentHistory";
+import { reconstructHistoricalDocument } from "../lib/documentHistoricalState";
 import { useDocuments } from "../hooks/useDocuments";
+import { useOperationManager } from "../hooks/useOperationManager";
 
 export const ActivityDetailsPage: React.FC = () => {
   const { activityId } = useParams<{ activityId: string }>();
   const { activity } = useDocuments();
+  const { getOperationsForDocument } = useOperationManager();
   const event = activity.find((item) => item.id === activityId);
   const [historicalState, setHistoricalState] = useState<{
     operationId: string;
@@ -39,6 +42,23 @@ export const ActivityDetailsPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [event, operationId]);
 
+  const documentId = event?.documentId;
+  const historicalVersion = React.useMemo(() => {
+    if (!documentId || !operationId) return null;
+    try {
+      const operations = getOperationsForDocument(documentId);
+      const operation = operations.find(({ id }) => id === operationId);
+      return {
+        operationId,
+        state: operation
+          ? reconstructHistoricalDocument(documentId, operations, { operationId })
+          : null,
+      };
+    } catch {
+      return { operationId, state: null };
+    }
+  }, [documentId, getOperationsForDocument, operationId]);
+
   if (
     !event ||
     (event.type !== "DOCUMENT_UPDATED" && event.type !== "DOCUMENT_CREATED")
@@ -71,7 +91,9 @@ export const ActivityDetailsPage: React.FC = () => {
   const relatedOperationIds =
     event.operationIds ?? (event.operationId ? [event.operationId] : []);
   const historicalResult = historicalState?.result;
-
+  const historicalVersionState = historicalVersion && historicalVersion.operationId === operationId
+    ? historicalVersion.state
+    : null;
   return (
     <main className="min-h-screen bg-[var(--background)] px-6 py-8 text-[var(--text-primary)]">
       <div className="mx-auto max-w-4xl">
@@ -118,6 +140,23 @@ export const ActivityDetailsPage: React.FC = () => {
             </p>
           </div>
         </section>
+        {historicalVersionState && (
+          <section className="mt-10" aria-live="polite">
+            <h2 className="text-lg font-semibold">Versão deste momento</h2>
+            <div className="mt-4 rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
+              <p className="text-sm text-[var(--text-secondary)]">
+                Estado do documento reconstruído no momento desta atividade ({date}).
+              </p>
+              <p className="mt-4 text-lg font-medium">{historicalVersionState.title}</p>
+              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-xl border-[var(--border)] bg-[var(--background)] p-4 text-sm text-[var(--text-secondary)]">
+                {historicalVersionState.content}
+              </pre>
+              {historicalVersionState.deleted && (
+                <p className="mt-3 text-sm text-[var(--text-secondary)]">Documento excluído neste momento.</p>
+              )}
+            </div>
+          </section>
+        )}
         {event.operationId && (
           <section className="mt-10" aria-live="polite">
             <h2 className="text-lg font-semibold">Histórico</h2>
