@@ -17,23 +17,57 @@ function friendlyOperationType(type: string): string {
   }
 }
 
-const SyncOperationGroup: React.FC<{ title: string; operations: Operation[] }> = ({ title, operations }) => (
+interface SyncOperationGroupProps {
+  title: string;
+  operations: Operation[];
+  expandedOperationId: string | null;
+  onSelect: (operationId: string) => void;
+}
+
+const SyncOperationGroup: React.FC<SyncOperationGroupProps> = ({
+  title,
+  operations,
+  expandedOperationId,
+  onSelect,
+}) => (
   <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
     <h3 className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--text-secondary)]">{title}</h3>
     <div className="mt-4 space-y-3">
-      {operations.map((operation) => (
-        <div key={operation.id} className="rounded-xl border-[var(--border)] p-4">
-          <p className="font-medium">{friendlyOperationType(operation.type)}</p>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">Documento: {operation.documentId}</p>
-          <p className="mt-1 text-xs text-[var(--text-secondary)]">{new Date(operation.timestamp).toLocaleString("pt-BR")}</p>
-          {operation.payload.type === "CREATE_DOCUMENT" && <>
-            <p className="mt-2 text-sm text-[var(--text-secondary)]">Título: {operation.payload.title}</p>
-            <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-secondary)]">Conteúdo: {operation.payload.content}</p>
-          </>}
-          {operation.payload.type === "UPDATE_TITLE" && <p className="mt-2 text-sm text-[var(--text-secondary)]">Título: {operation.payload.title}</p>}
-          {operation.payload.type === "UPDATE_CONTENT" && <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-secondary)]">Conteúdo: {operation.payload.content}</p>}
-        </div>
-      ))}
+      {operations.map((operation) => {
+        const isExpanded = expandedOperationId === operation.id;
+        return (
+          <div key={operation.id} className="rounded-xl border-[var(--border)] p-4">
+            <button
+              type="button"
+              className="w-full text-left"
+              aria-expanded={isExpanded}
+              aria-label={`Selecionar operação ${operation.id}`}
+              onClick={() => onSelect(operation.id)}
+            >
+              <p className="font-medium">{friendlyOperationType(operation.type)}</p>
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">Documento: {operation.documentId}</p>
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">{new Date(operation.timestamp).toLocaleString("pt-BR")}</p>
+            </button>
+            {isExpanded && (
+              <div className="mt-3 border-t border-[var(--border)] pt-3 text-sm text-[var(--text-secondary)]" data-testid={`operation-details-${operation.id}`}>
+                <p><span className="font-medium text-[var(--text-primary)]">Documento:</span> {operation.documentId}</p>
+                <p className="mt-1"><span className="font-medium text-[var(--text-primary)]">Tipo:</span> {operation.type}</p>
+                <p className="mt-1"><span className="font-medium text-[var(--text-primary)]">Data/hora:</span> {new Date(operation.timestamp).toLocaleString("pt-BR")}</p>
+                <p className="mt-1"><span className="font-medium text-[var(--text-primary)]">ID da operação:</span> {operation.id}</p>
+                <p className="mt-1"><span className="font-medium text-[var(--text-primary)]">deviceId:</span> {operation.deviceId}</p>
+                <p className="mt-2 font-medium text-[var(--text-primary)]">Resumo do payload</p>
+                {operation.payload.type === "UPDATE_TITLE" && <p className="mt-1">Título alterado: {operation.payload.title}</p>}
+                {operation.payload.type === "UPDATE_CONTENT" && <p className="mt-1 whitespace-pre-wrap">Conteúdo alterado: {operation.payload.content}</p>}
+                {operation.payload.type === "CREATE_DOCUMENT" && <>
+                  <p className="mt-1">Título inicial: {operation.payload.title}</p>
+                  <p className="mt-1 whitespace-pre-wrap">Conteúdo inicial: {operation.payload.content}</p>
+                </>}
+                {operation.payload.type === "DELETE_DOCUMENT" && <p className="mt-1">O documento foi excluído.</p>}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   </div>
 );
@@ -43,6 +77,7 @@ export const ActivityDetailsPage: React.FC = () => {
   const { activity, getDocument, updateDocument } = useDocuments();
   const { getOperations, getOperationsForDocument, createOperation } = useOperationManager();
   const [showSyncChanges, setShowSyncChanges] = useState(false);
+  const [expandedOperationId, setExpandedOperationId] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [restorationMessage, setRestorationMessage] = useState<string | null>(null);
   const event = activity.find((item) => item.id === activityId);
@@ -243,9 +278,9 @@ export const ActivityDetailsPage: React.FC = () => {
             </button>
             {showSyncChanges && (
               <div className="mt-4 space-y-6">
-                {syncChanges.sent.length > 0 && <SyncOperationGroup title="Alterações enviadas" operations={syncChanges.sent} />}
-                {syncChanges.received.length > 0 && <SyncOperationGroup title="Alterações recebidas" operations={syncChanges.received} />}
-                {syncChanges.all.length > 0 && <SyncOperationGroup title="Alterações processadas" operations={syncChanges.all} />}
+                {syncChanges.sent.length > 0 && <SyncOperationGroup title="Alterações enviadas" operations={syncChanges.sent} expandedOperationId={expandedOperationId} onSelect={(id) => setExpandedOperationId((current) => current === id ? null : id)} />}
+                {syncChanges.received.length > 0 && <SyncOperationGroup title="Alterações recebidas" operations={syncChanges.received} expandedOperationId={expandedOperationId} onSelect={(id) => setExpandedOperationId((current) => current === id ? null : id)} />}
+                {syncChanges.all.length > 0 && <SyncOperationGroup title="Alterações processadas" operations={syncChanges.all} expandedOperationId={expandedOperationId} onSelect={(id) => setExpandedOperationId((current) => current === id ? null : id)} />}
               </div>
             )}
           </section>

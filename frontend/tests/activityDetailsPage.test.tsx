@@ -1,5 +1,6 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import "@testing-library/jest-dom";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { VectorClock } from "../src/lib/vectorClock";
 import type { Operation } from "../src/types/operation";
@@ -353,5 +354,55 @@ describe("ActivityDetailsPage - versão histórica", () => {
     render(<ActivityDetailsPage />);
     expect(screen.queryByRole("button", { name: "Ver alterações →" })).toBeNull();
     expect(screen.queryByText("Alterações enviadas")).toBeNull();
+  });
+
+  it("seleciona uma operação e exibe seus detalhes somente leitura", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-1", "op-2", "op-3", "op-4"], sentOperationIds: ["op-1", "op-2"], receivedOperationIds: ["op-3", "op-4"] }];
+    state.operations = [
+      operation("op-1", "CREATE_DOCUMENT", { type: "CREATE_DOCUMENT", title: "Título inicial", content: "Conteúdo inicial" }, 1),
+      operation("op-2", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Título alterado" }, 2),
+      operation("op-3", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "Conteúdo alterado" }, 3),
+      operation("op-4", "DELETE_DOCUMENT", { type: "DELETE_DOCUMENT", deleted: true }, 4),
+    ];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver alterações →" }));
+    await screen.findByRole("button", { name: "Selecionar operação op-1" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Selecionar operação op-1" }));
+    const createDetails = await screen.findByTestId("operation-details-op-1");
+    expect(createDetails).toHaveTextContent("doc-1");
+    expect(createDetails).toHaveTextContent("CREATE_DOCUMENT");
+    expect(createDetails).toHaveTextContent("op-1");
+    expect(createDetails).toHaveTextContent("device-a");
+    expect(createDetails).toHaveTextContent("Título inicial");
+    expect(createDetails).toHaveTextContent("Conteúdo inicial");
+
+    fireEvent.click(screen.getByRole("button", { name: "Selecionar operação op-2" }));
+    await waitFor(() => expect(screen.queryByTestId("operation-details-op-1")).toBeNull());
+    const titleDetails = screen.getByTestId("operation-details-op-2");
+    expect(titleDetails).toHaveTextContent("Título alterado");
+    expect(titleDetails).toHaveTextContent("UPDATE_TITLE");
+
+    fireEvent.click(screen.getByRole("button", { name: "Selecionar operação op-2" }));
+    await waitFor(() => expect(screen.queryByTestId("operation-details-op-2")).toBeNull());
+
+    fireEvent.click(screen.getByRole("button", { name: "Selecionar operação op-3" }));
+    expect(await screen.findByTestId("operation-details-op-3")).toHaveTextContent("Conteúdo alterado");
+    fireEvent.click(screen.getByRole("button", { name: "Selecionar operação op-4" }));
+    expect(await screen.findByTestId("operation-details-op-4")).toHaveTextContent("O documento foi excluído.");
+    expect(screen.queryByTestId("operation-details-op-3")).toBeNull();
+    expect(state.createOperation).not.toHaveBeenCalled();
+    expect(state.updateDocument).not.toHaveBeenCalled();
+  });
+
+  it("não exibe operações posteriores ou ausentes das referências da atividade", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-2", "missing"], sentOperationIds: ["op-2"], receivedOperationIds: [] }];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    screen.getByRole("button", { name: "Ver alterações →" }).click();
+    expect(await screen.findByRole("button", { name: "Selecionar operação op-2" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Selecionar operação op-3" })).toBeNull();
+    expect(screen.queryByText("missing")).toBeNull();
   });
 });
