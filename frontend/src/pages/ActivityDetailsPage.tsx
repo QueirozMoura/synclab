@@ -239,7 +239,7 @@ export const ActivityDetailsPage: React.FC = () => {
               {syncChanges.sent.length + syncChanges.received.length + syncChanges.all.length} alterações relacionadas a esta sincronização.
             </p>
             <button type="button" className="dashboard-text-button mt-4" onClick={() => setShowSyncChanges((visible) => !visible)}>
-              {showSyncChanges ? "Ocultar alterações" : "Ver alterações →"}
+              {showSyncChanges ? "Ocultar alterações ←" : "Ver alterações →"}
             </button>
             {showSyncChanges && (
               <div className="mt-4 space-y-6">

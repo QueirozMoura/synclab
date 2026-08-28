@@ -319,6 +319,23 @@ describe("ActivityDetailsPage - versão histórica", () => {
     expect(screen.getByText("Você atualizou o título")).toBeTruthy();
   });
 
+  it("expande e recolhe os detalhes sem criar operações ou iniciar sincronização", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-1", "op-2"], sentOperationIds: ["op-1"], receivedOperationIds: ["op-2"] }];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    const button = screen.getByRole("button", { name: "Ver alterações →" });
+    expect(screen.queryByText("Alterações enviadas")).toBeNull();
+
+    button.click();
+    expect(await screen.findByRole("button", { name: "Ocultar alterações ←" })).toBeTruthy();
+    expect(screen.getByText("Alterações enviadas")).toBeTruthy();
+    expect(state.createOperation).not.toHaveBeenCalled();
+
+    screen.getByRole("button", { name: "Ocultar alterações ←" }).click();
+    await waitFor(() => expect(screen.queryByText("Alterações enviadas")).toBeNull());
+    expect(state.createOperation).not.toHaveBeenCalled();
+  });
+
   it("usa somente as referências da atividade, deduplica e ignora operações ausentes", async () => {
     state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-1", "op-1", "missing"], sentOperationIds: ["op-1", "op-1", "missing"], receivedOperationIds: [] }];
     const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
