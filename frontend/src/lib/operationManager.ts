@@ -400,7 +400,14 @@ export class OperationManager {
     await this.confirmLocalOperations(
       validPendingOperations.filter((operation) => acknowledgedIds.has(operation.id)),
     );
-    return result;
+    const sentOperationIds = [...new Set(validPendingOperations.map(({ id }) => id))];
+    const sentIds = new Set(sentOperationIds);
+    const receivedOperationIds = [...new Set(
+      result.acceptedOperations
+        .filter(({ id }) => !sentIds.has(id))
+        .map(({ id }) => id),
+    )];
+    return { ...result, sentOperationIds, receivedOperationIds };
   }
 
   private async confirmLocalOperations(operations: Operation[]): Promise<void> {

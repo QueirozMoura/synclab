@@ -143,6 +143,30 @@ describe("OperationManager pending operations", () => {
     expect(reloaded.hasPendingOperations()).toBe(true);
   });
 
+  it("preserva IDs enviados e identifica somente operações novas recebidas", async () => {
+    const local = operation("local", "doc-1");
+    const notSent = operation("not-sent", "doc-1");
+    persisted.push(local, notSent);
+    const remote = operation("remote", "doc-2", "device-b");
+    const synchronize = vi.fn(async (payload: SyncPayload) => ({
+      deviceId: payload.deviceId,
+      operations: [remote, ...payload.operations],
+      snapshots: [],
+      acknowledgedOperationIds: [local.id],
+    }));
+    const manager = new OperationManager();
+    manager.setSyncTransport({ synchronize });
+    await manager.initialize();
+
+    const result = await manager.syncPendingOperations();
+
+    expect(result.sentOperationIds).toEqual([local.id, notSent.id]);
+    expect(result.receivedOperationIds).toEqual([remote.id]);
+    expect(result.sentOperationIds).not.toContain(remote.id);
+    expect(result.receivedOperationIds).not.toContain(local.id);
+    expect(synchronize).toHaveBeenCalledTimes(1);
+  });
+
   it("skips a legacy blank UPDATE_TITLE while synchronizing valid pending operations", async () => {
     const invalidTitle: Operation = {
       ...operation("legacy-empty-title", "doc-1"),
@@ -163,7 +187,7 @@ describe("OperationManager pending operations", () => {
     manager.setSyncTransport(transport);
     await manager.initialize();
 
-    await expect(manager.syncPendingOperations()).resolves.toEqual({
+    await expect(manager.syncPendingOperations()).resolves.toMatchObject({
       acceptedOperations: [],
       missingOperations: [],
       snapshots: [],

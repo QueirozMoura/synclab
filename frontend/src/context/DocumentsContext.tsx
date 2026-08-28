@@ -441,8 +441,8 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     const promise = sync();
     void promise.then(
       (result) => {
-        const sentOperationIds = [...new Set(result.missingOperations.map(({ id }) => id))];
-        const receivedOperationIds = [...new Set(result.acceptedOperations.map(({ id }) => id))];
+        const sentOperationIds = [...new Set(result.sentOperationIds ?? [])];
+        const receivedOperationIds = [...new Set(result.receivedOperationIds ?? [])];
         const operationIds = [...new Set([...sentOperationIds, ...receivedOperationIds])];
         appendActivity({
           type: "SYNC_COMPLETED",

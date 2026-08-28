@@ -140,7 +140,7 @@ describe("DocumentsContext - synchronizeAll", () => {
   it("registra IDs enviadas e recebidas na atividade de sincronização", async () => {
     const sent = createMockOperation("sent-1", "doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "sent" }, VectorClock.from({ "local": 1 }));
     const received = createMockOperation("received-1", "doc-1", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "received" }, VectorClock.from({ "remote": 1 }));
-    const syncResult: SyncResult = { acceptedOperations: [received, received], missingOperations: [sent, sent], snapshots: [] };
+    const syncResult: SyncResult = { acceptedOperations: [received, received], missingOperations: [sent, sent], snapshots: [], sentOperationIds: [sent.id], receivedOperationIds: [received.id] };
     const manager = createOperationManagerContextMock({ sync: vi.fn(() => Promise.resolve(syncResult)) });
     const { result } = useDocumentsWithManager(manager);
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });

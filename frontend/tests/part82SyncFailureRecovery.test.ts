@@ -133,7 +133,7 @@ describe("Parte 82 - recuperação de falhas de sincronização", () => {
       );
     const sync = coordinator(manager, fetchFn);
     await expect(sync.sync()).rejects.toThrow("temporary");
-    await expect(sync.sync()).resolves.toEqual(emptyResult);
+    await expect(sync.sync()).resolves.toMatchObject(emptyResult);
     expect(manager.hasPendingOperations()).toBe(false);
     expect(
       manager.getOperations().find((item) => item.id === operation.id)
@@ -168,7 +168,7 @@ describe("Parte 82 - recuperação de falhas de sincronização", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
     reject(new Error("network"));
     await expect(first).rejects.toThrow("network");
-    await expect(sync.sync()).resolves.toEqual(emptyResult);
+    await expect(sync.sync()).resolves.toMatchObject(emptyResult);
     expect(manager.hasPendingOperations()).toBe(true);
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
@@ -184,7 +184,12 @@ describe("Parte 82 - recuperação de falhas de sincronização", () => {
     );
     const sync = coordinator(manager, fetchFn);
     const results = await Promise.all([sync.sync(), sync.sync(), sync.sync()]);
-    expect(results).toEqual([emptyResult, emptyResult, emptyResult]);
+    expect(results).toHaveLength(3);
+    expect(results).toEqual([
+      expect.objectContaining(emptyResult),
+      expect.objectContaining(emptyResult),
+      expect.objectContaining(emptyResult),
+    ]);
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(manager.getOperations()).toHaveLength(1);
     expect(manager.hasPendingOperations()).toBe(false);
