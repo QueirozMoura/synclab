@@ -2,13 +2,16 @@ import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { reconstructHistoricalState, type HistoricalStateResult } from "../lib/documentHistory";
 import { reconstructHistoricalDocument } from "../lib/documentHistoricalState";
+import { restoreHistoricalDocument, type HistoricalRestorationResult } from "../lib/historicalDocumentRestoration";
 import { useDocuments } from "../hooks/useDocuments";
 import { useOperationManager } from "../hooks/useOperationManager";
 
 export const ActivityDetailsPage: React.FC = () => {
   const { activityId } = useParams<{ activityId: string }>();
-  const { activity, getDocument } = useDocuments();
-  const { getOperationsForDocument } = useOperationManager();
+  const { activity, getDocument, updateDocument } = useDocuments();
+  const { getOperationsForDocument, createOperation } = useOperationManager();
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restorationMessage, setRestorationMessage] = useState<string | null>(null);
   const event = activity.find((item) => item.id === activityId);
   const [historicalState, setHistoricalState] = useState<{
     operationId: string;
@@ -95,6 +98,45 @@ export const ActivityDetailsPage: React.FC = () => {
     ? historicalVersion.state
     : null;
   const currentDocument = documentId ? getDocument(documentId) : undefined;
+  const canRestore = Boolean(operationId && historicalVersionState && !historicalVersionState.deleted && currentDocument && !isRestoring);
+  const restoreVersion = () => {
+    if (!documentId || !operationId || !historicalVersionState || historicalVersionState.deleted || !currentDocument || isRestoring) return;
+    if (!window.confirm("O documento atual será substituído por esta versão. Isso criará uma nova alteração no histórico, sem apagar versões anteriores. Deseja continuar?")) return;
+
+    setIsRestoring(true);
+    setRestorationMessage(null);
+    let result: HistoricalRestorationResult;
+    try {
+      result = restoreHistoricalDocument(documentId, getOperationsForDocument(documentId), operationId, {
+        getCurrentDocument: (id) => getDocument(id),
+        createOperation,
+        updateDocument,
+      });
+    } catch {
+      result = { status: "error", operations: [], error: undefined };
+    }
+    setIsRestoring(false);
+    switch (result.status) {
+      case "restored":
+        setRestorationMessage("Versão restaurada localmente. As novas alterações ficarão pendentes de sincronização.");
+        break;
+      case "nothing_to_restore":
+        setRestorationMessage("O documento já está nessa versão.");
+        break;
+      case "historical_version_not_found":
+        setRestorationMessage("A versão histórica não está mais disponível.");
+        break;
+      case "historical_document_deleted":
+        setRestorationMessage("Uma versão excluída não pode ser restaurada nesta etapa.");
+        break;
+      case "current_document_not_found":
+        setRestorationMessage("O documento atual não está disponível.");
+        break;
+      case "error":
+        setRestorationMessage("Não foi possível restaurar esta versão.");
+        break;
+    }
+  };
   const titleChanged = Boolean(currentDocument && historicalVersionState && currentDocument.title !== historicalVersionState.title);
   const contentChanged = Boolean(currentDocument && historicalVersionState && currentDocument.content !== historicalVersionState.content);
   return (
@@ -156,6 +198,14 @@ export const ActivityDetailsPage: React.FC = () => {
               </pre>
               {historicalVersionState.deleted && (
                 <p className="mt-3 text-sm text-[var(--text-secondary)]">Documento excluído neste momento.</p>
+              )}
+              {canRestore && (
+                <button type="button" className="dashboard-text-button mt-5 rounded-lg border-[var(--border)] px-4 py-2 text-sm" onClick={restoreVersion} disabled={isRestoring}>
+                  {isRestoring ? "Restaurando..." : "Restaurar esta versão"}
+                </button>
+              )}
+              {restorationMessage && (
+                <p className="mt-4 text-sm text-[var(--text-secondary)]" role="status">{restorationMessage}</p>
               )}
             </div>
             <div className="mt-4 rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">

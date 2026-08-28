@@ -8,6 +8,9 @@ const state = vi.hoisted(() => ({
   activity: [] as Array<Record<string, unknown>>,
   operations: [] as Operation[],
   reconstruct: vi.fn(),
+  restore: vi.fn(),
+  createOperation: vi.fn(),
+  updateDocument: vi.fn(),
   currentDocument: {
     id: "doc-1",
     title: "Atual",
@@ -24,10 +27,11 @@ vi.mock("../src/hooks/useDocuments", () => ({
   useDocuments: () => ({
     activity: state.activity,
     getDocument: () => state.currentDocument,
+    updateDocument: state.updateDocument,
   }),
 }));
 vi.mock("../src/hooks/useOperationManager", () => ({
-  useOperationManager: () => ({ getOperationsForDocument }),
+  useOperationManager: () => ({ getOperationsForDocument, createOperation: state.createOperation }),
 }));
 vi.mock("../src/lib/documentHistory", () => ({
   reconstructHistoricalState: vi
@@ -37,6 +41,9 @@ vi.mock("../src/lib/documentHistory", () => ({
 vi.mock("../src/lib/documentHistoricalState", () => ({
   reconstructHistoricalDocument: (...args: unknown[]) =>
     state.reconstruct(...args),
+}));
+vi.mock("../src/lib/historicalDocumentRestoration", () => ({
+  restoreHistoricalDocument: (...args: unknown[]) => state.restore(...args),
 }));
 vi.mock("react-router-dom", () => ({
   Link: ({
@@ -256,5 +263,47 @@ describe("ActivityDetailsPage - versão histórica", () => {
     render(<ActivityDetailsPage />);
     await waitFor(() => expect(screen.getByText("Resumo")).toBeTruthy());
     expect(screen.queryByText("Versão deste momento")).toBeNull();
+  });
+
+  it("exibe o botão e pede confirmação antes de restaurar", async () => {
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    const button = await screen.findByRole("button", { name: "Restaurar esta versão" });
+    expect(button).toBeTruthy();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    button.click();
+    expect(window.confirm).toHaveBeenCalled();
+    expect(state.restore).not.toHaveBeenCalled();
+  });
+
+  it("confirma a restauração com os dados corretos e atualiza a mensagem", async () => {
+    const restored = documentState("Título restaurado", "Conteúdo restaurado", "new-title");
+    state.restore.mockReturnValue({ status: "restored", operations: [operation("new-title", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Título restaurado" }, 4)], document: restored });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    (await screen.findByRole("button", { name: "Restaurar esta versão" })).click();
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/restaurada localmente/i));
+    expect(state.restore).toHaveBeenCalledWith("doc-1", state.operations, "op-2", expect.objectContaining({
+      getCurrentDocument: expect.any(Function), createOperation: expect.any(Function), updateDocument: expect.any(Function),
+    }));
+  });
+
+  it("mostra os retornos controlados sem lançar erro", async () => {
+    state.restore.mockReturnValue({ status: "nothing_to_restore", operations: [], document: state.currentDocument });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    (await screen.findByRole("button", { name: "Restaurar esta versão" })).click();
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/já está nessa versão/i));
+  });
+
+  it("não exibe o botão para histórico excluído e não sincroniza manualmente", async () => {
+    state.reconstruct.mockReturnValue({ ...documentState("Excluído", "Conteúdo", "op-2"), deleted: true });
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    await screen.findByText("Documento excluído neste momento.");
+    expect(screen.queryByRole("button", { name: "Restaurar esta versão" })).toBeNull();
+    expect(state.restore).not.toHaveBeenCalled();
   });
 });
