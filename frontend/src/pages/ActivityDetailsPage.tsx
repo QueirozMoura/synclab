@@ -22,6 +22,67 @@ interface SyncOperationGroupProps {
   operations: Operation[];
   expandedOperationId: string | null;
   onSelect: (operationId: string) => void;
+  getDocumentTitle: (documentId: unknown) => string | undefined;
+  isDocumentAvailable: (documentId: unknown) => boolean;
+}
+
+function AlterationSummary({ operation }: { operation: Operation }) {
+  const payload = (operation.payload ?? {}) as Record<string, unknown>;
+  const payloadType = typeof payload.type === "string" ? payload.type : operation.type;
+  const title = typeof payload.title === "string" ? payload.title : null;
+  const content = typeof payload.content === "string" ? payload.content : null;
+  const previousTitle = typeof payload.previousTitle === "string"
+    ? payload.previousTitle
+    : typeof payload.oldTitle === "string"
+      ? payload.oldTitle
+      : null;
+
+  const knownTypes = new Set(["UPDATE_TITLE", "UPDATE_CONTENT", "CREATE_DOCUMENT", "DELETE_DOCUMENT"]);
+  const operationKind = knownTypes.has(payloadType) ? payloadType : (payload.type === undefined ? operation.type : payloadType);
+
+  switch (operationKind) {
+    case "UPDATE_TITLE":
+      return (
+        <div data-testid={`operation-alteration-${operation.id}`}>
+          <p className="mt-2 font-medium text-[var(--text-primary)]">Alteração</p>
+          {previousTitle !== null && <p className="mt-1"><span className="font-medium text-[var(--text-primary)]">Título anterior:</span> {previousTitle}</p>}
+          {previousTitle === null && <p className="mt-1">Título anterior não disponível nesta operação.</p>}
+          <p className="mt-1"><span className="font-medium text-[var(--text-primary)]">Novo título:</span> {title ?? "não informado nesta operação"}</p>
+        </div>
+      );
+    case "UPDATE_CONTENT":
+      return (
+        <div data-testid={`operation-alteration-${operation.id}`}>
+          <p className="mt-2 font-medium text-[var(--text-primary)]">Alteração</p>
+          <p className="mt-1 font-medium text-[var(--text-primary)]">Conteúdo atualizado</p>
+          <p className="mt-1 whitespace-pre-wrap">{content ?? "Conteúdo não disponível nesta operação."}</p>
+        </div>
+      );
+    case "CREATE_DOCUMENT":
+      return (
+        <div data-testid={`operation-alteration-${operation.id}`}>
+          <p className="mt-2 font-medium text-[var(--text-primary)]">Alteração</p>
+          <p className="mt-1 font-medium text-[var(--text-primary)]">Documento criado</p>
+          <p className="mt-1"><span className="font-medium text-[var(--text-primary)]">Título inicial:</span> {title ?? "não informado nesta operação"}</p>
+          <p className="mt-1 whitespace-pre-wrap"><span className="font-medium text-[var(--text-primary)]">Conteúdo inicial:</span> {content ?? "não informado nesta operação"}</p>
+        </div>
+      );
+    case "DELETE_DOCUMENT":
+      return (
+        <div data-testid={`operation-alteration-${operation.id}`}>
+          <p className="mt-2 font-medium text-[var(--text-primary)]">Alteração</p>
+          <p className="mt-1 font-medium text-[var(--text-primary)]">Documento excluído</p>
+          <p className="mt-1">O documento foi excluído. A operação marcou o documento como excluído.</p>
+        </div>
+      );
+    default:
+      return (
+        <div data-testid={`operation-alteration-${operation.id}`}>
+          <p className="mt-2 font-medium text-[var(--text-primary)]">Alteração</p>
+          <p className="mt-1">Alteração registrada nesta operação. Os detalhes do payload não estão disponíveis.</p>
+        </div>
+      );
+  }
 }
 
 const SyncOperationGroup: React.FC<SyncOperationGroupProps> = ({
@@ -29,11 +90,34 @@ const SyncOperationGroup: React.FC<SyncOperationGroupProps> = ({
   operations,
   expandedOperationId,
   onSelect,
-}) => (
+  getDocumentTitle,
+  isDocumentAvailable,
+}) => {
+  const groupedOperations = React.useMemo(() => {
+    const groups = new Map<string, Operation[]>();
+    operations.forEach((operation) => {
+      const documentId = typeof operation.documentId === "string" && operation.documentId.trim()
+        ? operation.documentId
+        : "__unidentified__";
+      const group = groups.get(documentId) ?? [];
+      group.push(operation);
+      groups.set(documentId, group);
+    });
+    return [...groups.entries()];
+  }, [operations]);
+
+  return (
   <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
     <h3 className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--text-secondary)]">{title}</h3>
-    <div className="mt-4 space-y-3">
-      {operations.map((operation) => {
+    <div className="mt-4 space-y-5">
+      {groupedOperations.map(([documentId, grouped]) => (
+        <section key={documentId} className="rounded-xl border-[var(--border)] p-4" data-testid={`document-group-${documentId}`}>
+          <div className="flex items-baseline justify-between gap-3">
+            <h4 className="font-medium">{documentId === "__unidentified__" ? "Documento não identificado" : getDocumentTitle(documentId) ?? "Documento indisponível"}</h4>
+            <span className="text-xs text-[var(--text-secondary)]">{grouped.length} {grouped.length === 1 ? "alteração" : "alterações"}</span>
+          </div>
+          <div className="mt-3 space-y-3">
+      {grouped.map((operation) => {
         const isExpanded = expandedOperationId === operation.id;
         return (
           <div key={operation.id} className="rounded-xl border-[var(--border)] p-4">
@@ -55,22 +139,27 @@ const SyncOperationGroup: React.FC<SyncOperationGroupProps> = ({
                 <p className="mt-1"><span className="font-medium text-[var(--text-primary)]">Data/hora:</span> {new Date(operation.timestamp).toLocaleString("pt-BR")}</p>
                 <p className="mt-1"><span className="font-medium text-[var(--text-primary)]">ID da operação:</span> {operation.id}</p>
                 <p className="mt-1"><span className="font-medium text-[var(--text-primary)]">deviceId:</span> {operation.deviceId}</p>
-                <p className="mt-2 font-medium text-[var(--text-primary)]">Resumo do payload</p>
-                {operation.payload.type === "UPDATE_TITLE" && <p className="mt-1">Título alterado: {operation.payload.title}</p>}
-                {operation.payload.type === "UPDATE_CONTENT" && <p className="mt-1 whitespace-pre-wrap">Conteúdo alterado: {operation.payload.content}</p>}
-                {operation.payload.type === "CREATE_DOCUMENT" && <>
-                  <p className="mt-1">Título inicial: {operation.payload.title}</p>
-                  <p className="mt-1 whitespace-pre-wrap">Conteúdo inicial: {operation.payload.content}</p>
-                </>}
-                {operation.payload.type === "DELETE_DOCUMENT" && <p className="mt-1">O documento foi excluído.</p>}
+                <AlterationSummary operation={operation} />
+                {isDocumentAvailable(operation.documentId) && (
+                  <Link
+                    to={`/app/documents/${encodeURIComponent(operation.documentId)}`}
+                    className="dashboard-text-button mt-4 inline-block text-sm"
+                  >
+                    Abrir documento →
+                  </Link>
+                )}
               </div>
             )}
           </div>
         );
       })}
+          </div>
+        </section>
+      ))}
     </div>
   </div>
-);
+  );
+};
 
 export const ActivityDetailsPage: React.FC = () => {
   const { activityId } = useParams<{ activityId: string }>();
@@ -180,6 +269,12 @@ export const ActivityDetailsPage: React.FC = () => {
     ? historicalVersion.state
     : null;
   const currentDocument = documentId ? getDocument(documentId) : undefined;
+  const getDocumentTitle = (candidateDocumentId: unknown): string | undefined =>
+    typeof candidateDocumentId === "string" && candidateDocumentId.trim().length > 0
+      ? getDocument(candidateDocumentId)?.title
+      : undefined;
+  const isDocumentAvailable = (candidateDocumentId: unknown): candidateDocumentId is string =>
+    typeof candidateDocumentId === "string" && candidateDocumentId.trim().length > 0 && Boolean(getDocument(candidateDocumentId));
   const canRestore = Boolean(operationId && historicalVersionState && !historicalVersionState.deleted && currentDocument && !isRestoring);
   const restoreVersion = () => {
     if (!documentId || !operationId || !historicalVersionState || historicalVersionState.deleted || !currentDocument || isRestoring) return;
@@ -278,9 +373,9 @@ export const ActivityDetailsPage: React.FC = () => {
             </button>
             {showSyncChanges && (
               <div className="mt-4 space-y-6">
-                {syncChanges.sent.length > 0 && <SyncOperationGroup title="Alterações enviadas" operations={syncChanges.sent} expandedOperationId={expandedOperationId} onSelect={(id) => setExpandedOperationId((current) => current === id ? null : id)} />}
-                {syncChanges.received.length > 0 && <SyncOperationGroup title="Alterações recebidas" operations={syncChanges.received} expandedOperationId={expandedOperationId} onSelect={(id) => setExpandedOperationId((current) => current === id ? null : id)} />}
-                {syncChanges.all.length > 0 && <SyncOperationGroup title="Alterações processadas" operations={syncChanges.all} expandedOperationId={expandedOperationId} onSelect={(id) => setExpandedOperationId((current) => current === id ? null : id)} />}
+                {syncChanges.sent.length > 0 && <SyncOperationGroup title="Alterações enviadas" operations={syncChanges.sent} expandedOperationId={expandedOperationId} onSelect={(id) => setExpandedOperationId((current) => current === id ? null : id)} getDocumentTitle={getDocumentTitle} isDocumentAvailable={isDocumentAvailable} />}
+                {syncChanges.received.length > 0 && <SyncOperationGroup title="Alterações recebidas" operations={syncChanges.received} expandedOperationId={expandedOperationId} onSelect={(id) => setExpandedOperationId((current) => current === id ? null : id)} getDocumentTitle={getDocumentTitle} isDocumentAvailable={isDocumentAvailable} />}
+                {syncChanges.all.length > 0 && <SyncOperationGroup title="Alterações processadas" operations={syncChanges.all} expandedOperationId={expandedOperationId} onSelect={(id) => setExpandedOperationId((current) => current === id ? null : id)} getDocumentTitle={getDocumentTitle} isDocumentAvailable={isDocumentAvailable} />}
               </div>
             )}
           </section>

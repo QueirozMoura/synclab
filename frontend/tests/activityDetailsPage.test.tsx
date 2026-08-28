@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
     createdAt: "",
     updatedAt: "",
   } as Record<string, string>,
+  documents: [] as Array<Record<string, string>>,
 }));
 
 const getOperationsForDocument = vi.hoisted(() =>
@@ -27,7 +28,7 @@ const getOperationsForDocument = vi.hoisted(() =>
 vi.mock("../src/hooks/useDocuments", () => ({
   useDocuments: () => ({
     activity: state.activity,
-    getDocument: () => state.currentDocument,
+    getDocument: (id: string) => state.documents.find((document) => document.id === id) ?? (id === "doc-1" ? state.currentDocument : undefined),
     updateDocument: state.updateDocument,
   }),
 }));
@@ -104,6 +105,7 @@ describe("ActivityDetailsPage - versão histórica", () => {
       createdAt: "",
       updatedAt: "",
     };
+    state.documents = [];
     state.activity = [
       {
         id: "activity-1",
@@ -404,5 +406,109 @@ describe("ActivityDetailsPage - versão histórica", () => {
     expect(await screen.findByRole("button", { name: "Selecionar operação op-2" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Selecionar operação op-3" })).toBeNull();
     expect(screen.queryByText("missing")).toBeNull();
+  });
+
+  it("apresenta o novo título e informa quando o anterior não está disponível", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-title"], sentOperationIds: ["op-title"] }];
+    state.operations = [operation("op-title", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Novo título" }, 2)];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver alterações →" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Selecionar operação op-title" }));
+    const details = await screen.findByTestId("operation-alteration-op-title");
+    expect(details).toHaveTextContent("Novo título");
+    expect(details).toHaveTextContent("Título anterior não disponível nesta operação.");
+  });
+
+  it("tolera payloads incompletos de título e conteúdo sem quebrar", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-title", "op-content"], sentOperationIds: ["op-title"], receivedOperationIds: ["op-content"] }];
+    state.operations = [
+      operation("op-title", "UPDATE_TITLE", { type: "UPDATE_TITLE" } as Operation["payload"], 2),
+      operation("op-content", "UPDATE_CONTENT", { type: "UPDATE_CONTENT" } as Operation["payload"], 3),
+    ];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver alterações →" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Selecionar operação op-title" }));
+    expect(await screen.findByTestId("operation-alteration-op-title")).toHaveTextContent("não informado nesta operação");
+    fireEvent.click(screen.getByRole("button", { name: "Selecionar operação op-content" }));
+    expect(await screen.findByTestId("operation-alteration-op-content")).toHaveTextContent("Conteúdo não disponível nesta operação.");
+  });
+
+  it("usa fallback amigável para payload desconhecido sem criar ou alterar nada", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-unknown"], receivedOperationIds: ["op-unknown"] }];
+    state.operations = [operation("op-unknown", "UPDATE_TITLE", { type: "UNKNOWN_OPERATION" } as unknown as Operation["payload"], 2)];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver alterações →" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Selecionar operação op-unknown" }));
+    expect(await screen.findByTestId("operation-alteration-op-unknown")).toHaveTextContent("detalhes do payload não estão disponíveis");
+    expect(state.createOperation).not.toHaveBeenCalled();
+    expect(state.updateDocument).not.toHaveBeenCalled();
+  });
+
+  it("não quebra nem oferece abertura para operação sem documentId", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-no-id"] }];
+    state.operations = [{ ...operation("op-no-id", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "Sem documento" }, 2), documentId: "" }];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver alterações →" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Selecionar operação op-no-id" }));
+    expect(screen.queryByRole("link", { name: "Abrir documento →" })).toBeNull();
+    expect(screen.getByTestId("operation-alteration-op-no-id")).toBeTruthy();
+  });
+
+  it("usa documentId da operação recebida e não faz chamadas externas", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-received"], receivedOperationIds: ["op-received"] }];
+    state.operations = [operation("op-received", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "Recebido" }, 2)];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver alterações →" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Selecionar operação op-received" }));
+    expect(await screen.findByRole("link", { name: "Abrir documento →" })).toHaveAttribute("href", "/app/documents/doc-1");
+    expect(state.createOperation).not.toHaveBeenCalled();
+    expect(state.updateDocument).not.toHaveBeenCalled();
+  });
+
+  it("agrupa por documento, mostra quantidades e preserva a ordem original", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-a", "op-b", "op-c"], sentOperationIds: ["op-a", "op-b", "op-c"] }];
+    state.documents = [{ id: "doc-2", title: "Projeto B", content: "", createdAt: "", updatedAt: "" }];
+    state.operations = [
+      operation("op-a", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "A" }, 2),
+      { ...operation("op-b", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "B" }, 3), documentId: "doc-2" },
+      operation("op-c", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "C" }, 4),
+    ];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver alterações →" }));
+    const firstGroup = await screen.findByTestId("document-group-doc-1");
+    expect(firstGroup).toHaveTextContent("Atual");
+    expect(firstGroup).toHaveTextContent("2 alterações");
+    expect(firstGroup.querySelectorAll("button")[0]).toHaveAccessibleName("Selecionar operação op-a");
+    expect(firstGroup.querySelectorAll("button")[1]).toHaveAccessibleName("Selecionar operação op-c");
+    expect(screen.getByTestId("document-group-doc-2")).toHaveTextContent("Projeto B");
+    expect(screen.getByTestId("document-group-doc-2")).toHaveTextContent("1 alteração");
+  });
+
+  it("separa documentos indisponíveis e operações sem documentId", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-missing", "op-no-id"] }];
+    state.operations = [
+      { ...operation("op-missing", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "Ausente" }, 2), documentId: "missing-doc" },
+      { ...operation("op-no-id", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "Sem ID" }, 3), documentId: "" },
+    ];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Ver alterações →" }));
+    expect(await screen.findByTestId("document-group-missing-doc")).toHaveTextContent("Documento indisponível");
+    expect(screen.getByTestId("document-group-__unidentified__")).toHaveTextContent("Documento não identificado");
+    expect(screen.queryByRole("link", { name: "Abrir documento →" })).toBeNull();
+  });
+
+  it("mantém atividade antiga sem operação funcionando", async () => {
+    state.activity = [{ id: "activity-1", type: "DOCUMENT_CREATED", timestamp: "2024-01-01T00:00:02.000Z", documentId: "doc-1", documentTitle: "Inicial" }];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    expect(screen.getByRole("heading", { name: /você criou/i })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Abrir documento →" })).toBeNull();
   });
 });
