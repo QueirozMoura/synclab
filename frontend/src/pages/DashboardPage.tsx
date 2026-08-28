@@ -105,7 +105,7 @@ export const DashboardPage: React.FC = () => {
   const compactDocs = filteredDocuments.slice(1, 3);
 
   return (
-    <div className="dashboard-page flex h-screen overflow-hidden">
+    <div className="dashboard-page flex min-h-[100dvh] overflow-hidden">
       {/* Mobile Topbar */}
       <MobileTopbar onMenuClick={toggleSidebar} />
 
@@ -118,7 +118,7 @@ export const DashboardPage: React.FC = () => {
       )}
 
       {/* Sidebar */}
-      <DashboardSidebar />
+      <DashboardSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       {/* Main Content */}
       <div className="dashboard-main flex-1 flex flex-col overflow-hidden lg:pl-0">

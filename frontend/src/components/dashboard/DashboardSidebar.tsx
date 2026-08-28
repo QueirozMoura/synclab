@@ -4,7 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { useDocuments } from "../../hooks/useDocuments";
 import { useAuth } from "../../context/AuthContext";
 
-export const DashboardSidebar: React.FC = () => {
+interface DashboardSidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ isOpen = false, onClose }) => {
   const navigate = useNavigate();
   const { createDocument } = useDocuments();
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
@@ -119,7 +124,7 @@ export const DashboardSidebar: React.FC = () => {
   };
 
   return (
-    <div className="dashboard-sidebar hidden lg:flex lg:w-64 flex-col h-screen">
+    <div className={`dashboard-sidebar fixed inset-y-0 left-0 z-50 flex w-[min(18rem,calc(100vw-2rem))] flex-col transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}>
       {/* Header */}
       <div className="dashboard-sidebar-brand p-6">
         <div className="flex items-center gap-3 mb-4">
@@ -147,6 +152,7 @@ export const DashboardSidebar: React.FC = () => {
           <NavLink
             key={item.id}
             to={item.path}
+            onClick={onClose}
             className={({ isActive }) => `dashboard-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
               isActive
                 ? "dashboard-nav-active text-[#e4e1ed]"
@@ -165,6 +171,7 @@ export const DashboardSidebar: React.FC = () => {
           <NavLink
             key={item.id}
             to={item.path}
+            onClick={onClose}
             className={({ isActive }) => `dashboard-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
               isActive
                 ? "dashboard-nav-active text-[#e4e1ed]"

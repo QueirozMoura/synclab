@@ -4,8 +4,20 @@ import { useDocuments } from "../../hooks/useDocuments";
 import { useAuth } from "../../context/AuthContext";
 import { LoginButton } from "../auth/LoginButton";
 
-export const GlobalSidebar: React.FC = () => {
+interface GlobalSidebarProps {
+  mobileOpen?: boolean;
+  onClose?: () => void;
+}
+
+export const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ mobileOpen, onClose }) => {
   const navigate = useNavigate();
+  const [internalMobileOpen, setInternalMobileOpen] = React.useState(false);
+  const isControlled = mobileOpen !== undefined;
+  const isMobileOpen = isControlled ? mobileOpen : internalMobileOpen;
+  const closeMobileNavigation = () => {
+    setInternalMobileOpen(false);
+    onClose?.();
+  };
   const { createDocument } = useDocuments();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
@@ -86,7 +98,24 @@ export const GlobalSidebar: React.FC = () => {
   };
 
   return (
-    <aside className="global-sidebar hidden lg:flex lg:w-64 flex-col">
+    <>
+      {!isControlled && (
+        <button
+          type="button"
+          className="global-mobile-topbar lg:hidden"
+          aria-label="Abrir navegação"
+          aria-expanded={isMobileOpen}
+          onClick={() => setInternalMobileOpen(true)}
+        >
+          <span className="global-sidebar-logo" aria-hidden="true">S</span>
+          <span className="global-mobile-topbar-title">Synclab</span>
+          <span className="global-mobile-topbar-menu" aria-hidden="true">☰</span>
+        </button>
+      )}
+      {!isControlled && isMobileOpen && (
+        <button type="button" className="global-mobile-overlay lg:hidden" aria-label="Fechar navegação" onClick={closeMobileNavigation} />
+      )}
+      <aside className={`global-sidebar flex w-64 shrink-0 flex-col ${isMobileOpen ? "is-mobile-open" : ""}`}>
       <div className="global-sidebar-glow" aria-hidden="true" />
       {/* Header */}
       <div className="global-sidebar-header">
@@ -98,7 +127,7 @@ export const GlobalSidebar: React.FC = () => {
           </div>
         </Link>
         {!isAuthenticated && !isAuthLoading && <LoginButton />}
-        <button onClick={handleNewDocument} className="global-sidebar-cta" disabled={!isAuthenticated || isAuthLoading} aria-label={!isAuthenticated || isAuthLoading ? "Faça login para criar um documento" : "Novo documento"}>
+        <button onClick={() => { handleNewDocument(); closeMobileNavigation(); }} className="global-sidebar-cta" disabled={!isAuthenticated || isAuthLoading} aria-label={!isAuthenticated || isAuthLoading ? "Faça login para criar um documento" : "Novo documento"}>
           <span className="global-sidebar-cta-icon" aria-hidden="true">+</span>
           <span>Novo documento</span>
           <span className="global-sidebar-cta-shortcut" aria-hidden="true">⌘N</span>
@@ -112,6 +141,7 @@ export const GlobalSidebar: React.FC = () => {
           <NavLink
             key={item.id}
             to={item.path}
+            onClick={closeMobileNavigation}
             className={({ isActive }) => `global-sidebar-link ${isActive ? "is-active" : ""}`}
           >
             <span className="global-sidebar-link-icon">{getIcon(item.icon)}</span>
@@ -157,6 +187,7 @@ export const GlobalSidebar: React.FC = () => {
           <span>Ajuda</span>
         </NavLink>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };

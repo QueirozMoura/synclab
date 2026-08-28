@@ -68,7 +68,7 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
   };
 
   return (
-    <div className="h-16 border-b border-[#464554] bg-[#13131b] px-6 flex items-center justify-between sticky top-0 z-20">
+    <div className="editor-header flex min-w-0 min-h-16 flex-wrap items-center justify-between gap-2 border-b border-[#464554] bg-[#13131b] px-3 py-2 sticky top-0 z-20 sm:px-6">
       {/* Left - Title and Metadata */}
       <Link to="/app" className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
         <div className="w-6 h-6 relative">
@@ -91,13 +91,13 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
           </svg>
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-[#e4e1ed]">{title}</h1>
+          <h1 className="max-w-[45vw] truncate text-base font-semibold text-[#e4e1ed] sm:max-w-none sm:text-lg">{title}</h1>
           <p className="text-xs text-[#908fa0] mt-1">Salvo localmente</p>
         </div>
       </Link>
 
       {/* Right - Status, Share, Menu, Avatar */}
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-4">
         {/* Status Pill */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1f1f27] border border-[#464554]">
           <div

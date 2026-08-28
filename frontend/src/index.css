@@ -1564,3 +1564,102 @@ html[data-theme="light"] .editor-toolbar-divider { background:rgba(27,35,50,.15)
 .activity-status { display: flex; align-items: center; gap: .55rem; border-radius: .75rem; padding: .7rem .85rem; background: color-mix(in srgb, var(--success) 8%, var(--surface)); color: var(--text-secondary); }
 @media (max-width: 640px) { .activity-detail-shell { padding-left: 1rem; padding-right: 1rem; } .activity-hero { padding: 1.25rem; } .activity-hero h1 { font-size: 1.75rem; line-height: 1.15; } .activity-code { font-size: .76rem; } }
 @media (prefers-reduced-motion: reduce) { .activity-section, .activity-metric, .activity-back, .activity-restore { animation: none; transition: none; } }
+
+
+/* Responsive foundation: prevent page-level overflow and make app shells viewport-safe. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { max-width: 100%; overflow-x: hidden; }
+body { overflow-wrap: anywhere; }
+button, a, input, textarea, select { min-height: 2.5rem; }
+
+.app-global-sidebar { display: contents; }
+.app-mobile-overlay { padding: 0; border: 0; }
+@media (max-width: 1023px) {
+  .app-global-sidebar { display: block; position: fixed; inset: 0 auto 0 0; z-index: 50; width: min(18rem, calc(100vw - 1rem)); pointer-events: none; }
+  .app-global-sidebar .global-sidebar { height: 100dvh; max-width: 100%; transform: translateX(-105%); transition: transform 180ms ease; box-shadow: 18px 0 40px rgba(0,0,0,.35); pointer-events: auto; }
+  .app-global-sidebar.is-open .global-sidebar { transform: translateX(0); }
+  body > #root > .global-sidebar, .global-sidebar:not(.is-mobile-open) { max-width: 100%; }
+  .app-main { min-width: 0; }
+  .app-main .editor-header { min-width: 0; }
+}
+@media (max-width: 639px) {
+  .dashboard-content { padding-right: 1rem; padding-left: 1rem; padding-top: 5rem; }
+  .dashboard-page { min-width: 0; }
+  .dashboard-header { min-width: 0; }
+  .dashboard-header h1, .dashboard-section-heading h2 { font-size: clamp(1.15rem, 5vw, 1.4rem); line-height: 1.2; }
+  .dashboard-section-heading { align-items: flex-start; flex-wrap: wrap; gap: .7rem; }
+  .dashboard-actions { flex-wrap: wrap; gap: .6rem; }
+  .dashboard-actions .dashboard-button { min-width: min(100%, 9rem); }
+  .activity-detail-content { min-width: 0; }
+  .activity-detail-shell { overflow-x: clip; }
+  .activity-breadcrumb { max-width: 100%; overflow-wrap: anywhere; text-align: right; }
+  .activity-hero > div:first-child { display: flex; flex-direction: column; }
+  .activity-hero > div:first-child > div:first-child { min-width: 0; }
+  .activity-hero > div:first-child > div:last-child { align-self: flex-start; }
+  .activity-document { align-items: flex-start; }
+  .activity-document strong { overflow-wrap: anywhere; }
+  .activity-restore { width: 100%; justify-content: center; }
+  .activity-surface { min-width: 0; }
+  .activity-code { max-width: 100%; overflow-x: auto; overflow-wrap: normal; white-space: pre; }
+  .activity-diff-panel pre { max-width: 100%; overflow-x: auto; }
+  .editor-toolbar-shell { bottom: max(.75rem, env(safe-area-inset-bottom)); }
+}
+@media (max-width: 380px) {
+  .dashboard-mobile-topbar { padding-right: .75rem; padding-left: .75rem; }
+  .dashboard-mobile-status { padding-right: .45rem; padding-left: .45rem; }
+  .dashboard-mobile-status span { display: none; }
+  .activity-hero { padding: 1rem; }
+  .activity-icon { width: 2.75rem; height: 2.75rem; }
+  .activity-pill { max-width: 100%; overflow-wrap: anywhere; }
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  .dashboard-content { padding-right: 2rem; padding-left: 2rem; }
+  .activity-detail-content { max-width: 48rem; }
+}
+@media (min-width: 1024px) {
+  .app-main { padding-top: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-global-sidebar .global-sidebar { transition: none; }
+}
+
+
+/* Shared responsive rules for page containers, overlays and content-heavy controls. */
+@media (max-width: 639px) {
+  .editor-header > .flex { gap: .35rem; }
+  .editor-header .editor-share-button { display: none; }
+  .editor-header .absolute.right-0 { right: -.25rem; max-width: calc(100vw - 1.5rem); }
+  .editor-header .editor-header-title { min-width: 0; }
+  .document-confirm-modal { max-height: calc(100dvh - 2rem); overflow-y: auto; padding: 1.1rem; }
+  .document-confirm-modal .document-modal-button { width: 100%; justify-content: center; }
+  .favorites-content, .settings-content { padding-right: 1rem; padding-left: 1rem; }
+  .help-content { padding-right: 1rem; padding-left: 1rem; }
+  .document-card, .dashboard-document-card { min-width: 0; }
+  .document-card h2, .dashboard-document-card h3 { overflow-wrap: anywhere; }
+  .auth-card, form { max-width: 100%; }
+  input, textarea, select { max-width: 100%; }
+}
+@media (max-width: 380px) {
+  .editor-header { padding-right: .65rem; padding-left: .65rem; }
+  .editor-header > a { max-width: calc(100% - 5rem); }
+  .editor-header > a > div:last-child { min-width: 0; }
+  .editor-header > .flex > .relative { flex-shrink: 0; }
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  .editor-toolbar-shell { max-width: calc(100vw - 2rem); }
+  .editor-toolbar-surface { max-width: 100%; overflow-x: auto; }
+}
+
+
+/* Shared mobile navigation for pages that do not own a dashboard shell. */
+.global-mobile-topbar { position: fixed; inset: 0 0 auto; z-index: 40; display: flex; height: 4rem; align-items: center; gap: .7rem; border-bottom: 1px solid rgba(201,199,255,.12); background: rgba(15,16,22,.92); padding: .7rem 1rem; color: #f7f4fb; backdrop-filter: blur(16px); }
+.global-mobile-topbar .global-sidebar-logo { width: 2rem; height: 2rem; padding: 0; }
+.global-mobile-topbar-title { font-size: .9rem; font-weight: 750; }
+.global-mobile-topbar-menu { margin-left: auto; font-size: 1.15rem; color: #c9c7ff; }
+.global-mobile-overlay { position: fixed; inset: 0; z-index: 45; width: 100%; border: 0; background: rgba(0,0,0,.62); }
+@media (max-width: 1023px) {
+  body:has(.global-mobile-topbar) { padding-top: 4rem; }
+  .global-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; width: min(18rem, calc(100vw - 1rem)); height: 100dvh; max-width: 100%; transform: translateX(-105%); transition: transform 180ms ease; box-shadow: 18px 0 40px rgba(0,0,0,.35); }
+  .global-sidebar.is-mobile-open { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) { .global-sidebar { transition: none; } }

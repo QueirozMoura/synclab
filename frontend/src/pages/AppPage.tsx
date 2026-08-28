@@ -5,16 +5,21 @@ import { EditorHeader } from "../components/app/EditorHeader";
 import { EditorContent } from "../components/app/EditorContent";
 import { EditorToolbar } from "../components/app/EditorToolbar";
 import { StatusFooter } from "../components/app/StatusFooter";
+import { MobileTopbar } from "../components/dashboard/MobileTopbar";
 
 export const AppPage: React.FC = () => {
   const [activeDocument, setActiveDocument] = React.useState("Architecture");
 
   const noop = () => {};
 
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+
   return (
-    <div className="flex h-screen bg-[#13131b] overflow-hidden">
+    <div className="app-shell flex min-h-[100dvh] overflow-hidden bg-[#13131b]">
+      <MobileTopbar onMenuClick={() => setMobileMenuOpen(true)} />
+      {mobileMenuOpen && <button type="button" aria-label="Fechar navegação" className="app-mobile-overlay fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
       {/* Global Sidebar */}
-      <GlobalSidebar />
+      <div className={`app-global-sidebar ${mobileMenuOpen ? "is-open" : ""}`}><GlobalSidebar mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} /></div>
 
       {/* Workspace Sidebar */}
       <WorkspaceSidebar
@@ -23,7 +28,7 @@ export const AppPage: React.FC = () => {
       />
 
       {/* Main Content Area */}
-      <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="app-main flex min-w-0 flex-1 flex-col overflow-hidden pt-16 lg:pt-0">
         {/* Header */}
         <EditorHeader title={activeDocument} />
 

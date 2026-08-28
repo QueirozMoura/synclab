@@ -3,10 +3,10 @@ import React from "react";
 export const EditorContent: React.FC = () => {
   return (
     <div className="flex-1 overflow-y-auto bg-[#13131b]">
-      <div className="mx-auto max-w-3xl px-8 py-16">
+      <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-8 sm:py-16">
         {/* Main Title */}
         <div className="mb-12">
-          <h1 className="text-4xl font-bold text-[#e4e1ed] mb-1">
+          <h1 className="break-words text-3xl font-bold text-[#e4e1ed] mb-1 sm:text-4xl">
             Architecture
           </h1>
           <div className="w-12 h-1 bg-gradient-to-r from-[#c0c1ff] to-transparent rounded" />
@@ -37,7 +37,7 @@ export const EditorContent: React.FC = () => {
           </blockquote>
 
           {/* Local-first Approach Subsection */}
-          <div className="ml-4">
+          <div className="ml-2 sm:ml-4">
             <h3 className="text-lg font-semibold text-[#e4e1ed] mb-3">
               Local-first Approach
             </h3>
