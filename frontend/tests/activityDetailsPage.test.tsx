@@ -31,7 +31,7 @@ vi.mock("../src/hooks/useDocuments", () => ({
   }),
 }));
 vi.mock("../src/hooks/useOperationManager", () => ({
-  useOperationManager: () => ({ getOperationsForDocument, createOperation: state.createOperation }),
+  useOperationManager: () => ({ getOperations: () => state.operations, getOperationsForDocument, createOperation: state.createOperation }),
 }));
 vi.mock("../src/lib/documentHistory", () => ({
   reconstructHistoricalState: vi
@@ -250,8 +250,8 @@ describe("ActivityDetailsPage - versão histórica", () => {
     const { ActivityDetailsPage } =
       await import("../src/pages/ActivityDetailsPage");
     render(<ActivityDetailsPage />);
-    expect(screen.getByText("Atividade não encontrada")).toBeTruthy();
-    expect(screen.queryByText("Versão deste momento")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Sincronização concluída" })).toBeTruthy();
+    expect(screen.queryByText("Ver alterações →")).toBeNull();
   });
 
   it("não quebra quando a reconstrução falha", async () => {
@@ -305,5 +305,36 @@ describe("ActivityDetailsPage - versão histórica", () => {
     await screen.findByText("Documento excluído neste momento.");
     expect(screen.queryByRole("button", { name: "Restaurar esta versão" })).toBeNull();
     expect(state.restore).not.toHaveBeenCalled();
+  });
+
+  it("exibe alterações enviadas e recebidas de uma sincronização", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-1", "op-2"], sentOperationIds: ["op-1"], receivedOperationIds: ["op-2"] }];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    const button = screen.getByRole("button", { name: "Ver alterações →" });
+    button.click();
+    expect(await screen.findByText("Alterações enviadas")).toBeTruthy();
+    expect(screen.getByText("Alterações recebidas")).toBeTruthy();
+    expect(screen.getByText("Documento criado")).toBeTruthy();
+    expect(screen.getByText("Você atualizou o título")).toBeTruthy();
+  });
+
+  it("usa somente as referências da atividade, deduplica e ignora operações ausentes", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z", operationIds: ["op-1", "op-1", "missing"], sentOperationIds: ["op-1", "op-1", "missing"], receivedOperationIds: [] }];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    screen.getByRole("button", { name: "Ver alterações →" }).click();
+    expect(await screen.findByText("Alterações enviadas")).toBeTruthy();
+    expect(screen.getAllByText("Documento criado")).toHaveLength(1);
+    expect(screen.queryByText("missing")).toBeNull();
+    expect(screen.queryByText("Alterações recebidas")).toBeNull();
+  });
+
+  it("não mostra botão nem alterações para sincronização sem referências", async () => {
+    state.activity = [{ id: "activity-1", type: "SYNC_COMPLETED", timestamp: "2024-01-01T00:00:02.000Z" }];
+    const { ActivityDetailsPage } = await import("../src/pages/ActivityDetailsPage");
+    render(<ActivityDetailsPage />);
+    expect(screen.queryByRole("button", { name: "Ver alterações →" })).toBeNull();
+    expect(screen.queryByText("Alterações enviadas")).toBeNull();
   });
 });

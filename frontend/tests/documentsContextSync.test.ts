@@ -11,6 +11,8 @@ import type { Document } from "../src/types/document";
 import type { Operation } from "../src/types/operation";
 import type { DocumentSnapshot } from "../src/types/documentSnapshot";
 import type { OperationManagerContextType } from "../src/context/OperationManagerContextType";
+import { OperationManagerContext } from "../src/context/OperationManagerContextType";
+import { recordActivity } from "../src/lib/indexedDb";
 import type { SyncCoordinator, SyncStatus } from "../src/lib/syncCoordinator";
 import type { SyncTransport } from "../src/types/syncTransport";
 
@@ -43,6 +45,14 @@ const TestWrapper = ({ children }: { children: React.ReactNode }) =>
     null,
     React.createElement(DocumentsProvider, null, children)
   );
+
+const useDocumentsWithManager = (manager: OperationManagerContextType) => {
+  const wrapper = ({ children }: { children: React.ReactNode }) =>
+    React.createElement(OperationManagerContext.Provider, { value: manager },
+      React.createElement(DocumentsProvider, null, children));
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return renderHook(() => useDocuments(), { wrapper });
+};
 
 const useDocumentsForTest = () => {
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -125,6 +135,49 @@ function createOperationManagerContextMock(
 describe("DocumentsContext - synchronizeAll", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("registra IDs enviadas e recebidas na atividade de sincronização", async () => {
+    const sent = createMockOperation("sent-1", "doc-1", "UPDATE_TITLE", { type: "UPDATE_TITLE", title: "sent" }, VectorClock.from({ "local": 1 }));
+    const received = createMockOperation("received-1", "doc-1", "UPDATE_CONTENT", { type: "UPDATE_CONTENT", content: "received" }, VectorClock.from({ "remote": 1 }));
+    const syncResult: SyncResult = { acceptedOperations: [received, received], missingOperations: [sent, sent], snapshots: [] };
+    const manager = createOperationManagerContextMock({ sync: vi.fn(() => Promise.resolve(syncResult)) });
+    const { result } = useDocumentsWithManager(manager);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+
+    await act(async () => { await result.current.syncDocuments(); });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const completed = vi.mocked(recordActivity).mock.calls
+      .map(([event]) => event as { type: string; operationIds?: string[]; sentOperationIds?: string[]; receivedOperationIds?: string[] })
+      .find((event) => event.type === "SYNC_COMPLETED");
+    expect(completed).toMatchObject({
+      operationIds: ["sent-1", "received-1"],
+      sentOperationIds: ["sent-1"],
+      receivedOperationIds: ["received-1"],
+    });
+  });
+
+  it("mantém sincronização sem operações e atividades antigas sem referências", async () => {
+    const manager = createOperationManagerContextMock();
+    const { result } = useDocumentsWithManager(manager);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    await act(async () => { await result.current.syncDocuments(); });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const completed = vi.mocked(recordActivity).mock.calls
+      .map(([event]) => event as { type: string; operationIds?: string[] })
+      .filter((event) => event.type === "SYNC_COMPLETED")
+      .at(-1);
+    expect(completed?.operationIds).toEqual([]);
+    expect({ id: "old", type: "SYNC_COMPLETED" }).not.toHaveProperty("operationIds");
+  });
+
+  it("não cria operações nem faz chamada adicional ao sincronizar", async () => {
+    const manager = createOperationManagerContextMock();
+    const { result } = useDocumentsWithManager(manager);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    await act(async () => { await result.current.syncDocuments(); });
+    expect(manager.createOperation).not.toHaveBeenCalled();
+    expect(manager.sync).toHaveBeenCalledTimes(1);
   });
 
   it("should handle empty payload", async () => {

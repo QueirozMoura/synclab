@@ -62,6 +62,8 @@ export interface ActivityEvent {
   documentTitle?: string;
   operationId?: string;
   operationIds?: string[];
+  sentOperationIds?: string[];
+  receivedOperationIds?: string[];
   metadata?: Record<string, string | number>;
 }
 

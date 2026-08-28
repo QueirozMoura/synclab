@@ -440,7 +440,18 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     appendActivity({ type: "SYNC_STARTED" });
     const promise = sync();
     void promise.then(
-      (result) => appendActivity({ type: "SYNC_COMPLETED", metadata: { accepted: result.acceptedOperations.length, sent: result.missingOperations.length } }),
+      (result) => {
+        const sentOperationIds = [...new Set(result.missingOperations.map(({ id }) => id))];
+        const receivedOperationIds = [...new Set(result.acceptedOperations.map(({ id }) => id))];
+        const operationIds = [...new Set([...sentOperationIds, ...receivedOperationIds])];
+        appendActivity({
+          type: "SYNC_COMPLETED",
+          operationIds,
+          sentOperationIds,
+          receivedOperationIds,
+          metadata: { accepted: receivedOperationIds.length, sent: sentOperationIds.length },
+        });
+      },
       (error: unknown) => appendActivity({ type: "SYNC_FAILED", metadata: { message: error instanceof Error ? error.message : String(error) } }),
     );
     return promise;

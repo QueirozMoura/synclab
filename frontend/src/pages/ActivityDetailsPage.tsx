@@ -5,11 +5,44 @@ import { reconstructHistoricalDocument } from "../lib/documentHistoricalState";
 import { restoreHistoricalDocument, type HistoricalRestorationResult } from "../lib/historicalDocumentRestoration";
 import { useDocuments } from "../hooks/useDocuments";
 import { useOperationManager } from "../hooks/useOperationManager";
+import type { Operation } from "../types/operation";
+
+function friendlyOperationType(type: string): string {
+  switch (type) {
+    case "CREATE_DOCUMENT": return "Documento criado";
+    case "UPDATE_TITLE": return "Você atualizou o título";
+    case "UPDATE_CONTENT": return "Você atualizou o conteúdo";
+    case "DELETE_DOCUMENT": return "Documento excluído";
+    default: return "Alteração no documento";
+  }
+}
+
+const SyncOperationGroup: React.FC<{ title: string; operations: Operation[] }> = ({ title, operations }) => (
+  <div className="rounded-2xl border-[var(--border)] bg-[var(--surface)] p-6">
+    <h3 className="text-sm font-medium uppercase tracking-[0.12em] text-[var(--text-secondary)]">{title}</h3>
+    <div className="mt-4 space-y-3">
+      {operations.map((operation) => (
+        <div key={operation.id} className="rounded-xl border-[var(--border)] p-4">
+          <p className="font-medium">{friendlyOperationType(operation.type)}</p>
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">Documento: {operation.documentId}</p>
+          <p className="mt-1 text-xs text-[var(--text-secondary)]">{new Date(operation.timestamp).toLocaleString("pt-BR")}</p>
+          {operation.payload.type === "CREATE_DOCUMENT" && <>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">Título: {operation.payload.title}</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-secondary)]">Conteúdo: {operation.payload.content}</p>
+          </>}
+          {operation.payload.type === "UPDATE_TITLE" && <p className="mt-2 text-sm text-[var(--text-secondary)]">Título: {operation.payload.title}</p>}
+          {operation.payload.type === "UPDATE_CONTENT" && <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--text-secondary)]">Conteúdo: {operation.payload.content}</p>}
+        </div>
+      ))}
+    </div>
+  </div>
+);
 
 export const ActivityDetailsPage: React.FC = () => {
   const { activityId } = useParams<{ activityId: string }>();
   const { activity, getDocument, updateDocument } = useDocuments();
-  const { getOperationsForDocument, createOperation } = useOperationManager();
+  const { getOperations, getOperationsForDocument, createOperation } = useOperationManager();
+  const [showSyncChanges, setShowSyncChanges] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [restorationMessage, setRestorationMessage] = useState<string | null>(null);
   const event = activity.find((item) => item.id === activityId);
@@ -45,6 +78,18 @@ export const ActivityDetailsPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [event, operationId]);
 
+  const syncChanges = React.useMemo(() => {
+    if (event?.type !== "SYNC_COMPLETED") return { sent: [], received: [], all: [] };
+    const operationsById = new Map(getOperations().map((operation) => [operation.id, operation]));
+    const unique = (ids: string[] | undefined) => [...new Set(ids ?? [])]
+      .map((id) => operationsById.get(id))
+      .filter((operation): operation is NonNullable<typeof operation> => Boolean(operation));
+    const sent = unique(event.sentOperationIds);
+    const received = unique(event.receivedOperationIds);
+    const categorizedIds = new Set([...sent, ...received].map(({ id }) => id));
+    const all = unique(event.operationIds).filter(({ id }) => !categorizedIds.has(id));
+    return { sent, received, all };
+  }, [event, getOperations]);
   const documentId = event?.documentId;
   const historicalVersion = React.useMemo(() => {
     if (!documentId || !operationId) return null;
@@ -64,7 +109,7 @@ export const ActivityDetailsPage: React.FC = () => {
 
   if (
     !event ||
-    (event.type !== "DOCUMENT_UPDATED" && event.type !== "DOCUMENT_CREATED")
+    (event.type !== "DOCUMENT_UPDATED" && event.type !== "DOCUMENT_CREATED" && event.type !== "SYNC_COMPLETED")
   ) {
     return (
       <main className="min-h-screen bg-[var(--background)] px-6 py-12 text-[var(--text-primary)]">
@@ -89,7 +134,9 @@ export const ActivityDetailsPage: React.FC = () => {
   const title =
     event.type === "DOCUMENT_CREATED"
       ? `Você criou ${event.documentTitle ?? "um documento"}`
-      : `Você editou ${event.documentTitle ?? "um documento"}`;
+      : event.type === "SYNC_COMPLETED"
+        ? "Sincronização concluída"
+        : `Você editou ${event.documentTitle ?? "um documento"}`;
   const date = new Date(event.timestamp).toLocaleString("pt-BR");
   const relatedOperationIds =
     event.operationIds ?? (event.operationId ? [event.operationId] : []);
@@ -185,6 +232,24 @@ export const ActivityDetailsPage: React.FC = () => {
             </p>
           </div>
         </section>
+        {event.type === "SYNC_COMPLETED" && (syncChanges.sent.length + syncChanges.received.length + syncChanges.all.length > 0) && (
+          <section className="mt-10" aria-live="polite">
+            <h2 className="text-lg font-semibold">Sincronização</h2>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">
+              {syncChanges.sent.length + syncChanges.received.length + syncChanges.all.length} alterações relacionadas a esta sincronização.
+            </p>
+            <button type="button" className="dashboard-text-button mt-4" onClick={() => setShowSyncChanges((visible) => !visible)}>
+              {showSyncChanges ? "Ocultar alterações" : "Ver alterações →"}
+            </button>
+            {showSyncChanges && (
+              <div className="mt-4 space-y-6">
+                {syncChanges.sent.length > 0 && <SyncOperationGroup title="Alterações enviadas" operations={syncChanges.sent} />}
+                {syncChanges.received.length > 0 && <SyncOperationGroup title="Alterações recebidas" operations={syncChanges.received} />}
+                {syncChanges.all.length > 0 && <SyncOperationGroup title="Alterações processadas" operations={syncChanges.all} />}
+              </div>
+            )}
+          </section>
+        )}
         {historicalVersionState && (
           <section className="mt-10" aria-live="polite">
             <h2 className="text-lg font-semibold">Versão deste momento</h2>
