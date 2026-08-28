@@ -72,8 +72,8 @@ describe("Dashboard sync action", () => {
     updateDocument: vi.fn(),
     deleteDocument: vi.fn(),
     syncDocuments: vi
-      .fn()
-      .mockResolvedValue({ acceptedOperations: [], missingOperations: [], snapshots: [] }),
+     .fn()
+     .mockResolvedValue({ acceptedOperations: [], missingOperations: [], snapshots: [], sentOperationIds: [], receivedOperationIds: [] }),
     getSyncStatus: vi.fn(() => "idle"),
     isSyncing: vi.fn(() => false),
     getLastSyncResult: vi.fn(() => null),
@@ -172,6 +172,8 @@ describe("Dashboard sync action", () => {
       missingOperations: [
         { id: "missing-1" },
       ],
+      sentOperationIds: ["sent-1"],
+      receivedOperationIds: ["received-1", "received-2"],
       snapshots: [
         { documentId: "doc-1" },
         { documentId: "doc-2" },
@@ -217,6 +219,8 @@ describe("Dashboard sync action", () => {
     const syncDocuments = vi.fn().mockResolvedValue({
       acceptedOperations: [{ id: "a1" }, { id: "a2" }, { id: "a3" }, { id: "a4" }],
       missingOperations: [{ id: "m1" }, { id: "m2" }],
+      sentOperationIds: ["sent-1", "sent-2", "sent-2"],
+      receivedOperationIds: ["received-1", "received-2", "received-3", "received-4"],
       snapshots: [{ documentId: "doc-1" }],
     });
     useDocumentsMock.mockReturnValue(baseContextValue({ syncDocuments }));

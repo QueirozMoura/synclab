@@ -96,7 +96,7 @@ describe("OperationManagerContext + HttpSyncTransport integration", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(0);
-    await expect(first).resolves.toEqual({ acceptedOperations: [], missingOperations: [], snapshots: [] });
+    await expect(first).resolves.toEqual({ acceptedOperations: [], missingOperations: [], snapshots: [], sentOperationIds: [], receivedOperationIds: [] });
 
     rerender();
     expect(result.current.syncCoordinator).toBe(coordinatorBefore);
@@ -115,7 +115,7 @@ describe("OperationManagerContext + HttpSyncTransport integration", () => {
 
     const { result } = renderHook(() => useOperationManager(), { wrapper });
 
-    await expect(result.current.sync()).resolves.toEqual({ acceptedOperations: [], missingOperations: [], snapshots: [] });
+    await expect(result.current.sync()).resolves.toEqual({ acceptedOperations: [], missingOperations: [], snapshots: [], sentOperationIds: [], receivedOperationIds: [] });
     expect(fetchMock).toHaveBeenCalledTimes(0);
     expect(result.current.getSyncStatus()).toBe("success");
     expect(result.current.getSyncStatus()).toBe("success");

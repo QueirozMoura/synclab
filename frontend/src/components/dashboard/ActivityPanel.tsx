@@ -21,6 +21,12 @@ export const ActivityPanel: React.FC = () => {
     return grouped.map(({ event, count, operationIds }) => ({
       event,
       operationIds,
+      hasOperations: [...new Set([
+        ...(event.operationIds ?? []),
+        ...(event.sentOperationIds ?? []),
+        ...(event.receivedOperationIds ?? []),
+        ...operationIds,
+      ])].length > 0,
       key: `${event.id}-${count}`,
       title: event.type === "DOCUMENT_CREATED" ? `Você criou ${event.documentTitle ?? "um documento"}` : event.type === "DOCUMENT_UPDATED" ? `${count > 1 ? "Você atualizou" : "Você editou"} ${event.documentTitle ?? "um documento"}` : event.type === "SYNC_COMPLETED" ? "Sincronização concluída" : event.type === "SYNC_FAILED" ? "Sincronização falhou" : "Sincronização iniciada",
       timeAgo: count > 1 ? `${count} alterações · ${new Date(event.timestamp).toLocaleString("pt-BR")}` : new Date(event.timestamp).toLocaleString("pt-BR"),
@@ -59,7 +65,7 @@ export const ActivityPanel: React.FC = () => {
             timeAgo={item.timeAgo}
             dotColor={item.dotColor}
             icon={item.icon}
-            action={item.event.type === "DOCUMENT_UPDATED" && typeof item.event.operationId === "string" && item.event.operationId.length > 0 ? <Link to={`/app/activity/${item.event.id}`} state={{ operationIds: item.operationIds }} className="mt-2 inline-block text-xs font-medium text-[var(--primary)] transition-opacity hover:opacity-75">Ver alterações →</Link> : undefined}
+            action={item.hasOperations && (item.event.type === "DOCUMENT_UPDATED" || item.event.type === "SYNC_COMPLETED") ? <Link to={`/app/activity/${item.event.id}`} state={{ operationIds: item.operationIds }} className="mt-2 inline-block text-xs font-medium text-[var(--primary)] transition-opacity hover:opacity-75">Ver alterações →</Link> : undefined}
             isLast={index === visibleActivities.length - 1}
           />
         ))}

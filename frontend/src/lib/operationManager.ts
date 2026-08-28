@@ -369,6 +369,8 @@ export class OperationManager {
         acceptedOperations: [],
         missingOperations: [],
         snapshots: [],
+        sentOperationIds: [],
+        receivedOperationIds: [],
       };
     }
 

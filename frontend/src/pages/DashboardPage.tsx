@@ -92,8 +92,8 @@ export const DashboardPage: React.FC = () => {
     ? []
     : syncFeedback === "success" && syncSummary
       ? [
-        `Operações enviadas: ${syncSummary.missingOperations.length}`,
-        `Operações recebidas: ${syncSummary.acceptedOperations.length}`,
+        `Operações enviadas: ${new Set(syncSummary.sentOperationIds ?? []).size}`,
+        `Operações recebidas: ${new Set(syncSummary.receivedOperationIds ?? []).size}`,
         `Snapshots processados: ${syncSummary.snapshots.length}`,
       ]
       : syncFeedback === "error" && syncErrorMessage
