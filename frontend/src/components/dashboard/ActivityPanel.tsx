@@ -11,6 +11,9 @@ export const ActivityPanel: React.FC = () => {
     const grouped: Array<{ event: typeof activity[number]; count: number; operationIds: string[] }> = [];
     for (const event of activity) {
       const previous = grouped[grouped.length - 1];
+      // SYNC_STARTED remains in IndexedDB/history, but a completed pair is
+      // represented by the more useful completion entry on the dashboard.
+      if (event.type === "SYNC_STARTED" && previous?.event.type === "SYNC_COMPLETED") continue;
       if (event.type === "DOCUMENT_UPDATED" && previous?.event.type === event.type && previous.event.documentId === event.documentId) {
         previous.count += 1;
         if (event.operationId) previous.operationIds.push(event.operationId);
@@ -29,7 +32,9 @@ export const ActivityPanel: React.FC = () => {
       ])].length > 0,
       key: `${event.id}-${count}`,
       title: event.type === "DOCUMENT_CREATED" ? `Você criou ${event.documentTitle ?? "um documento"}` : event.type === "DOCUMENT_UPDATED" ? `${count > 1 ? "Você atualizou" : "Você editou"} ${event.documentTitle ?? "um documento"}` : event.type === "SYNC_COMPLETED" ? "Sincronização concluída" : event.type === "SYNC_FAILED" ? "Sincronização falhou" : "Sincronização iniciada",
-      timeAgo: count > 1 ? `${count} alterações · ${new Date(event.timestamp).toLocaleString("pt-BR")}` : new Date(event.timestamp).toLocaleString("pt-BR"),
+      timeAgo: event.type === "SYNC_COMPLETED"
+        ? `${new Set(event.sentOperationIds ?? []).size} enviadas · ${new Set(event.receivedOperationIds ?? []).size} recebidas · ${new Date(event.timestamp).toLocaleString("pt-BR")}`
+        : count > 1 ? `${count} alterações · ${new Date(event.timestamp).toLocaleString("pt-BR")}` : new Date(event.timestamp).toLocaleString("pt-BR"),
       dotColor: event.type === "SYNC_COMPLETED" ? "#10b981" : event.type === "SYNC_FAILED" ? "#ffb4ab" : "#c0c1ff",
       icon: event.type === "DOCUMENT_UPDATED" ? "✎" : event.type === "SYNC_COMPLETED" ? "✓" : event.type === "SYNC_FAILED" ? "!" : event.type === "DOCUMENT_CREATED" ? "+" : "↻",
     }));

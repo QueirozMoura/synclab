@@ -35,6 +35,7 @@ export const DashboardPage: React.FC = () => {
     isOnline,
     syncState,
     getPendingOperationsForDocument,
+    activity = [],
   } = useDocuments();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [isSyncPending, setIsSyncPending] = React.useState(false);
@@ -78,7 +79,7 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  const syncStatus = isSyncPending ? "syncing" : syncState;
+  const syncStatus = isSyncPending ? "syncing" : syncFeedback === "error" ? "error" : syncState;
 
   const syncText = isSyncPending
     ? "Sincronizando..."
@@ -103,6 +104,7 @@ export const DashboardPage: React.FC = () => {
   const filteredDocuments = documents.filter((doc) => filter === "all" || getDocumentState(doc.id) === filter);
   const featuredDoc = filteredDocuments[0];
   const compactDocs = filteredDocuments.slice(1, 3);
+  const pendingCount = documents.reduce((total, doc) => total + (getPendingOperationsForDocument?.(doc.id) ?? 0), 0);
 
   return (
     <div className="dashboard-page flex min-h-[100dvh] overflow-hidden">
@@ -133,7 +135,13 @@ export const DashboardPage: React.FC = () => {
               syncText={syncText}
                 syncDetails={syncDetails}
                 lastSuccessfulSyncAt={getLastSuccessfulSyncAt()}
+                pendingCount={pendingCount}
               />
+              <div className="dashboard-metrics mt-7 grid-cols-2 gap-3 md:grid-cols-3" aria-label="Resumo do workspace">
+                <div className="dashboard-metric"><span className="dashboard-metric-icon" aria-hidden="true">◇</span><div><strong>{documents.length}</strong><span>documentos no workspace</span></div></div>
+                <div className="dashboard-metric"><span className="dashboard-metric-icon" aria-hidden="true">↯</span><div><strong>{activity.length}</strong><span>eventos registrados</span></div></div>
+                <div className="dashboard-metric col-span-2 md:col-span-1"><span className="dashboard-metric-icon" aria-hidden="true">◌</span><div><strong>{pendingCount}</strong><span>{pendingCount === 1 ? "alteração pendente" : "alterações pendentes"}</span></div></div>
+              </div>
               {filterOpen && (
                 <div className="relative z-10 mt-3 flex-wrap gap-2" role="group" aria-label="Filtros de documentos">
                   {(["all", "synced", "pending", "offline", "error"] as const).map((option) => (
