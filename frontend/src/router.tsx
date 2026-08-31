@@ -7,6 +7,7 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { EditorPage } from "./pages/EditorPage";
 import { NewDocumentRedirect } from "./pages/NewDocumentRedirect";
 import { FavoritesPage } from "./pages/FavoritesPage";
+import { SyncCenterPage } from "./pages/SyncCenterPage";
 import { RootLayout } from "./components/RootLayout";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -54,6 +55,10 @@ export const router = createBrowserRouter([
       {
         path: "/app/help",
         element: <ProtectedRoute><HelpPage /></ProtectedRoute>,
+      },
+      {
+        path: "/app/sync",
+        element: <ProtectedRoute><SyncCenterPage /></ProtectedRoute>,
       },
     ],
   },

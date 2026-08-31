@@ -64,6 +64,7 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ isOpen = fal
     { id: "recent", label: "Recentes", icon: "history", path: "/app" },
     { id: "favorites", label: "Favoritos", icon: "star", path: "/app/favorites" },
     { id: "documents", label: "Documentos", icon: "description", path: "/app/documents" },
+    { id: "sync", label: "Sincronização", icon: "sync", path: "/app/sync" },
   ];
 
   const footerItems = [
@@ -101,6 +102,15 @@ export const DashboardSidebar: React.FC<DashboardSidebarProps> = ({ isOpen = fal
             <polyline points="14 2 14 8 20 8" />
             <line x1="12" y1="13" x2="12" y2="17" />
             <line x1="9" y1="15" x2="15" y2="15" />
+          </svg>
+        );
+      case "sync":
+        return (
+          <svg className={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+            <path d="M16 21v-5h5" />
           </svg>
         );
       case "settings":
