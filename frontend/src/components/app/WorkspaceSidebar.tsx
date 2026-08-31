@@ -48,7 +48,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({ onDocumentDe
             to="/app/documents/new"
             aria-label="Criar novo documento"
             title="Criar novo documento"
-            className="text-[#c0c1ff] hover:bg-[#1f1f27] p-2 rounded transition-colors"
+            className="workspace-sidebar-create text-[#c0c1ff] hover:bg-[#1f1f27] p-2 rounded transition-colors"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19" />

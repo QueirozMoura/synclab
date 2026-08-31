@@ -1965,3 +1965,347 @@ button, a, input, textarea, select { min-height: 2.5rem; }
 @media (prefers-reduced-motion: reduce) {
   .editor-document-body { transition: none; }
 }
+
+
+/* Part 3: cohesive workspace navigation surfaces. */
+.global-sidebar,
+.dashboard-sidebar {
+  min-width: 0;
+  color: #d9d6e4;
+}
+
+.global-sidebar {
+  border-right-color: rgba(201, 199, 255, .16);
+  background: #15161e;
+  box-shadow: 12px 0 32px rgba(0, 0, 0, .16);
+}
+
+.global-sidebar::before {
+  background: linear-gradient(180deg, rgba(201, 199, 255, .045), transparent 28%, rgba(139, 211, 199, .018));
+}
+
+.global-sidebar-header {
+  padding: 1.25rem .9rem 1rem;
+  border-bottom-color: rgba(201, 199, 255, .12);
+}
+
+.global-sidebar-brand {
+  min-height: 2.75rem;
+  padding: .3rem .4rem 1.15rem;
+}
+
+.global-sidebar-brand:focus-visible,
+.global-sidebar-link:focus-visible,
+.global-sidebar-cta:focus-visible,
+.global-sidebar-footer a:focus-visible,
+.workspace-sidebar-create:focus-visible,
+.document-list-link:focus-visible,
+.document-delete-button:focus-visible,
+.dashboard-sidebar a:focus-visible,
+.dashboard-sidebar button:focus-visible,
+.dashboard-profile-button:focus-visible {
+  outline: 2px solid #8bd3c7;
+  outline-offset: 3px;
+}
+
+.global-sidebar-cta {
+  min-height: 2.85rem;
+  border-color: rgba(201, 199, 255, .3);
+  box-shadow: 0 8px 20px rgba(139, 211, 199, .08);
+}
+
+.global-sidebar-cta:active {
+  transform: translateY(1px);
+}
+
+.global-nav {
+  padding: 1.15rem .65rem;
+}
+
+.global-sidebar-section-label {
+  margin-top: .35rem;
+  margin-bottom: .65rem;
+  color: #858293;
+}
+
+.global-sidebar-link {
+  min-height: 2.75rem;
+  margin: .12rem 0;
+  padding: .65rem .75rem;
+  border-radius: .55rem;
+  font-size: .78rem;
+}
+
+.global-sidebar-link::before {
+  left: -.65rem;
+}
+
+.global-sidebar-link:active {
+  transform: translateX(1px);
+}
+
+.global-sidebar-link.is-active .global-sidebar-link-icon,
+.global-sidebar-link:hover .global-sidebar-link-icon {
+  color: #c9c7ff;
+}
+
+.global-sidebar-footer {
+  padding: .85rem .65rem 1rem;
+  border-top-color: rgba(201, 199, 255, .12);
+}
+
+/* The document rail stays visually distinct from global navigation. */
+.workspace-sidebar-create {
+  display: grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  min-height: 2.35rem;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: .55rem;
+  color: #c9c7ff;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.workspace-sidebar-create:hover {
+  border-color: rgba(139, 211, 199, .28);
+  background: rgba(139, 211, 199, .1);
+  color: #f4f1f8;
+  transform: translateY(-1px);
+}
+
+.workspace-sidebar-create:active {
+  transform: translateY(0) scale(.96);
+}
+
+.document-list-item {
+  position: relative;
+  min-height: 3.15rem;
+  border-radius: .55rem;
+  background: rgba(255, 255, 255, .018);
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.document-list-item::before {
+  position: absolute;
+  inset: .45rem auto .45rem 0;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: #8bd3c7;
+  content: "";
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.document-list-item:hover {
+  border-color: rgba(201, 199, 255, .16);
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .025);
+}
+
+.document-list-item.is-active::before {
+  opacity: 1;
+}
+
+.document-list-item.is-active {
+  border-color: rgba(201, 199, 255, .22);
+  background: rgba(192, 193, 255, .11);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .035);
+}
+
+.document-list-link {
+  min-width: 0;
+  min-height: 3.15rem;
+  padding: .7rem .65rem .7rem .8rem;
+  font-size: .77rem;
+}
+
+.document-list-link > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-list-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: .4rem;
+  color: #8bd3c7;
+  background: rgba(139, 211, 199, .07);
+  transition: background-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.document-list-item:hover .document-list-icon,
+.document-list-item.is-active .document-list-icon {
+  background: rgba(201, 199, 255, .12);
+  color: #c9c7ff;
+  transform: scale(1.04);
+}
+
+.document-delete-button {
+  width: 2.25rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  margin-right: .4rem;
+  border: 1px solid transparent;
+}
+
+.document-delete-button:hover:not(:disabled),
+.document-delete-button:focus-visible {
+  border-color: rgba(255, 180, 171, .2);
+}
+
+/* Dashboard sidebar uses the same visual language while keeping its own markup and state. */
+.dashboard-sidebar {
+  border-right: 1px solid rgba(201, 199, 255, .14);
+  background: #15161e;
+  box-shadow: 12px 0 32px rgba(0, 0, 0, .14);
+}
+
+.dashboard-sidebar-brand {
+  padding: 1.25rem 1rem 1.1rem;
+  border-bottom-color: rgba(201, 199, 255, .12);
+}
+
+.dashboard-sidebar-brand > .flex:first-child {
+  margin-bottom: 1.1rem;
+}
+
+.dashboard-brand-mark {
+  border: 1px solid rgba(201, 199, 255, .26);
+  box-shadow: 0 0 20px rgba(139, 211, 199, .1), inset 0 1px rgba(255, 255, 255, .3);
+}
+
+.dashboard-sidebar .dashboard-button-primary {
+  min-height: 2.85rem;
+  border: 1px solid rgba(201, 199, 255, .28);
+  box-shadow: 0 8px 20px rgba(139, 211, 199, .08);
+}
+
+.dashboard-sidebar .dashboard-button-primary:active {
+  transform: translateY(1px);
+}
+
+.dashboard-sidebar > nav {
+  padding: 1.1rem .7rem;
+}
+
+.dashboard-sidebar .dashboard-nav-item {
+  min-height: 2.75rem;
+  border: 1px solid transparent;
+  border-radius: .55rem;
+  padding: .65rem .75rem;
+  color: #aaa7b8;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.dashboard-sidebar .dashboard-nav-item:hover {
+  border-color: rgba(201, 199, 255, .1);
+  background: rgba(255, 255, 255, .045);
+  color: #f7f4fb;
+  transform: translateX(2px);
+}
+
+.dashboard-sidebar .dashboard-nav-item:active {
+  transform: translateX(1px);
+}
+
+.dashboard-sidebar .dashboard-nav-active {
+  border-color: rgba(201, 199, 255, .16);
+  background: rgba(192, 193, 255, .1);
+  color: #f0edf7;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .035);
+}
+
+.dashboard-sidebar .dashboard-nav-active::before {
+  left: -.7rem;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: #8bd3c7;
+  box-shadow: 0 0 10px rgba(139, 211, 199, .65);
+}
+
+.dashboard-sidebar-footer {
+  padding: .85rem .7rem 1rem;
+  border-top-color: rgba(201, 199, 255, .12);
+}
+
+.dashboard-profile-button {
+  min-height: 3.2rem !important;
+  border-color: transparent !important;
+}
+
+.dashboard-profile-button:hover {
+  background: rgba(255, 255, 255, .045) !important;
+}
+
+.dashboard-profile-button > div:first-child,
+.dashboard-sidebar [role="menu"] > div:first-child > div:first-child {
+  border-color: rgba(201, 199, 255, .2);
+}
+
+.dashboard-sidebar [role="menu"] {
+  border: 1px solid rgba(201, 199, 255, .16);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, .28);
+}
+
+.global-mobile-topbar,
+.dashboard-mobile-topbar {
+  border-bottom-color: rgba(201, 199, 255, .14);
+  background: rgba(15, 16, 22, .96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
+}
+
+.global-mobile-topbar-menu,
+.dashboard-mobile-topbar .dashboard-icon-button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.global-mobile-overlay,
+.app-mobile-overlay {
+  background: rgba(3, 4, 8, .7);
+  backdrop-filter: blur(2px);
+}
+
+@media (max-width: 1023px) {
+  .app-global-sidebar .global-sidebar,
+  .dashboard-sidebar {
+    width: min(18rem, calc(100vw - 1rem));
+    box-shadow: 18px 0 42px rgba(0, 0, 0, .42);
+  }
+
+  .global-sidebar-header,
+  .dashboard-sidebar-brand {
+    padding-top: 1.1rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .global-sidebar-link,
+  .dashboard-sidebar .dashboard-nav-item {
+    min-height: 2.9rem;
+  }
+
+  .document-list-link,
+  .document-list-item {
+    min-height: 3.35rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .global-sidebar-brand,
+  .global-sidebar-cta,
+  .global-sidebar-link,
+  .global-sidebar-link-icon,
+  .workspace-sidebar-create,
+  .document-list-item,
+  .document-list-icon,
+  .dashboard-sidebar .dashboard-nav-item,
+  .dashboard-sidebar .dashboard-button-primary {
+    transition: none;
+  }
+}
