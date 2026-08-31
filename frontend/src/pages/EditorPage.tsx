@@ -12,13 +12,14 @@ import { useAuth } from "../context/AuthContext";
 
 export const EditorPage: React.FC = () => {
   const { documentId } = useParams<{ documentId: string }>();
-  const { getDocument, updateDocument } = useDocuments();
+  const { getDocument, updateDocument, syncState, getPendingOperationsForDocument } = useDocuments();
   const { createOperation } = useOperationManager();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const canEdit = isAuthenticated && !isAuthLoading;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const document = getDocument(documentId || "");
+  const pendingCount = document ? (getPendingOperationsForDocument?.(document.id) ?? 0) : 0;
 
   const [title, setTitle] = useState(() => document?.title || "");
   const [content, setContent] = useState(() => document?.content || "");
@@ -214,7 +215,7 @@ export const EditorPage: React.FC = () => {
         />
 
         <div className="flex flex-col flex-1 overflow-hidden">
-          <EditorHeader title="Documento não encontrado" onMenuClick={() => setMobileMenuOpen(true)} />
+          <EditorHeader title="Documento não encontrado" onMenuClick={() => setMobileMenuOpen(true)} syncState={syncState} pendingCount={pendingCount} />
           <div className="flex-1 overflow-y-auto bg-[#13131b] flex items-center justify-center">
             <div className="mx-auto max-w-3xl px-8 py-16 text-center">
               <div className="w-16 h-16 rounded-full border-2 border-dashed border-[#464554] flex items-center justify-center mx-auto mb-6 text-[#c0c1ff]">
@@ -253,9 +254,9 @@ export const EditorPage: React.FC = () => {
       />
 
       <div className="flex flex-col flex-1 overflow-hidden">
-        <EditorHeader title={title} onMenuClick={() => setMobileMenuOpen(true)} />
-        <div className="flex-1 overflow-y-auto bg-[#13131b]">
-          <div className="mx-auto max-w-3xl px-8 py-8">
+        <EditorHeader title={title} onMenuClick={() => setMobileMenuOpen(true)} syncState={syncState} pendingCount={pendingCount} />
+        <main className="editor-workspace flex-1 overflow-y-auto">
+          <div className="editor-document-surface mx-auto max-w-3xl px-8 py-8">
             {/* Title Input */}
             <input
               ref={titleRef}
@@ -265,33 +266,27 @@ export const EditorPage: React.FC = () => {
               readOnly={!canEdit}
               onKeyDown={handleTitleKeyDown}
               placeholder="Documento sem título"
-              className="w-full text-4xl font-bold text-[#e4e1ed] bg-transparent border-none outline-none placeholder-[#908fa0] mb-4"
+              className="editor-document-title w-full text-4xl font-bold text-[#e4e1ed] bg-transparent border-none outline-none placeholder-[#908fa0] mb-4"
               style={{ lineHeight: 1.1 }}
             />
-            <div className="w-12 h-1 bg-gradient-to-r from-[#c0c1ff] to-transparent rounded mb-4" />
+            <div className="editor-title-rule" aria-hidden="true" />
 
             {!canEdit && <div role="status" className="mb-4 rounded-lg border-[#464554] bg-[#1f1f27] px-4 py-3 text-sm text-[#c7c4d7]">Este documento está bloqueado para edição. Faça login para continuar.</div>}
 
             {/* Edit / Preview Toggle */}
-            <div className="flex gap-2 mb-6">
+            <div className="editor-mode-switch mb-6" role="group" aria-label="Modo do documento">
               <button
                 onClick={() => setMode("edit")}
                 disabled={!canEdit}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  mode === "edit"
-                    ? "bg-[#c0c1ff] text-[#1000a9]"
-                    : "bg-[#1f1f27] text-[#c7c4d7] hover:bg-[#292932]"
-                }`}
+                aria-pressed={mode === "edit"}
+                className={`editor-mode-button ${mode === "edit" ? "is-active" : ""} ${!canEdit ? "is-disabled" : ""}`}
               >
                 Editar
               </button>
               <button
                 onClick={() => setMode("preview")}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                  mode === "preview"
-                    ? "bg-[#c0c1ff] text-[#1000a9]"
-                    : "bg-[#1f1f27] text-[#c7c4d7] hover:bg-[#292932]"
-                }`}
+                aria-pressed={mode === "preview"}
+                className={`editor-mode-button ${mode === "preview" ? "is-active" : ""}`}
               >
                 Visualizar
               </button>
@@ -305,7 +300,7 @@ export const EditorPage: React.FC = () => {
                 onChange={(e) => handleContentChange(e.target.value)}
                 readOnly={!canEdit}
                 placeholder={isNewDocument ? "Comece a escrever seu documento..." : ""}
-                className="w-full min-h-[500px] bg-transparent border-none outline-none text-[#c7c4d7] placeholder-[#908fa0] text-base leading-relaxed resize-none font-mono"
+                className="editor-document-body w-full min-h-[500px] bg-transparent border-none outline-none text-[#c7c4d7] placeholder-[#908fa0] text-base leading-relaxed resize-none font-mono"
                 style={{ lineHeight: 1.7 }}
                 spellCheck={false}
               />
@@ -315,7 +310,7 @@ export const EditorPage: React.FC = () => {
 
             <div className="h-32" />
           </div>
-        </div>
+        </main>
         {mode === "edit" && (
           <EditorToolbar
             onH1={handleH1}

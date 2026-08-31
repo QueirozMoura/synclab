@@ -203,7 +203,7 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ content }) => 
   const blocks = parseMarkdown(content);
 
   return (
-    <div className="w-full min-h-[500px] prose prose-invert max-w-none">
+    <div className="w-full min-h-[500px] editor-preview max-w-none">
       {blocks.map((block, index) => {
         switch (block.type) {
           case "heading1":
@@ -236,7 +236,7 @@ export const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({ content }) => 
                 key={index}
                 className="bg-[#1f1f27] border border-[#464554] rounded-lg overflow-x-auto my-4"
               >
-                <pre className="p-4 text-sm font-mono text-[#c7c4d7] leading-relaxed overflow-x-auto">
+                <pre className="overflow-x-auto p-4 text-sm font-mono leading-relaxed text-[#c7c4d7]">
                   <code>{block.content}</code>
                 </pre>
               </div>

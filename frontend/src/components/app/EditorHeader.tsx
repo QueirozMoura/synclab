@@ -1,14 +1,26 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import type { SyncState } from "../../lib/syncState";
 
 interface EditorHeaderProps {
   title: string;
   onMenuClick?: () => void;
+  syncState?: SyncState;
+  pendingCount?: number;
 }
 
-export const EditorHeader: React.FC<EditorHeaderProps> = ({ title, onMenuClick }) => {
+export const EditorHeader: React.FC<EditorHeaderProps> = ({ title, onMenuClick, syncState = "synced", pendingCount = 0 }) => {
   const navigate = useNavigate();
+  const status = syncState === "offline"
+    ? { label: "Offline · salvo localmente", tone: "offline", icon: "◌" }
+    : syncState === "syncing"
+      ? { label: "Sincronizando...", tone: "syncing", icon: "↻" }
+      : syncState === "pending"
+        ? { label: `${pendingCount} ${pendingCount === 1 ? "alteração pendente" : "alterações pendentes"}`, tone: "pending", icon: "↻" }
+        : syncState === "error"
+          ? { label: "Erro ao sincronizar", tone: "error", icon: "!" }
+          : { label: "Sincronizado · salvo localmente", tone: "synced", icon: "✓" };
   const { user, logout } = useAuth();
   const [shareOpen, setShareOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -69,10 +81,10 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title, onMenuClick }
   };
 
   return (
-    <div className="editor-header flex min-w-0 min-h-16 flex-wrap items-center justify-between gap-2 border-b border-[#464554] bg-[#13131b] px-3 py-2 sticky top-0 z-20 sm:px-6">
+    <header className="editor-header flex min-w-0 min-h-16 flex-wrap items-center justify-between gap-2 border-b border-[#464554] bg-[#13131b] px-3 py-2 sticky top-0 z-20 sm:px-6">
       {/* Left - Title and Metadata */}
       <div className="flex min-w-0 items-center gap-2">
-        {onMenuClick && <button type="button" onClick={onMenuClick} aria-label="Abrir navegação" className="editor-mobile-menu lg:hidden">☰</button>}
+        {onMenuClick && <button type="button" onClick={onMenuClick} aria-label="Abrir navegação" aria-controls="editor-global-navigation" className="editor-mobile-menu lg:hidden">☰</button>}
         <Link to="/app" aria-label="Voltar ao ambiente" className="flex min-w-0 items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
         <div className="w-6 h-6 relative">
           <svg
@@ -93,9 +105,9 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title, onMenuClick }
             />
           </svg>
         </div>
-        <div>
-          <h1 className="max-w-[45vw] truncate text-base font-semibold text-[#e4e1ed] sm:max-w-none sm:text-lg">{title}</h1>
-          <p className="text-xs text-[#908fa0] mt-1">Salvo localmente</p>
+        <div className="min-w-0">
+          <h1 className="editor-header-title max-w-[45vw] truncate text-base font-semibold text-[#e4e1ed] sm:max-w-none sm:text-lg">{title}</h1>
+          <p className="text-xs text-[#908fa0] mt-1">{syncState === "offline" ? "Offline-first · seguro neste dispositivo" : "Documento local"}</p>
         </div>
         </Link>
       </div>
@@ -104,13 +116,8 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title, onMenuClick }
       <div className="flex min-w-0 items-center gap-2 sm:gap-4">
         {/* Status Pill */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1f1f27] border border-[#464554]">
-          <div
-            className="w-2 h-2 rounded-full bg-[#10b981]"
-            style={{
-              boxShadow: "0 0 8px rgba(16,185,129,0.5)",
-            }}
-          />
-          <span className="text-xs text-[#e4e1ed]">Salvo localmente</span>
+          <span className={syncState === "syncing" ? "editor-save-status-icon is-spinning" : "editor-save-status-icon"} aria-hidden="true">{status.icon}</span>
+          <span>{status.label}</span>
         </div>
 
         {/* Share Button */}
@@ -227,6 +234,6 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title, onMenuClick }
           )}
         </div>
       </div>
-    </div>
+  </header>
   );
 };
