@@ -16,6 +16,7 @@ export const EditorPage: React.FC = () => {
   const { createOperation } = useOperationManager();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const canEdit = isAuthenticated && !isAuthLoading;
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const document = getDocument(documentId || "");
 
@@ -205,14 +206,15 @@ export const EditorPage: React.FC = () => {
   if (!document) {
     return (
       <div className="flex h-screen bg-[#13131b] overflow-hidden">
-        <GlobalSidebar />
+        {mobileMenuOpen && <button type="button" aria-label="Fechar navegação" className="app-mobile-overlay fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
+        <div className={`app-global-sidebar ${mobileMenuOpen ? "is-open" : ""}`}><GlobalSidebar mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} /></div>
         <WorkspaceSidebar
           activeDocument="Not Found"
           onSelectDocument={() => {}}
         />
 
         <div className="flex flex-col flex-1 overflow-hidden">
-          <EditorHeader title="Documento não encontrado" />
+          <EditorHeader title="Documento não encontrado" onMenuClick={() => setMobileMenuOpen(true)} />
           <div className="flex-1 overflow-y-auto bg-[#13131b] flex items-center justify-center">
             <div className="mx-auto max-w-3xl px-8 py-16 text-center">
               <div className="w-16 h-16 rounded-full border-2 border-dashed border-[#464554] flex items-center justify-center mx-auto mb-6 text-[#c0c1ff]">
@@ -242,15 +244,16 @@ export const EditorPage: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-[#13131b] overflow-hidden">
-      <GlobalSidebar />
+    <div className="app-shell flex h-screen bg-[#13131b] overflow-hidden">
+      {mobileMenuOpen && <button type="button" aria-label="Fechar navegação" className="app-mobile-overlay fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
+      <div className={`app-global-sidebar ${mobileMenuOpen ? "is-open" : ""}`}><GlobalSidebar mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} /></div>
       <WorkspaceSidebar
         activeDocument={title}
         onSelectDocument={() => {}}
       />
 
       <div className="flex flex-col flex-1 overflow-hidden">
-        <EditorHeader title={title} />
+        <EditorHeader title={title} onMenuClick={() => setMobileMenuOpen(true)} />
         <div className="flex-1 overflow-y-auto bg-[#13131b]">
           <div className="mx-auto max-w-3xl px-8 py-8">
             {/* Title Input */}

@@ -4,9 +4,10 @@ import { useAuth } from "../../context/AuthContext";
 
 interface EditorHeaderProps {
   title: string;
+  onMenuClick?: () => void;
 }
 
-export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
+export const EditorHeader: React.FC<EditorHeaderProps> = ({ title, onMenuClick }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [shareOpen, setShareOpen] = useState(false);
@@ -70,7 +71,9 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
   return (
     <div className="editor-header flex min-w-0 min-h-16 flex-wrap items-center justify-between gap-2 border-b border-[#464554] bg-[#13131b] px-3 py-2 sticky top-0 z-20 sm:px-6">
       {/* Left - Title and Metadata */}
-      <Link to="/app" className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
+      <div className="flex min-w-0 items-center gap-2">
+        {onMenuClick && <button type="button" onClick={onMenuClick} aria-label="Abrir navegação" className="editor-mobile-menu lg:hidden">☰</button>}
+        <Link to="/app" aria-label="Voltar ao ambiente" className="flex min-w-0 items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity">
         <div className="w-6 h-6 relative">
           <svg
             viewBox="0 0 24 24"
@@ -94,7 +97,8 @@ export const EditorHeader: React.FC<EditorHeaderProps> = ({ title }) => {
           <h1 className="max-w-[45vw] truncate text-base font-semibold text-[#e4e1ed] sm:max-w-none sm:text-lg">{title}</h1>
           <p className="text-xs text-[#908fa0] mt-1">Salvo localmente</p>
         </div>
-      </Link>
+        </Link>
+      </div>
 
       {/* Right - Status, Share, Menu, Avatar */}
       <div className="flex min-w-0 items-center gap-2 sm:gap-4">

@@ -1626,7 +1626,9 @@ button, a, input, textarea, select { min-height: 2.5rem; }
 
 .app-global-sidebar { display: contents; }
 .app-mobile-overlay { padding: 0; border: 0; }
+.editor-mobile-menu { display: none; }
 @media (max-width: 1023px) {
+  .editor-mobile-menu { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; flex: 0 0 auto; border: 1px solid #464554; border-radius: .5rem; color: #c7c4d7; background: #1f1f27; }
   .app-global-sidebar { display: block; position: fixed; inset: 0 auto 0 0; z-index: 50; width: min(18rem, calc(100vw - 1rem)); pointer-events: none; }
   .app-global-sidebar .global-sidebar { height: 100dvh; max-width: 100%; transform: translateX(-105%); transition: transform 180ms ease; box-shadow: 18px 0 40px rgba(0,0,0,.35); pointer-events: auto; }
   .app-global-sidebar.is-open .global-sidebar { transform: translateX(0); }
@@ -1634,6 +1636,13 @@ button, a, input, textarea, select { min-height: 2.5rem; }
   .app-main { min-width: 0; }
   .app-main .editor-header { min-width: 0; }
 }
+@media (max-width: 639px) {
+  .editor-header { min-height: 4rem; padding-top: .75rem; padding-bottom: .75rem; }
+  .editor-header > .flex:first-child { min-width: 0; }
+  .editor-header > .flex:last-child { flex: 0 0 auto; }
+  .editor-header > .flex:last-child > div:first-child { display: none; }
+}
+
 @media (max-width: 639px) {
   .dashboard-content { padding-right: 1rem; padding-left: 1rem; padding-top: 5rem; }
   .dashboard-page { min-width: 0; }
