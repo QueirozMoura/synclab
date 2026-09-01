@@ -98,7 +98,7 @@ export const HelpPage: React.FC = () => {
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Suporte</h2>
                 <div className="space-y-3">
                   <a
-                    href="https://github.com/synclab/synclab/issues"
+                    href="https://github.com/QueirozMoura/synclab/issues"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block p-4 bg-[#1b1b23] border border-[#27272A] rounded-lg hover:border-[#464554] transition-colors flex items-center gap-3"
