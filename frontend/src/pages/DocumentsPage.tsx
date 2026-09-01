@@ -38,7 +38,7 @@ export const DocumentsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#13131b] overflow-hidden">
+    <div className="documents-page flex h-screen bg-[#13131b] overflow-hidden">
       <GlobalSidebar />
       <WorkspaceSidebar
         activeDocument="architecture"
@@ -47,12 +47,12 @@ export const DocumentsPage: React.FC = () => {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-5xl mx-auto px-8 py-8">
-            <div className="flex items-center justify-between mb-8">
+          <div className="documents-page-content max-w-5xl mx-auto px-8 py-8">
+            <div className="documents-page-header flex items-center justify-between mb-8">
               <h1 className="text-3xl font-bold text-[#e4e1ed]">Documentos</h1>
               <button
                 onClick={handleNewDocument}
-                className="bg-[#c0c1ff] text-[#1000a9] px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity flex items-center gap-2"
+                className="documents-page-primary-action bg-[#c0c1ff] text-[#1000a9] px-4 py-2 rounded-md text-sm font-semibold hover:opacity-90 transition-opacity flex items-center gap-2"
               >
                 <span>+</span>
                 <span>Novo documento</span>
@@ -64,7 +64,7 @@ export const DocumentsPage: React.FC = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="documents-page-grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {documents.map((doc) => (
                 <div key={doc.id} className="document-card-wrapper relative">
                   <DocumentCard
