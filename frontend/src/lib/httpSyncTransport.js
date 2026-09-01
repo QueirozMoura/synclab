@@ -28,7 +28,7 @@ export class HttpSyncTransport {
             vectorClock: VectorClock.from(syncOp.vectorClock),
         };
     }
-    #syncResultToSyncPayload(syncResult, deviceId) {
+    #syncResultToSyncPayload(syncResult, deviceId, submittedOperationIds) {
         const allOperations = [
             ...syncResult.acceptedOperations,
             ...syncResult.missingOperations,
@@ -37,7 +37,9 @@ export class HttpSyncTransport {
             deviceId,
             operations: allOperations.map(this.#toOperation),
             snapshots: syncResult.snapshots ?? [],
-            acknowledgedOperationIds: syncResult.acceptedOperations.map((operation) => operation.id),
+            // A successful /sync response acknowledges the submitted batch. The
+            // acceptedOperations field only reports newly inserted operations.
+            acknowledgedOperationIds: submittedOperationIds,
         };
     }
     #isSyncResult(value) {
@@ -60,6 +62,7 @@ export class HttpSyncTransport {
             credentials: "include",
             headers: {
                 "Content-Type": "application/json",
+                "x-device-id": payload.deviceId,
             },
             body: JSON.stringify(outgoingPayload),
         });
@@ -70,6 +73,6 @@ export class HttpSyncTransport {
         if (!this.#isSyncResult(syncResult)) {
             throw new Error("Invalid sync response");
         }
-        return this.#syncResultToSyncPayload(syncResult, payload.deviceId);
+        return this.#syncResultToSyncPayload(syncResult, payload.deviceId, payload.operations.map((operation) => operation.id));
     }
 }

@@ -147,7 +147,7 @@ describe("HttpSyncTransport", () => {
       );
     });
 
-    it("deve enviar Content-Type: application/json", async () => {
+    it("deve enviar Content-Type e o deviceId local no header", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -163,6 +163,7 @@ describe("HttpSyncTransport", () => {
           credentials: "include",
           headers: expect.objectContaining({
             "Content-Type": "application/json",
+            "x-device-id": payload.deviceId,
           }),
         })
       );
@@ -181,6 +182,21 @@ describe("HttpSyncTransport", () => {
       const callBody = JSON.parse(mockFetch.mock.calls[0][1].body as string);
       expect(callBody.operations[0].vectorClock).toEqual({ "local-device": 1 });
       expect(callBody.operations[0].vectorClock).not.toHaveProperty("clock");
+    });
+
+    it("reconhece todas as operações enviadas, inclusive as já persistidas no servidor", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ acceptedOperations: [], missingOperations: [], snapshots: [] }),
+      });
+
+      const payload = createPayload({
+        operations: [createOperation("already-on-server", "local-device")],
+      });
+      const result = await transport.synchronize(payload);
+
+      expect(result.acknowledgedOperationIds).toEqual(["already-on-server"]);
     });
 
     it("deve enviar operações no payload", async () => {

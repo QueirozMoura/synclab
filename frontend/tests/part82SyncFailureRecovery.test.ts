@@ -169,7 +169,7 @@ describe("Parte 82 - recuperação de falhas de sincronização", () => {
     reject(new Error("network"));
     await expect(first).rejects.toThrow("network");
     await expect(sync.sync()).resolves.toMatchObject(emptyResult);
-    expect(manager.hasPendingOperations()).toBe(true);
+    expect(manager.hasPendingOperations()).toBe(false);
     expect(fetchFn).toHaveBeenCalledTimes(2);
   });
 

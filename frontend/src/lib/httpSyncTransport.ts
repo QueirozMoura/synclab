@@ -55,7 +55,11 @@ export class HttpSyncTransport implements SyncTransport {
     };
   }
 
-  #syncResultToSyncPayload(syncResult: SyncResult, deviceId: string): SyncPayload {
+  #syncResultToSyncPayload(
+    syncResult: SyncResult,
+    deviceId: string,
+    submittedOperationIds: string[],
+  ): SyncPayload {
     const allOperations = [
       ...syncResult.acceptedOperations,
       ...syncResult.missingOperations,
@@ -64,7 +68,9 @@ export class HttpSyncTransport implements SyncTransport {
       deviceId,
       operations: allOperations.map(this.#toOperation),
       snapshots: syncResult.snapshots ?? [],
-      acknowledgedOperationIds: syncResult.acceptedOperations.map((operation) => operation.id),
+      // A successful /sync response acknowledges the submitted batch. The
+      // acceptedOperations field only reports newly inserted operations.
+      acknowledgedOperationIds: submittedOperationIds,
     };
   }
 
@@ -89,6 +95,7 @@ export class HttpSyncTransport implements SyncTransport {
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
+        "x-device-id": payload.deviceId,
       },
       body: JSON.stringify(outgoingPayload),
     });
@@ -101,6 +108,10 @@ export class HttpSyncTransport implements SyncTransport {
     if (!this.#isSyncResult(syncResult)) {
       throw new Error("Invalid sync response");
     }
-    return this.#syncResultToSyncPayload(syncResult, payload.deviceId);
+    return this.#syncResultToSyncPayload(
+      syncResult,
+      payload.deviceId,
+      payload.operations.map((operation) => operation.id),
+    );
   }
 }

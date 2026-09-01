@@ -129,7 +129,7 @@ describe("Parte 81 - fluxo ponta a ponta do transport", () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it("confirma somente as operações explicitamente aceitas pelo servidor", async () => {
+  it("confirma todas as operações enviadas após resposta HTTP bem-sucedida", async () => {
     const manager = new OperationManager();
     const first = manager.createOperation("doc-1", "CREATE_DOCUMENT", {
       type: "CREATE_DOCUMENT",
@@ -156,9 +156,9 @@ describe("Parte 81 - fluxo ponta a ponta do transport", () => {
 
     await coordinator.sync();
 
-    expect(manager.getPendingOperations().map((operation) => operation.id)).toEqual([second.id]);
+    expect(manager.getPendingOperations()).toHaveLength(0);
     expect(manager.getOperations().find((operation) => operation.id === first.id)?.confirmedAt).toBeTypeOf("number");
-    expect(manager.getOperations().find((operation) => operation.id === second.id)?.confirmedAt).toBeUndefined();
+    expect(manager.getOperations().find((operation) => operation.id === second.id)?.confirmedAt).toBeTypeOf("number");
     expect(manager.getOperations().find((operation) => operation.id === third.id)?.confirmedAt).toBeTypeOf("number");
   });
 

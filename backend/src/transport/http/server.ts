@@ -170,7 +170,7 @@ export async function createServer(): Promise<FastifyInstance> {
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-device-id"],
   });
   app.addHook("onSend", async (request, reply) => {
     if (request.headers.origin && allowedOrigins.has(request.headers.origin)) {
