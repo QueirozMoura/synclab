@@ -3,6 +3,7 @@ import { LandingPage } from "./pages/LandingPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { HelpPage } from "./pages/HelpPage";
+import { HelpArticlePage } from "./pages/HelpArticlePage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { EditorPage } from "./pages/EditorPage";
 import { NewDocumentRedirect } from "./pages/NewDocumentRedirect";
@@ -55,6 +56,10 @@ export const router = createBrowserRouter([
       {
         path: "/app/help",
         element: <ProtectedRoute><HelpPage /></ProtectedRoute>,
+      },
+      {
+        path: "/app/help/:slug",
+        element: <ProtectedRoute><HelpArticlePage /></ProtectedRoute>,
       },
       {
         path: "/app/sync",

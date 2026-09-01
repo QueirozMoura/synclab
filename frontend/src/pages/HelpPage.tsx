@@ -17,21 +17,21 @@ export const HelpPage: React.FC = () => {
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Primeiros passos</h2>
                 <div className="space-y-3">
                   <Link
-                    to="/help/getting-started"
+                    to="/app/help/getting-started"
                     className="block p-4 bg-[#1b1b23] border border-[#27272A] rounded-lg hover:border-[#464554] transition-colors"
                   >
                     <h3 className="font-medium text-[#e4e1ed] mb-1">Guia de início rápido</h3>
                     <p className="text-sm text-[#c7c4d7]">Aprenda o básico do Synclab em 5 minutos</p>
                   </Link>
                   <Link
-                    to="/help/creating-documents"
+                    to="/app/help/creating-documents"
                     className="block p-4 bg-[#1b1b23] border border-[#27272A] rounded-lg hover:border-[#464554] transition-colors"
                   >
                     <h3 className="font-medium text-[#e4e1ed] mb-1">Criar documentos</h3>
                     <p className="text-sm text-[#c7c4d7]">Como criar e organizar seus documentos</p>
                   </Link>
                   <Link
-                    to="/help/collaboration"
+                    to="/app/help/collaboration"
                     className="block p-4 bg-[#1b1b23] border border-[#27272A] rounded-lg hover:border-[#464554] transition-colors"
                   >
                     <h3 className="font-medium text-[#e4e1ed] mb-1">Colaboração em tempo real</h3>
@@ -44,21 +44,21 @@ export const HelpPage: React.FC = () => {
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Recursos</h2>
                 <div className="space-y-3">
                   <Link
-                    to="/help/offline-first"
+                    to="/app/help/offline-first"
                     className="block p-4 bg-[#1b1b23] border border-[#27272A] rounded-lg hover:border-[#464554] transition-colors"
                   >
                     <h3 className="font-medium text-[#e4e1ed] mb-1">Edição offline-first</h3>
                     <p className="text-sm text-[#c7c4d7]">Como o Synclab funciona sem internet</p>
                   </Link>
                   <Link
-                    to="/help/crdt"
+                    to="/app/help/crdt"
                     className="block p-4 bg-[#1b1b23] border border-[#27272A] rounded-lg hover:border-[#464554] transition-colors"
                   >
                     <h3 className="font-medium text-[#e4e1ed] mb-1">Tecnologia CRDT</h3>
                     <p className="text-sm text-[#c7c4d7]">Entenda os tipos de dados replicados livres de conflitos</p>
                   </Link>
                   <Link
-                    to="/help/sync"
+                    to="/app/help/sync"
                     className="block p-4 bg-[#1b1b23] border border-[#27272A] rounded-lg hover:border-[#464554] transition-colors"
                   >
                     <h3 className="font-medium text-[#e4e1ed] mb-1">Sincronização</h3>
@@ -71,21 +71,21 @@ export const HelpPage: React.FC = () => {
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Referência</h2>
                 <div className="space-y-3">
                   <Link
-                    to="/help/keyboard-shortcuts"
+                    to="/app/help/keyboard-shortcuts"
                     className="block p-4 bg-[#1b1b23] border border-[#27272A] rounded-lg hover:border-[#464554] transition-colors"
                   >
                     <h3 className="font-medium text-[#e4e1ed] mb-1">Atalhos de teclado</h3>
                     <p className="text-sm text-[#c7c4d7]">Lista completa de atalhos de teclado</p>
                   </Link>
                   <Link
-                    to="/help/command-palette"
+                    to="/app/help/command-palette"
                     className="block p-4 bg-[#1b1b23] border border-[#27272A] rounded-lg hover:border-[#464554] transition-colors"
                   >
                     <h3 className="font-medium text-[#e4e1ed] mb-1">Paleta de comandos</h3>
                     <p className="text-sm text-[#c7c4d7]">Domine os atalhos ⌘K / Ctrl+K</p>
                   </Link>
                   <Link
-                    to="/help/markdown"
+                    to="/app/help/markdown"
                     className="block p-4 bg-[#1b1b23] border border-[#27272A] rounded-lg hover:border-[#464554] transition-colors"
                   >
                     <h3 className="font-medium text-[#e4e1ed] mb-1">Suporte a Markdown</h3>
