@@ -4436,3 +4436,33 @@ html[data-theme="light"] .documents-page .document-feedback.error {
   border-color: rgba(179, 91, 22, .2);
   color: #9b4d16;
 }
+
+
+/* Part 6: keep the autonomous documents navigation deterministic per viewport. */
+@media (min-width: 1024px) {
+  .documents-page .global-mobile-topbar,
+  .documents-page .global-mobile-overlay {
+    display: none !important;
+  }
+
+  .documents-page > .global-sidebar {
+    position: relative;
+    inset: auto;
+    display: flex;
+    width: 16rem;
+    max-width: none;
+    height: 100%;
+    transform: none;
+    pointer-events: auto;
+  }
+}
+
+@media (max-width: 1023px) {
+  .documents-page > .global-mobile-topbar {
+    display: flex;
+  }
+
+  .documents-page > .global-sidebar {
+    max-width: min(18rem, calc(100vw - 1rem));
+  }
+}
