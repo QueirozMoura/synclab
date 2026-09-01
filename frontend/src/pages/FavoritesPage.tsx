@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { GlobalSidebar } from "../components/app/GlobalSidebar";
+import { AppNavigation } from "../components/app/AppNavigation";
 import { WorkspaceSidebar } from "../components/app/WorkspaceSidebar";
 import { useDocuments } from "../hooks/useDocuments";
 
@@ -48,7 +48,7 @@ export const FavoritesPage: React.FC = () => {
 
   return (
     <div className="favorites-page flex h-screen overflow-hidden">
-      <GlobalSidebar />
+      <AppNavigation />
       <WorkspaceSidebar activeDocument="" onSelectDocument={() => {}} />
       <main className="favorites-main flex-1 overflow-y-auto">
         <div className="favorites-content mx-auto max-w-6xl px-5 py-8 sm:px-8 lg:py-12">

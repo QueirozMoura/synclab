@@ -9,15 +9,10 @@ interface GlobalSidebarProps {
   onClose?: () => void;
 }
 
-export const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ mobileOpen, onClose }) => {
+export const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ mobileOpen = false, onClose }) => {
   const navigate = useNavigate();
-  const [internalMobileOpen, setInternalMobileOpen] = React.useState(false);
-  const isControlled = mobileOpen !== undefined;
-  const isMobileOpen = isControlled ? mobileOpen : internalMobileOpen;
-  const closeMobileNavigation = () => {
-    setInternalMobileOpen(false);
-    onClose?.();
-  };
+  const isMobileOpen = mobileOpen;
+  const closeMobileNavigation = () => onClose?.();
   const { createDocument } = useDocuments();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
@@ -116,23 +111,6 @@ export const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ mobileOpen, onClos
   };
 
   return (
-    <>
-      {!isControlled && (
-        <button
-          type="button"
-          className="global-mobile-topbar lg:hidden"
-          aria-label="Abrir navegação"
-          aria-expanded={isMobileOpen}
-          onClick={() => setInternalMobileOpen(true)}
-        >
-          <span className="global-sidebar-logo" aria-hidden="true">S</span>
-          <span className="global-mobile-topbar-title">Synclab</span>
-          <span className="global-mobile-topbar-menu" aria-hidden="true">☰</span>
-        </button>
-      )}
-      {!isControlled && isMobileOpen && (
-        <button type="button" className="global-mobile-overlay lg:hidden" aria-label="Fechar navegação" onClick={closeMobileNavigation} />
-      )}
       <aside className={`global-sidebar flex w-64 shrink-0 flex-col ${isMobileOpen ? "is-mobile-open" : ""}`}>
       <div className="global-sidebar-glow" aria-hidden="true" />
       {/* Header */}
@@ -206,6 +184,5 @@ export const GlobalSidebar: React.FC<GlobalSidebarProps> = ({ mobileOpen, onClos
         </NavLink>
       </div>
       </aside>
-    </>
   );
 };

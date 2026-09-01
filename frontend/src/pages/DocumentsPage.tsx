@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { GlobalSidebar } from "../components/app/GlobalSidebar";
+import { AppNavigation } from "../components/app/AppNavigation";
 import { WorkspaceSidebar } from "../components/app/WorkspaceSidebar";
 import { DocumentCard } from "../components/dashboard/DocumentCard";
 import { useDocuments } from "../hooks/useDocuments";
@@ -39,7 +39,7 @@ export const DocumentsPage: React.FC = () => {
 
   return (
     <div className="documents-page flex h-screen bg-[#13131b] overflow-hidden">
-      <GlobalSidebar />
+      <AppNavigation />
       <WorkspaceSidebar
         activeDocument="architecture"
         onSelectDocument={() => {}}

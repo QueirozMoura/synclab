@@ -1,5 +1,5 @@
 import React from "react";
-import { GlobalSidebar } from "../components/app/GlobalSidebar";
+import { AppNavigation } from "../components/app/AppNavigation";
 import { type ThemePreference } from "../context/ThemeContext";
 import { useTheme } from "../context/useTheme";
 
@@ -14,13 +14,13 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-[#09090B] overflow-hidden">
-      <GlobalSidebar />
-      
+      <AppNavigation />
+
       <div className="flex-1 flex flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-8 py-12">
             <h1 className="text-3xl font-bold text-[#e4e1ed] mb-8">Configurações</h1>
-            
+
             <div className="space-y-6">
               <section className="bg-[#151517] border border-[#27272A] rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Conta</h2>
@@ -43,7 +43,7 @@ export const SettingsPage: React.FC = () => {
                   </div>
                 </div>
               </section>
-              
+
               <section className="bg-[#151517] border border-[#27272A] rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Editor</h2>
                 <div className="space-y-4">
@@ -70,7 +70,7 @@ export const SettingsPage: React.FC = () => {
                   </label>
                 </div>
               </section>
-              
+
               <section className="bg-[#151517] border border-[#27272A] rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Sincronização</h2>
                 <div className="space-y-4">
@@ -90,7 +90,7 @@ export const SettingsPage: React.FC = () => {
                   </label>
                 </div>
               </section>
-              
+
               <section className="bg-[#151517] border border-[#27272A] rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Aparência</h2>
                 <div className="space-y-4">

@@ -27,8 +27,8 @@ vi.mock("../src/hooks/useDocuments", () => ({
   useDocuments: () => ({ documents, isLoading: false, toggleFavorite }),
 }));
 vi.mock("react-router-dom", () => ({ useNavigate: () => navigate }));
-vi.mock("../src/components/app/GlobalSidebar", () => ({
-  GlobalSidebar: () => <aside>Sidebar</aside>,
+vi.mock("../src/components/app/AppNavigation", () => ({
+  AppNavigation: () => <aside>Sidebar</aside>,
 }));
 vi.mock("../src/components/app/WorkspaceSidebar", () => ({
   WorkspaceSidebar: () => <aside>Workspace</aside>,

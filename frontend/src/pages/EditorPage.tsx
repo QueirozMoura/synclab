@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { GlobalSidebar } from "../components/app/GlobalSidebar";
+import { AppNavigation } from "../components/app/AppNavigation";
 import { WorkspaceSidebar } from "../components/app/WorkspaceSidebar";
 import { EditorHeader } from "../components/app/EditorHeader";
 import { EditorToolbar } from "../components/app/EditorToolbar";
@@ -16,8 +16,6 @@ export const EditorPage: React.FC = () => {
   const { createOperation } = useOperationManager();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const canEdit = isAuthenticated && !isAuthLoading;
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   const document = getDocument(documentId || "");
   const pendingCount = document ? (getPendingOperationsForDocument?.(document.id) ?? 0) : 0;
 
@@ -207,15 +205,14 @@ export const EditorPage: React.FC = () => {
   if (!document) {
     return (
       <div className="flex h-screen bg-[#13131b] overflow-hidden">
-        {mobileMenuOpen && <button type="button" aria-label="Fechar navegação" className="app-mobile-overlay fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
-        <div className={`app-global-sidebar ${mobileMenuOpen ? "is-open" : ""}`}><GlobalSidebar mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} /></div>
+        <AppNavigation />
         <WorkspaceSidebar
           activeDocument="Not Found"
           onSelectDocument={() => {}}
         />
 
         <div className="flex flex-col flex-1 overflow-hidden">
-          <EditorHeader title="Documento não encontrado" onMenuClick={() => setMobileMenuOpen(true)} syncState={syncState} pendingCount={pendingCount} />
+          <EditorHeader title="Documento não encontrado" syncState={syncState} pendingCount={pendingCount} />
           <div className="flex-1 overflow-y-auto bg-[#13131b] flex items-center justify-center">
             <div className="mx-auto max-w-3xl px-8 py-16 text-center">
               <div className="w-16 h-16 rounded-full border-2 border-dashed border-[#464554] flex items-center justify-center mx-auto mb-6 text-[#c0c1ff]">
@@ -246,15 +243,14 @@ export const EditorPage: React.FC = () => {
 
   return (
     <div className="app-shell flex h-screen bg-[#13131b] overflow-hidden">
-      {mobileMenuOpen && <button type="button" aria-label="Fechar navegação" className="app-mobile-overlay fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setMobileMenuOpen(false)} />}
-      <div className={`app-global-sidebar ${mobileMenuOpen ? "is-open" : ""}`}><GlobalSidebar mobileOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} /></div>
+      <AppNavigation />
       <WorkspaceSidebar
         activeDocument={title}
         onSelectDocument={() => {}}
       />
 
       <div className="flex flex-col flex-1 overflow-hidden">
-        <EditorHeader title={title} onMenuClick={() => setMobileMenuOpen(true)} syncState={syncState} pendingCount={pendingCount} />
+        <EditorHeader title={title} syncState={syncState} pendingCount={pendingCount} />
         <main className="editor-workspace flex-1 overflow-y-auto">
           <div className="editor-document-surface mx-auto max-w-3xl px-8 py-8">
             {/* Title Input */}

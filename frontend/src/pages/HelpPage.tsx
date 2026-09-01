@@ -1,17 +1,17 @@
 import React from "react";
-import { GlobalSidebar } from "../components/app/GlobalSidebar";
+import { AppNavigation } from "../components/app/AppNavigation";
 import { Link } from "react-router-dom";
 
 export const HelpPage: React.FC = () => {
   return (
     <div className="flex h-screen bg-[#09090B] overflow-hidden">
-      <GlobalSidebar />
-      
+      <AppNavigation />
+
       <div className="flex-1 flex flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-8 py-12">
             <h1 className="text-3xl font-bold text-[#e4e1ed] mb-8">Ajuda e documentação</h1>
-            
+
             <div className="space-y-6">
               <section className="bg-[#151517] border border-[#27272A] rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Primeiros passos</h2>
@@ -39,7 +39,7 @@ export const HelpPage: React.FC = () => {
                   </Link>
                 </div>
               </section>
-              
+
               <section className="bg-[#151517] border border-[#27272A] rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Recursos</h2>
                 <div className="space-y-3">
@@ -66,7 +66,7 @@ export const HelpPage: React.FC = () => {
                   </Link>
                 </div>
               </section>
-              
+
               <section className="bg-[#151517] border border-[#27272A] rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Referência</h2>
                 <div className="space-y-3">
@@ -93,7 +93,7 @@ export const HelpPage: React.FC = () => {
                   </Link>
                 </div>
               </section>
-              
+
               <section className="bg-[#151517] border border-[#27272A] rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-[#e4e1ed] mb-4">Suporte</h2>
                 <div className="space-y-3">
