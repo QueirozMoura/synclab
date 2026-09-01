@@ -232,7 +232,6 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [isRefreshingAuth, setIsRefreshingAuth] = useState(false);
   const {
     createOperation,
-    getOperationsForDocument,
     synchronizeDocument: syncDoc,
     synchronize,
     reconstructSyncedDocument,
@@ -242,6 +241,7 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
     getLastSyncResult: getCoordinatorLastSyncResult,
     getLastSyncError: getCoordinatorLastSyncError,
     getLastSuccessfulSyncAt: getCoordinatorLastSuccessfulSyncAt,
+    getPendingOperations,
     hasPendingOperations,
   } = useOperationManager();
 
@@ -320,8 +320,8 @@ export const DocumentsProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [documents]);
 
   const getPendingOperationsForDocument = useCallback((id: string): number => {
-    return getOperationsForDocument(id).filter((operation) => operation.confirmedAt === undefined).length;
-  }, [getOperationsForDocument]);
+    return getPendingOperations().filter((operation) => operation.documentId === id).length;
+  }, [getPendingOperations]);
 
   const updateDocument = useCallback((id: string, data: Partial<Document>, operationId?: string) => {
     const currentDocument = documents.find((item) => item.id === id);

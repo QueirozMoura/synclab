@@ -53,6 +53,7 @@ export class OperationManager {
   private readonly operationLog: OperationLog;
   private readonly pendingOperationIds = new Set<string>();
   private initialized = false;
+  private initializationPromise: Promise<void> | null = null;
   private syncTransport: SyncTransport | null = null;
 
   constructor() {
@@ -66,34 +67,42 @@ export class OperationManager {
   }
 
   async initialize(): Promise<void> {
-    if (this.initialized) {
-      return;
-    }
-    const storedOperations = await getAllOperations();
-    // IndexedDB structured clone restores class instances as plain objects.
-    // Hydrate before the operations enter the log or any VectorClock method is called.
-    const hydratedOperations = storedOperations.map((operation) => ({
-      ...operation,
-      vectorClock: hydrateVectorClock(
-        operation.vectorClock as VectorClock | SerializedVectorClock,
-      ),
-    }));
-    this.operationLog.loadInitial(hydratedOperations);
-    this.rebuildPendingOperationIds();
-    if (hydratedOperations.length > 0) {
-      for (const op of hydratedOperations) {
-        this.vectorClock = this.vectorClock.merge(op.vectorClock);
-      }
-    } else {
-      const snapshots = await getAllSnapshots();
-      for (const snapshot of snapshots) {
-        if (snapshot.vectorClock) {
-          const snapshotClock = VectorClock.from(snapshot.vectorClock);
-          this.vectorClock = this.vectorClock.merge(snapshotClock);
+    if (this.initialized) return;
+    if (this.initializationPromise) return this.initializationPromise;
+
+    this.initializationPromise = (async () => {
+      const storedOperations = await getAllOperations();
+      // IndexedDB structured clone restores class instances as plain objects.
+      // Hydrate before the operations enter the log or any VectorClock method is called.
+      const hydratedOperations = storedOperations.map((operation) => ({
+        ...operation,
+        vectorClock: hydrateVectorClock(
+          operation.vectorClock as VectorClock | SerializedVectorClock,
+        ),
+      }));
+      this.operationLog.loadInitial(hydratedOperations);
+      this.rebuildPendingOperationIds();
+      if (hydratedOperations.length > 0) {
+        for (const op of hydratedOperations) {
+          this.vectorClock = this.vectorClock.merge(op.vectorClock);
+        }
+      } else {
+        const snapshots = await getAllSnapshots();
+        for (const snapshot of snapshots) {
+          if (snapshot.vectorClock) {
+            const snapshotClock = VectorClock.from(snapshot.vectorClock);
+            this.vectorClock = this.vectorClock.merge(snapshotClock);
+          }
         }
       }
+      this.initialized = true;
+    })();
+
+    try {
+      await this.initializationPromise;
+    } finally {
+      this.initializationPromise = null;
     }
-    this.initialized = true;
   }
 
   getDeviceId(): string {
@@ -216,12 +225,19 @@ export class OperationManager {
   }
 
   hasPendingOperations(): boolean {
-    return this.pendingOperationIds.size > 0;
+    return this.getPendingOperations().length > 0;
   }
 
   getPendingOperations(): Operation[] {
+    // Derive the queue from the log so it cannot become stale when operations
+    // are loaded or appended asynchronously. Keep the device boundary: remote
+    // operations are history, not local work to submit again.
     return orderOperations(
-      this.getOperations().filter((operation) => this.pendingOperationIds.has(operation.id)),
+      this.getOperations().filter(
+        (operation) =>
+          operation.deviceId === this.deviceId &&
+          operation.confirmedAt === undefined,
+      ),
     );
   }
 
@@ -348,6 +364,12 @@ export class OperationManager {
   }
 
   async syncPendingOperations(): Promise<SyncResult> {
+    // A locally-created operation already in the log is immediately usable.
+    // If startup is still loading IndexedDB (or the log is empty), wait for it
+    // so a manual click cannot race the initial hydration.
+    if (!this.initialized && (this.initializationPromise || this.operationLog.size() === 0)) {
+      await this.initialize();
+    }
     if (!this.syncTransport) {
       throw new Error("SyncTransport not configured. Call setTransport() before syncPendingOperations().");
     }

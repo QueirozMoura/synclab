@@ -143,6 +143,30 @@ describe("OperationManager pending operations", () => {
     expect(reloaded.hasPendingOperations()).toBe(true);
   });
 
+  it("derives the queue from the log for operations added after initialization", async () => {
+    const manager = new OperationManager();
+    await manager.initialize();
+    const synchronize = vi.fn(async (payload: SyncPayload) => ({
+      deviceId: payload.deviceId,
+      operations: payload.operations,
+      snapshots: [],
+      acknowledgedOperationIds: payload.operations.map((item) => item.id),
+    }));
+    manager.setSyncTransport({ synchronize });
+
+    const created = manager.createOperation("doc-1", "UPDATE_CONTENT", {
+      type: "UPDATE_CONTENT",
+      content: "added after startup",
+    });
+
+    expect(manager.getPendingOperations().map((item) => item.id)).toEqual([created.id]);
+    await manager.syncPendingOperations();
+
+    expect(synchronize).toHaveBeenCalledTimes(1);
+    expect(synchronize.mock.calls[0][0].operations.map((item) => item.id)).toEqual([created.id]);
+    expect(manager.getPendingOperations()).toHaveLength(0);
+  });
+
   it("preserva IDs enviados e identifica somente operações novas recebidas", async () => {
     const local = operation("local", "doc-1");
     const notSent = operation("not-sent", "doc-1");
