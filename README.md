@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <a href="https://synclab-pi.vercel.app" target="_blank"><strong>🌐 Try it live →</strong></a>
+  <a href="https://synclab-phi.vercel.app" target="_blank"><strong>🌐 Try it live →</strong></a>
 </p>
 
 ---
@@ -682,7 +682,7 @@ These are ideas, not commitments:
 ---
 
 <p align="center">
-  <a href="https://synclab-pi.vercel.app">Live app</a> ·
+  <a href="https://synclab-phi.vercel.app">Live app</a> ·
   <a href="https://github.com/QueirozMoura/synclab/issues">Report an issue</a>
 </p>
 
